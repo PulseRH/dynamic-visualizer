@@ -103,6 +103,7 @@ const VERT = /* glsl */ `
 
 const FRAG = /* glsl */ `
   uniform float uGlow;
+  uniform float uVis;
   varying vec3 vColor;
   varying float vAmp;
 
@@ -111,7 +112,7 @@ const FRAG = /* glsl */ `
     float d2 = dot(c, c);
     if (d2 > 0.25) discard;
     float a = smoothstep(0.25, 0.06, d2);
-    gl_FragColor = vec4(vColor * uGlow * a, a);   // premultiplied for additive
+    gl_FragColor = vec4(vColor * uGlow * uVis * a, a);   // premultiplied for additive
   }
 `;
 
@@ -185,6 +186,7 @@ export class VisualScene {
       uSizeComp: { value: 1 },
       uZMove: { value: 1 },
       uXYMove: { value: 1 },
+      uVis: { value: 1 },
       uGlow: { value: 1.1 },
       uBands: { value: this.bandTex },
     };
@@ -272,6 +274,17 @@ export class VisualScene {
     this.pointer.ty = ny;
   }
 
+  /** idle envelope: 1 = particles live, 0 = plain wallpaper (audio silent).
+   *  Fades the cloud out and brings the backdrop image back to full strength. */
+  setIdleVis(v) {
+    this.idleVis = v;
+    this.uniforms.uVis.value = v;
+    if (this.backdrop && !this.backdrop.isDestroyed) {
+      this.backdrop.material.uniforms.uDim.value =
+        this.backdropBaseDim + (1 - this.backdropBaseDim) * (1 - v);
+    }
+  }
+
   /** dim image backdrop ('black' | 'dim' | 'off') */
   setBackdrop(bitmapOrCanvas, mode) {
     if (this.backdrop) {
@@ -309,7 +322,9 @@ export class VisualScene {
     this.backdrop.position.z = -0.02;
     this.backdrop.renderOrder = -1;
     this.backdrop.frustumCulled = false;
+    this.backdropBaseDim = mode === 'dim' ? 0.17 : 0;
     this.scene.add(this.backdrop);
+    this.setIdleVis(this.idleVis ?? 1); // apply the current idle envelope
     this._layoutBackdrop();
   }
 

@@ -19,7 +19,7 @@ const audio = new AudioEngine();
 let currentImage = null;      // canvas or ImageBitmap currently visualized
 let currentImageUrl = null;   // for the thumbnail
 let rebuildToken = 0;
-let sleeping = false;
+let idleVis = 1;
 let qualityTimer = 0;
 let statTimer = 0;
 let frameEMA = 16;
@@ -217,21 +217,20 @@ function loop(now) {
 
   const analyzer = audio.frame(spaced, now);
 
-  // idle sleep: freeze rendering entirely when nothing plays
-  if (get('idleSleep') && audio.mode !== 'demo') {
-    if (analyzer.energy < 0.008) {
-      if (!sleeping) {
-        quietSince = now;
-        sleeping = true;
-      } else if (now - quietSince > 4000 && analyzer.beat === 0) {
-        return; // skip render; rAF still runs (near-zero cost) and watches for audio
-      }
-    } else {
-      sleeping = false;
-    }
+  // idle envelope: after a few silent seconds the particles fade away and the
+  // backdrop returns to its full, unfaded wallpaper look; once fully faded the
+  // render loop sleeps (near-zero GPU) and wakes the moment sound returns
+  const silent = audio.mode !== 'demo' && get('idleSleep') && analyzer.energy < 0.01;
+  let target = 1;
+  if (silent) {
+    if (!quietSince) quietSince = now;
+    target = now - quietSince > 4000 ? 0 : 1;
   } else {
-    sleeping = false;
+    quietSince = 0;
   }
+  idleVis += (target - idleVis) * (1 - Math.exp(-spaced / 700));
+  scene.setIdleVis(idleVis);
+  if (target === 0 && idleVis < 0.004) return; // fully faded: sleep, rAF still watches for audio
 
   scene.render(analyzer, get('parallax'));
   ui.setLevel(analyzer.level);
