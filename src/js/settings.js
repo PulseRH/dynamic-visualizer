@@ -19,6 +19,9 @@ const DEFAULTS = {
   hideBackdrop: false,     // black background while particles are on screen
   flybyExit: false,        // idle exit: points rush the camera instead of a clean fade
   cursorRipple: true,      // particles swell around the mouse cursor
+  sensGain: 1.0,           // input gain: how strongly sound drives everything
+  sensFloor: 0.0,          // noise floor: below this level, no movement
+  sensCurve: 1.5,          // response gamma: higher = quiet sounds move less
   parallax: 0.8,
   audioSource: 'demo',     // 'system' | 'mic' | 'file' | 'demo'
   audioFileUrl: null,

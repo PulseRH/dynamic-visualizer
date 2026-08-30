@@ -263,11 +263,21 @@ let lastBands = get('bands');
 let lastSyncedImageUrl = get('imageUrl');
 let imageSyncTimer = null;
 let countTimer = null;
+function applyAudioResponse() {
+  const a = audio.analyzer;
+  if (!a) return;
+  a.sensitivity = get('sensGain');
+  a.floor = get('sensFloor');
+  a.curve = get('sensCurve');
+}
+
 onChange((all, patch) => {
   scene.applySettings(all);
+  applyAudioResponse();
   if (get('bands') !== lastBands) {
     lastBands = get('bands');
     audio.setBandCount(lastBands); // recreate the analyzer, no rebuild needed
+    applyAudioResponse();
   }
   // image switched in another window (e.g. preview while wallpaper runs)
   if (get('imageUrl') !== lastSyncedImageUrl) {
@@ -308,7 +318,7 @@ function advanceIdle(a, dtMs, now) {
   } else {
     quietSince = 0;
   }
-  const tau = target === 0 ? 155 : 250; // points clear in ~0.6s
+  const tau = target === 0 ? 150 : 250; // points clear in ~0.6s
   idleVis += (target - idleVis) * (1 - Math.exp(-Math.max(1, dtMs) / tau));
   // snap the endpoints so the faded state is exactly the plain wallpaper at
   // full brightness (asymptotic easing would never quite get there)
@@ -384,6 +394,7 @@ function loop(now) {
 window.__dv = { audio, scene, get, set, loadUrl: (u) => loadFromUrl(u), rebuild: () => rebuildCloud() }; // debug/testing handle
 (async function boot() {
   audio.setBandCount(get('bands'));
+  applyAudioResponse();
   try {
     await loadInitialImage();
   } catch (err) {

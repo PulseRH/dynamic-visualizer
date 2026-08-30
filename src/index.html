@@ -110,6 +110,19 @@
         <span class="val"></span>
       </label>
       <label class="check-row"><input type="checkbox" id="cursorRipple" /> Cursor ripple</label>
+      <label class="slider-row">Input gain
+        <input type="range" id="sensGain" min="0.2" max="3" step="0.05" />
+        <span class="val"></span>
+      </label>
+      <label class="slider-row">Noise floor
+        <input type="range" id="sensFloor" min="0" max="0.5" step="0.01" />
+        <span class="val"></span>
+      </label>
+      <label class="slider-row">Curve
+        <input type="range" id="sensCurve" min="0.5" max="4" step="0.05" />
+        <span class="val"></span>
+      </label>
+      <p class="hint">Response shaping: gain scales the input, the floor mutes quiet sounds, and the curve decides how much quieter sounds move than loud ones. Higher curve = only peaks move.</p>
       <label class="slider-row">Bands
         <input type="range" id="bands" min="8" max="128" step="4" />
         <span class="val"></span>

@@ -9,6 +9,9 @@ const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 export class BandAnalyzer {
   constructor(count = BAND_COUNT) {
     this.count = count;
+    this.sensitivity = 1;   // input gain
+    this.floor = 0;         // noise floor: below this, no movement
+    this.curve = 1.5;       // gamma: higher = only peaks move
     this.bands = new Float32Array(count);       // smoothed 0..1
     this.raw = new Float32Array(count);         // pre-smoothing 0..1
     this.energy = 0;                                  // overall loudness 0..1
@@ -77,13 +80,22 @@ export class BandAnalyzer {
     this.peak = Math.max(mx, this.peak * 0.996);
     const norm = 1 / this.peak;
 
-    bass /= 10;
-    this.bassEnergy = clamp01(bass * norm);
+    // user response curve: gain -> noise floor -> gamma. Quiet input ends up
+    // small; only peaks reach full movement.
+    const gain = this.sensitivity, floor = this.floor, curve = this.curve;
+    const shape = (v) => {
+      v = clamp01(v * norm * gain);
+      v = v <= floor ? 0 : (v - floor) / (1 - floor);
+      return Math.pow(v, curve);
+    };
+
+    bass = shape(clamp01(bass / 10));
+    this.bassEnergy = bass;
     this.bassAvg = this.bassAvg * 0.995 + this.bassEnergy * 0.005;
 
     let energy = 0;
     for (let b = 0; b < this.count; b++) {
-      const v = clamp01(raw[b] * norm);
+      const v = shape(raw[b]);
       const prev = bands[b];
       bands[b] = prev + (v - prev) * (v > prev ? this.smoothUp : this.smoothDown);
       energy += bands[b];

@@ -50,8 +50,8 @@ const VERT = /* glsl */ `
     }
     if (uInvert > 0.5) bt = 1.0 - bt;   // swap bass <-> highs direction
     float band = clamp(floor(bt * uBandCount), 0.0, uBandCount - 1.0);
+    // already shaped by the analyzer (gain -> floor -> curve)
     float amp = texture2D(uBands, vec2((band + 0.5) / uBandCount, 0.5)).r;
-    amp = amp * amp;                          // perceptual response
     float lightAmp = amp;                     // no global dimming: quiet
                                               // regions keep their base light
 
