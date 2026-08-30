@@ -224,22 +224,23 @@ export class VisualScene {
   }
 
   _fitCamera() {
-    // distance so the cloud (1 world unit tall) fills the frame; depth motion
-    // may slightly overflow the edges, which reads as immersive rather than wrong
+    // COVER fit: keep the image's square pixels and zoom until it fills the
+    // screen, cropping overflow — like background-size: cover
     const halfH = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
-    const needH = 0.5 * 1.12;
-    const needW = (this.cloudAspect / 2) * 1.12;
-    const dH = needH / halfH;
-    const dW = needW / (halfH * this.camera.aspect);
-    this.camBaseZ = Math.max(dH, dW);
+    const dH = 0.5 / halfH;                                       // height just fills
+    const dW = (this.cloudAspect / 2) / (halfH * this.camera.aspect); // width just fills
+    this.camBaseZ = Math.min(dH, dW);
   }
 
   _layoutBackdrop() {
     if (!this.backdrop) return;
-    const dist = this.camBaseZ;
+    // same cover transform as the cloud, so backdrop pixels sit exactly
+    // under their particles (no stretching on any aspect ratio)
+    const dist = this.camBaseZ - 0.02;
     const halfH = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) * dist;
     const halfW = halfH * this.camera.aspect;
-    this.backdrop.scale.set(halfW * 2.02, halfH * 2.02, 1);
+    const s = Math.max((halfW * 2) / this.cloudAspect, halfH * 2) * 1.01;
+    this.backdrop.scale.set(this.cloudAspect * s, s, 1);
   }
 
   /** rebuild geometry from sampled cloud arrays */
@@ -361,6 +362,7 @@ export class VisualScene {
     // 'audio' mode = zero autonomous motion: no camera drift, spectrum only
     this.autoMotion = s.waveMode !== 'audio';
     this._fitCamera();
+    this._layoutBackdrop();
   }
 
   setQuality(q) {
