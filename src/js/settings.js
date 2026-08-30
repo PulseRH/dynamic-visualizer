@@ -16,6 +16,7 @@ const DEFAULTS = {
   invertBands: false,      // flip band direction: bass toward viewer / far side
   overscan: 1.0,           // extra zoom so parallax never reveals edges
   overscanAuto: true,      // overscan follows the parallax setting
+  hideBackdrop: false,     // black background while particles are on screen
   parallax: 0.8,
   audioSource: 'demo',     // 'system' | 'mic' | 'file' | 'demo'
   audioFileUrl: null,

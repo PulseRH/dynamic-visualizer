@@ -21,6 +21,7 @@ const VERT = /* glsl */ `
   uniform float uSizeComp;
   uniform float uZMove;
   uniform float uXYMove;
+  uniform float uVis;
   uniform sampler2D uBands;
 
   attribute vec3 aColor;
@@ -80,6 +81,8 @@ const VERT = /* glsl */ `
     pos.xy += vec2(sin(uTime * 3.1 + aRand * 40.0), cos(uTime * 2.6 + aRand * 30.0))
             * amp * 0.006 * uIntensity * uXYMove;
     pos.xy *= 1.0 + uBeat * 0.012 * uXYMove;
+    // idle exit: the cloud flies toward the camera as it fades out
+    pos.z += (1.0 - uVis) * 0.4;
 
     vec4 mv = modelViewMatrix * vec4(pos, 1.0);
     gl_Position = projectionMatrix * mv;
@@ -277,13 +280,15 @@ export class VisualScene {
   }
 
   /** idle envelope: 1 = particles live, 0 = plain wallpaper (audio silent).
-   *  Fades the cloud out and brings the backdrop image back to full strength. */
+   *  Fades the cloud out (flying toward the camera) and brings the backdrop
+   *  image back; with hideBackdrop, the image only exists while fading. */
   setIdleVis(v) {
     this.idleVis = v;
     this.uniforms.uVis.value = v;
     if (this.backdrop && !this.backdrop.isDestroyed) {
+      const base = this.hideBackdrop ? 0 : this.backdropBaseDim;
       this.backdrop.material.uniforms.uDim.value =
-        this.backdropBaseDim + (1 - this.backdropBaseDim) * (1 - v);
+        base + (1 - base) * (1 - v);
     }
   }
 
@@ -355,6 +360,7 @@ export class VisualScene {
     this.uniforms.uZMove.value = s.depthMove;
     this.uniforms.uXYMove.value = s.xyMove;
     this.overscan = s.overscan;
+    this.hideBackdrop = !!s.hideBackdrop;
     this.setBandCount(s.bands);
     // size compensation: additive brightness ∝ point area (diameter²),
     // normalized so size ≈ 1 (diameter = spacing) is the reference look

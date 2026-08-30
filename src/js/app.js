@@ -217,18 +217,18 @@ function loop(now) {
 
   const analyzer = audio.frame(spaced, now);
 
-  // idle envelope: shortly after silence the particles fade out fast (so you
-  // never catch them static) and the backdrop returns to its full, unfaded
-  // wallpaper look; once fully faded the render loop sleeps until sound returns
+  // idle envelope: ~0.6s after silence the points fly toward the camera and
+  // fade out in ~0.5s while the backdrop image returns to its full look; the
+  // render loop then sleeps until sound returns
   const silent = audio.mode !== 'demo' && get('idleSleep') && analyzer.energy < 0.01;
   let target = 1;
   if (silent) {
     if (!quietSince) quietSince = now;
-    target = now - quietSince > 1200 ? 0 : 1;
+    target = now - quietSince > 600 ? 0 : 1;
   } else {
     quietSince = 0;
   }
-  const tau = target === 0 ? 250 : 500; // fade out fast, return a bit gentler
+  const tau = target === 0 ? 110 : 250; // fast fly-by exit, gentler return
   idleVis += (target - idleVis) * (1 - Math.exp(-spaced / tau));
   scene.setIdleVis(idleVis);
   if (target === 0 && idleVis < 0.004) return; // fully faded: sleep, rAF still watches for audio

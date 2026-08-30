@@ -97,6 +97,7 @@ export class UI {
     $('autoQuality').onchange = (e) => set({ autoQuality: e.target.checked });
     $('idleSleep').onchange = (e) => set({ idleSleep: e.target.checked });
     $('invertBands').onchange = (e) => set({ invertBands: e.target.checked });
+    $('hideBackdrop').onchange = (e) => set({ hideBackdrop: e.target.checked });
 
     // Parallax auto-raises Overscan (so the edges stay hidden) until the user
     // takes manual control of Overscan.
@@ -191,6 +192,7 @@ export class UI {
     $('autoQuality').checked = get('autoQuality');
     $('idleSleep').checked = get('idleSleep');
     $('invertBands').checked = !!get('invertBands');
+    $('hideBackdrop').checked = !!get('hideBackdrop');
 
     const src = get('audioSource');
     const hints = {
