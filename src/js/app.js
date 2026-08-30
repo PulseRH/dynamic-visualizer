@@ -183,9 +183,14 @@ async function switchAudio(mode, opts = {}) {
 // setting (glow, intensity, modes, …) applies live to the scene
 let lastCount = get('pointCount');
 let lastDepthMode = get('depthMode');
+let lastBands = get('bands');
 let countTimer = null;
 onChange((all, patch) => {
   scene.applySettings(all);
+  if (get('bands') !== lastBands) {
+    lastBands = get('bands');
+    audio.setBandCount(lastBands); // recreate the analyzer, no rebuild needed
+  }
   if (get('pointCount') !== lastCount || get('depthMode') !== lastDepthMode) {
     lastCount = get('pointCount');
     lastDepthMode = get('depthMode');
@@ -248,6 +253,7 @@ function loop(now) {
 
 window.__dv = { audio, scene, get, set, loadUrl: (u) => loadFromUrl(u), rebuild: () => rebuildCloud() }; // debug/testing handle
 (async function boot() {
+  audio.setBandCount(get('bands'));
   try {
     await loadInitialImage();
   } catch (err) {

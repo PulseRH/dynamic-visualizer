@@ -12,6 +12,7 @@ const DEFAULTS = {
   intensity: 1.0,
   depthMove: 1.0,          // Z motion multiplier (toward/away from viewer)
   xyMove: 1.0,             // lateral motion multiplier (x/y shimmer + swell)
+  bands: 64,               // number of frequency bands = number of regions
   parallax: 0.8,
   audioSource: 'demo',     // 'system' | 'mic' | 'file' | 'demo'
   audioFileUrl: null,

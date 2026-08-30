@@ -42,6 +42,7 @@ class Ring {
 export class AudioEngine {
   constructor() {
     this.analyzer = new BandAnalyzer();
+    this.bandCount = 64;
     this.mode = 'none';
     this.status = '';
     this.error = null;
@@ -56,6 +57,14 @@ export class AudioEngine {
     this._synth = null;
     this._synthClock = 0;
     this.audioEl = null;
+  }
+
+  /** resize the analysis when the user changes the band count */
+  setBandCount(n) {
+    n = Math.max(4, Math.min(256, Math.round(n)));
+    if (n === this.bandCount) return;
+    this.bandCount = n;
+    this.analyzer = new BandAnalyzer(n);
   }
 
   async setMode(mode, opts = {}) {

@@ -15,6 +15,7 @@ const VERT = /* glsl */ `
   uniform float uCamZ;
   uniform float uMode;
   uniform float uBandMap;
+  uniform float uBandCount;
   uniform float uBoost;
   uniform float uSizeComp;
   uniform float uZMove;
@@ -43,8 +44,8 @@ const VERT = /* glsl */ `
     } else {
       bt = uvw.x;                                               // left = bass, right = highs
     }
-    float band = clamp(floor(bt * 63.0), 0.0, 63.0);
-    float amp = texture2D(uBands, vec2((band + 0.5) / 64.0, 0.5)).r;
+    float band = clamp(floor(bt * uBandCount), 0.0, uBandCount - 1.0);
+    float amp = texture2D(uBands, vec2((band + 0.5) / uBandCount, 0.5)).r;
     amp = amp * amp;                          // perceptual response
     float lightAmp = amp;                     // no global dimming: quiet
                                               // regions keep their base light
@@ -157,9 +158,10 @@ export class VisualScene {
     this.lastNow = performance.now();
     this.pointer = { x: 0, y: 0, tx: 0, ty: 0 };
 
-    // 64-band spectrum texture (RGBA8 for universal support)
-    this.bandData = new Uint8Array(64 * 4);
-    this.bandTex = new THREE.DataTexture(this.bandData, 64, 1, THREE.RGBAFormat);
+    // spectrum texture (RGBA8, width = band count, user-configurable)
+    this.bandCount = 64;
+    this.bandData = new Uint8Array(this.bandCount * 4);
+    this.bandTex = new THREE.DataTexture(this.bandData, this.bandCount, 1, THREE.RGBAFormat);
     this.bandTex.magFilter = THREE.NearestFilter;
     this.bandTex.minFilter = THREE.NearestFilter;
     this.bandTex.needsUpdate = true;
@@ -175,6 +177,7 @@ export class VisualScene {
       uCamZ: { value: 1.4 },
       uMode: { value: 1 },
       uBandMap: { value: 1 },
+      uBandCount: { value: 64 },
       uBoost: { value: 1 },
       uSizeComp: { value: 1 },
       uZMove: { value: 1 },
@@ -301,6 +304,20 @@ export class VisualScene {
     this._layoutBackdrop();
   }
 
+  setBandCount(n) {
+    n = Math.max(4, Math.min(256, Math.round(n)));
+    if (n === this.bandCount) return;
+    this.bandCount = n;
+    this.bandData = new Uint8Array(n * 4);
+    this.bandTex.dispose();
+    this.bandTex = new THREE.DataTexture(this.bandData, n, 1, THREE.RGBAFormat);
+    this.bandTex.magFilter = THREE.NearestFilter;
+    this.bandTex.minFilter = THREE.NearestFilter;
+    this.bandTex.needsUpdate = true;
+    this.uniforms.uBands.value = this.bandTex;
+    this.uniforms.uBandCount.value = n;
+  }
+
   applySettings(s) {
     this.uniforms.uIntensity.value = s.intensity;
     this.uniforms.uDepthScale.value = s.depthScale;
@@ -310,6 +327,7 @@ export class VisualScene {
     this.uniforms.uBoost.value = s.boost;
     this.uniforms.uZMove.value = s.depthMove;
     this.uniforms.uXYMove.value = s.xyMove;
+    this.setBandCount(s.bands);
     // size compensation: additive brightness ∝ point area (diameter²),
     // normalized so size ≈ 1 (diameter = spacing) is the reference look
     this.uniforms.uSizeComp.value =
@@ -335,10 +353,12 @@ export class VisualScene {
     this.time += dt;
 
     const bands = analyzer.bands;
-    for (let i = 0; i < 64; i++) {
-      this.bandData[i * 4] = Math.min(255, bands[i] * 255) | 0;
-      this.bandData[i * 4 + 1] = this.bandData[i * 4];
-      this.bandData[i * 4 + 2] = this.bandData[i * 4];
+    const count = Math.min(this.bandCount, bands.length);
+    for (let i = 0; i < count; i++) {
+      const v = Math.min(255, bands[i] * 255) | 0;
+      this.bandData[i * 4] = v;
+      this.bandData[i * 4 + 1] = v;
+      this.bandData[i * 4 + 2] = v;
       this.bandData[i * 4 + 3] = 255;
     }
     this.bandTex.needsUpdate = true;

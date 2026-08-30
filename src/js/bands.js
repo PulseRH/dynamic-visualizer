@@ -2,14 +2,15 @@
 // Feed it either a byte array (WebAudio AnalyserNode) or a float magnitude
 // array (our own FFT). Output drives the GPU uniforms.
 
-export const BAND_COUNT = 64;
+export const BAND_COUNT = 64;   // default; the count is now user-configurable
 
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
 export class BandAnalyzer {
-  constructor() {
-    this.bands = new Float32Array(BAND_COUNT);       // smoothed 0..1
-    this.raw = new Float32Array(BAND_COUNT);         // pre-smoothing 0..1
+  constructor(count = BAND_COUNT) {
+    this.count = count;
+    this.bands = new Float32Array(count);       // smoothed 0..1
+    this.raw = new Float32Array(count);         // pre-smoothing 0..1
     this.energy = 0;                                  // overall loudness 0..1
     this.bassEnergy = 0;
     this.beat = 0;                                    // 1 on kick, decays
@@ -27,11 +28,11 @@ export class BandAnalyzer {
   edges(bins, sampleRate) {
     if (this._edges && this._edgeSr === sampleRate && this._edges.bins === bins) return this._edges;
     const fMin = 30, fMax = Math.min(16000, sampleRate / 2);
-    const lo = new Uint32Array(BAND_COUNT);
-    const hi = new Uint32Array(BAND_COUNT);
-    for (let b = 0; b < BAND_COUNT; b++) {
-      const f0 = fMin * Math.pow(fMax / fMin, b / BAND_COUNT);
-      const f1 = fMin * Math.pow(fMax / fMin, (b + 1) / BAND_COUNT);
+    const lo = new Uint32Array(this.count);
+    const hi = new Uint32Array(this.count);
+    for (let b = 0; b < this.count; b++) {
+      const f0 = fMin * Math.pow(fMax / fMin, b / this.count);
+      const f1 = fMin * Math.pow(fMax / fMin, (b + 1) / this.count);
       lo[b] = Math.max(1, Math.min(bins - 1, Math.floor((f0 / (sampleRate / 2)) * bins)));
       hi[b] = Math.max(lo[b] + 1, Math.min(bins, Math.ceil((f1 / (sampleRate / 2)) * bins)));
     }
@@ -45,7 +46,7 @@ export class BandAnalyzer {
     // bytes are 0..255 with dB scaling already applied; map to 0..1 magnitude-ish
     const bins = bytes.length;
     const { lo, hi } = this.edges(bins, sampleRate);
-    for (let b = 0; b < BAND_COUNT; b++) {
+    for (let b = 0; b < this.count; b++) {
       let sum = 0;
       for (let i = lo[b]; i < hi[b]; i++) sum += bytes[i] / 255;
       this.raw[b] = sum / (hi[b] - lo[b]);
@@ -57,7 +58,7 @@ export class BandAnalyzer {
   fromFloat(mags, sampleRate) {
     const bins = mags.length;
     const { lo, hi } = this.edges(bins, sampleRate);
-    for (let b = 0; b < BAND_COUNT; b++) {
+    for (let b = 0; b < this.count; b++) {
       let sum = 0;
       for (let i = lo[b]; i < hi[b]; i++) sum += mags[i];
       this.raw[b] = (sum / (hi[b] - lo[b])) * 2.5;
@@ -69,7 +70,7 @@ export class BandAnalyzer {
     const { bands, raw } = this;
     // running peak normalization with slow decay keeps the look consistent
     let mx = 0.001, bass = 0;
-    for (let b = 0; b < BAND_COUNT; b++) {
+    for (let b = 0; b < this.count; b++) {
       if (raw[b] > mx) mx = raw[b];
       if (b < 10) bass += raw[b];
     }
@@ -81,13 +82,13 @@ export class BandAnalyzer {
     this.bassAvg = this.bassAvg * 0.995 + this.bassEnergy * 0.005;
 
     let energy = 0;
-    for (let b = 0; b < BAND_COUNT; b++) {
+    for (let b = 0; b < this.count; b++) {
       const v = clamp01(raw[b] * norm);
       const prev = bands[b];
       bands[b] = prev + (v - prev) * (v > prev ? this.smoothUp : this.smoothDown);
       energy += bands[b];
     }
-    this.energy = clamp01((energy / BAND_COUNT) * 2.2);
+    this.energy = clamp01((energy / this.count) * 2.2);
     this.level = clamp01(this.energy * 1.4 + this.bassEnergy * 0.6);
   }
 

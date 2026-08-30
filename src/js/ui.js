@@ -90,6 +90,7 @@ export class UI {
     slider('glow', 'glow', (v) => v.toFixed(2));
     slider('boost', 'boost', (v) => v.toFixed(2));
     slider('intensity', 'intensity', (v) => v.toFixed(2));
+    slider('bands', 'bands');
     slider('depthMove', 'depthMove', (v) => v.toFixed(2));
     slider('xyMove', 'xyMove', (v) => v.toFixed(2));
     slider('parallax', 'parallax', (v) => v.toFixed(2));
@@ -164,6 +165,7 @@ export class UI {
     setSlider('glow', get('glow'));
     setSlider('boost', get('boost'));
     setSlider('intensity', get('intensity'));
+    setSlider('bands', get('bands'));
     setSlider('depthMove', get('depthMove'));
     setSlider('xyMove', get('xyMove'));
     setSlider('parallax', get('parallax'));
