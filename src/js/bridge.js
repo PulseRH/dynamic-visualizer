@@ -86,4 +86,13 @@ export const bridge = {
     if (ev) return ev.onCursor(cb);
     return () => {};
   },
+
+  sendSpectrum(bands, energy, beat) {
+    if (ev) ev.sendSpectrum(bands, energy, beat);
+  },
+
+  onSpectrum(cb) {
+    if (ev) return ev.onSpectrum(cb);
+    return () => {};
+  },
 };

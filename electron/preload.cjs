@@ -22,6 +22,12 @@ contextBridge.exposeInMainWorld('dv', {
     ipcRenderer.on('cursor', handler);
     return () => ipcRenderer.removeListener('cursor', handler);
   },
+  sendSpectrum: (bands, energy, beat) => ipcRenderer.send('spectrum', bands, energy, beat),
+  onSpectrum: (cb) => {
+    const handler = (_e, bands, energy, beat) => cb(bands, energy, beat);
+    ipcRenderer.on('spectrum', handler);
+    return () => ipcRenderer.removeListener('spectrum', handler);
+  },
   onPcm: (cb) => {
     const handler = (_e, data) => cb(data);
     ipcRenderer.on('capture:pcm', handler);

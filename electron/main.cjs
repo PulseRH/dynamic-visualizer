@@ -216,6 +216,8 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      // keep analyzing (and feeding the wallpaper windows) while minimized
+      backgroundThrottling: false,
     },
   });
   mainWindow.loadURL('app://bundle/src/index.html');
@@ -646,3 +648,15 @@ function disableWallpaperMode() {
 ipcMain.handle('wallpaperMode:enable', () => enableWallpaperMode());
 ipcMain.handle('wallpaperMode:disable', () => { disableWallpaperMode(); return { ok: true }; });
 ipcMain.handle('wallpaperMode:state', () => wallpaperActive);
+
+// The preview window is the single audio capture source; its analysis is
+// relayed to every wallpaper window (secondary loopback captures come back
+// silent on Windows, so per-window capture is not viable).
+ipcMain.on('spectrum', (event, bands, energy, beat) => {
+  if (!wallpaperWins.length) return;
+  for (const win of wallpaperWins) {
+    if (!win.isDestroyed() && win.webContents !== event.sender) {
+      win.webContents.send('spectrum', bands, energy, beat);
+    }
+  }
+});

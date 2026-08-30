@@ -136,11 +136,30 @@ async function rebuildCloud() {
 // ------------------------------------------------------- wallpaper mode
 
 const isWallpaperWindow = new URLSearchParams(location.search).get('wallpaper') === '1';
+// The preview window is the single audio capture source; wallpaper windows
+// render from the spectrum it broadcasts (secondary loopback captures come
+// back silent on Windows, so per-window capture is not viable).
+const remoteAnalyzer = {
+  bands: new Float32Array(64),
+  energy: 0,
+  beat: 0,
+  level: 0,
+  lastUpdate: 0,
+};
+let wallpaperAudioActive = false;
 if (isWallpaperWindow) {
   document.body.classList.add('wallpaper');
   // wallpaper windows are click-through: the main process feeds us the global
   // cursor so the wallpaper still parallaxes with the mouse
   bridge.onCursor(({ nx, ny }) => scene.setExternalPointer(nx, ny));
+  bridge.onSpectrum((bands, energy, beat) => {
+    const n = Math.min(bands.length, remoteAnalyzer.bands.length);
+    for (let i = 0; i < n; i++) remoteAnalyzer.bands[i] = bands[i];
+    remoteAnalyzer.energy = energy;
+    remoteAnalyzer.beat = beat;
+    remoteAnalyzer.level = energy;
+    remoteAnalyzer.lastUpdate = performance.now();
+  });
 }
 
 async function toggleWallpaper() {
@@ -162,7 +181,10 @@ async function toggleWallpaper() {
   }
 }
 
-bridge.onWallpaperState((on) => ui.setWallpaperActive(on));
+bridge.onWallpaperState((on) => {
+  wallpaperAudioActive = on;
+  ui.setWallpaperActive(on);
+});
 
 // ------------------------------------------------------------- audio flow
 
@@ -205,8 +227,20 @@ onChange((all, patch) => {
 });
 
 let lastRender = 0;
+let lastAudioT = 0;
 function loop(now) {
   requestAnimationFrame(loop);
+
+  // analysis runs even while hidden (the preview feeds the wallpaper windows)
+  let analyzer;
+  if (isWallpaperWindow) {
+    analyzer = remoteAnalyzer;
+  } else {
+    analyzer = audio.frame(Math.min(50, now - (lastAudioT || now - 16)), now);
+    lastAudioT = now;
+    if (wallpaperAudioActive) bridge.sendSpectrum(analyzer.bands, analyzer.energy, analyzer.beat);
+  }
+
   if (document.hidden) return;
 
   const cap = get('fpsCap');
@@ -214,8 +248,6 @@ function loop(now) {
   if (now - lastRender < interval - 0.75) return;
   const spaced = Math.max(0, now - lastRender);
   lastRender = now;
-
-  const analyzer = audio.frame(spaced, now);
 
   // idle envelope: ~0.6s after silence the points fly toward the camera and
   // fade out in ~0.5s while the backdrop image returns to its full look; the
@@ -266,6 +298,9 @@ window.__dv = { audio, scene, get, set, loadUrl: (u) => loadFromUrl(u), rebuild:
     currentImage = makeProceduralImage();
     setMainImage(currentImage, null);
   }
-  await switchAudio(get('audioSource'), { fileUrl: get('audioFileUrl') });
+  if (!isWallpaperWindow) {
+    // wallpaper windows render from the preview's relayed spectrum instead
+    await switchAudio(get('audioSource'), { fileUrl: get('audioFileUrl') });
+  }
   requestAnimationFrame(loop);
 })();

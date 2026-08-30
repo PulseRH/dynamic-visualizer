@@ -242,11 +242,14 @@ export class VisualScene {
   _layoutBackdrop() {
     if (!this.backdrop) return;
     // same cover transform as the cloud, so backdrop pixels sit exactly
-    // under their particles (no stretching on any aspect ratio)
-    const dist = this.camBaseZ - 0.02;
+    // under their particles (no stretching on any aspect ratio).
+    // NB: the backdrop sits BEHIND the cloud plane, so the camera-to-backdrop
+    // distance is camBaseZ + 0.02 — getting this sign wrong shrinks the plane
+    // and shows black bars around the idle image.
+    const dist = this.camBaseZ + 0.02;
     const halfH = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) * dist;
     const halfW = halfH * this.camera.aspect;
-    const s = Math.max((halfW * 2) / this.cloudAspect, halfH * 2) * 1.01;
+    const s = Math.max((halfW * 2) / this.cloudAspect, halfH * 2) * 1.02;
     this.backdrop.scale.set(this.cloudAspect * s, s, 1);
   }
 
