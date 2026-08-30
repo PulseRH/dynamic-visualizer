@@ -77,6 +77,11 @@ export const bridge = {
     return !!(await ev.isWallpaperActive());
   },
 
+  saveImage(dataUrl) {
+    if (ev) return ev.saveImage(dataUrl);
+    return Promise.resolve(null); // browser dev mode: blob fallback handles it
+  },
+
   onWallpaperState(cb) {
     if (ev) ev.onWallpaperState(cb);
     else cb(false);

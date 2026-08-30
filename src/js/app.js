@@ -64,6 +64,7 @@ async function handleImagePick({ kind, file }) {
     if (kind === 'wallpaper') {
       const res = await bridge.getWallpaper();
       if (res.ok) {
+        lastSyncedImageUrl = null;
         set({ imageUrl: null }); // follow the OS wallpaper
         await loadFromUrl(res.url);
         ui.toast('Loaded your desktop wallpaper');
@@ -73,14 +74,31 @@ async function handleImagePick({ kind, file }) {
     } else if (kind === 'upload') {
       const picked = await bridge.chooseImage();
       if (picked) {
+        lastSyncedImageUrl = picked.url;
         set({ imageUrl: picked.url });
         await loadFromUrl(picked.url);
       }
     } else if (kind === 'blob') {
-      const url = URL.createObjectURL(file);
-      const bitmap = await createImageBitmap(file);
-      set({ imageUrl: null });
-      setMainImage(bitmap, url);
+      // persist the dropped image so every window (and future sessions) can use it
+      let saved = null;
+      try {
+        const dataUrl = await new Promise((res, rej) => {
+          const fr = new FileReader();
+          fr.onload = () => res(fr.result);
+          fr.onerror = rej;
+          fr.readAsDataURL(file);
+        });
+        saved = await bridge.saveImage(dataUrl);
+      } catch {}
+      if (saved) {
+        lastSyncedImageUrl = saved.url;
+        set({ imageUrl: saved.url });
+        await loadFromUrl(saved.url);
+      } else {
+        const bitmap = await createImageBitmap(file);
+        set({ imageUrl: null });
+        setMainImage(bitmap, URL.createObjectURL(file));
+      }
     }
   } catch (err) {
     console.error(err);
@@ -211,12 +229,32 @@ async function switchAudio(mode, opts = {}) {
 let lastCount = get('pointCount');
 let lastDepthMode = get('depthMode');
 let lastBands = get('bands');
+let lastSyncedImageUrl = get('imageUrl');
+let imageSyncTimer = null;
 let countTimer = null;
 onChange((all, patch) => {
   scene.applySettings(all);
   if (get('bands') !== lastBands) {
     lastBands = get('bands');
     audio.setBandCount(lastBands); // recreate the analyzer, no rebuild needed
+  }
+  // image switched in another window (e.g. preview while wallpaper runs)
+  if (get('imageUrl') !== lastSyncedImageUrl) {
+    lastSyncedImageUrl = get('imageUrl');
+    clearTimeout(imageSyncTimer);
+    imageSyncTimer = setTimeout(async () => {
+      const url = get('imageUrl');
+      try {
+        if (url) {
+          await loadFromUrl(url);
+        } else {
+          const res = await bridge.getWallpaper();
+          if (res.ok) await loadFromUrl(res.url);
+        }
+      } catch (err) {
+        console.warn('image sync failed', err);
+      }
+    }, 350);
   }
   if (get('pointCount') !== lastCount || get('depthMode') !== lastDepthMode) {
     lastCount = get('pointCount');

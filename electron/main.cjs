@@ -267,6 +267,23 @@ function encodePath(p) {
   return p.split(path.sep === '\\' ? /[\\/]/ : /\//).map(encodeURIComponent).join('/');
 }
 
+// Persist a dropped/pasted image (data URL) into userData so every window —
+// including wallpaper windows, now and after restarts — can load it.
+ipcMain.handle('image:saveDataUrl', async (_e, dataUrl) => {
+  try {
+    const match = /^data:image\/(\w+);base64,(.+)$/.exec(String(dataUrl));
+    if (!match) return null;
+    const ext = match[1] === 'jpeg' ? 'jpg' : match[1];
+    const dir = path.join(app.getPath('userData'), 'uploads');
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, `image-${Date.now()}.${ext}`);
+    fs.writeFileSync(file, Buffer.from(match[2], 'base64'));
+    return { path: file, url: 'app://abs/' + encodePath(file) };
+  } catch (err) {
+    return null;
+  }
+});
+
 ipcMain.handle('image:choose', async () => {
   const res = await dialog.showOpenDialog(mainWindow, {
     title: 'Choose an image',

@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('dv', {
   info: () => ipcRenderer.invoke('app:info'),
   getWallpaper: () => ipcRenderer.invoke('wallpaper:get'),
   chooseImage: () => ipcRenderer.invoke('image:choose'),
+  saveImage: (dataUrl) => ipcRenderer.invoke('image:saveDataUrl', dataUrl),
   chooseAudioFile: () => ipcRenderer.invoke('audio:chooseFile'),
   startPulseCapture: () => ipcRenderer.invoke('capture:startPulse'),
   stopPulseCapture: () => ipcRenderer.invoke('capture:stopPulse'),
