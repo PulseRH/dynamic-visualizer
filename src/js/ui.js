@@ -97,6 +97,7 @@ export class UI {
 
     $('autoQuality').onchange = (e) => set({ autoQuality: e.target.checked });
     $('idleSleep').onchange = (e) => set({ idleSleep: e.target.checked });
+    $('invertBands').onchange = (e) => set({ invertBands: e.target.checked });
   }
 
   _wireImageButtons() {
@@ -172,6 +173,7 @@ export class UI {
 
     $('autoQuality').checked = get('autoQuality');
     $('idleSleep').checked = get('idleSleep');
+    $('invertBands').checked = !!get('invertBands');
 
     const src = get('audioSource');
     const hints = {

@@ -16,6 +16,7 @@ const VERT = /* glsl */ `
   uniform float uMode;
   uniform float uBandMap;
   uniform float uBandCount;
+  uniform float uInvert;
   uniform float uBoost;
   uniform float uSizeComp;
   uniform float uZMove;
@@ -44,6 +45,7 @@ const VERT = /* glsl */ `
     } else {
       bt = uvw.x;                                               // left = bass, right = highs
     }
+    if (uInvert > 0.5) bt = 1.0 - bt;   // swap bass <-> highs direction
     float band = clamp(floor(bt * uBandCount), 0.0, uBandCount - 1.0);
     float amp = texture2D(uBands, vec2((band + 0.5) / uBandCount, 0.5)).r;
     amp = amp * amp;                          // perceptual response
@@ -178,6 +180,7 @@ export class VisualScene {
       uMode: { value: 1 },
       uBandMap: { value: 1 },
       uBandCount: { value: 64 },
+      uInvert: { value: 0 },
       uBoost: { value: 1 },
       uSizeComp: { value: 1 },
       uZMove: { value: 1 },
@@ -323,6 +326,7 @@ export class VisualScene {
     this.uniforms.uDepthScale.value = s.depthScale;
     this.uniforms.uMode.value = MODES[s.waveMode] ?? 1;
     this.uniforms.uBandMap.value = BAND_MAPS[s.bandMap] ?? 0;
+    this.uniforms.uInvert.value = s.invertBands ? 1 : 0;
     this.uniforms.uGlow.value = s.glow;
     this.uniforms.uBoost.value = s.boost;
     this.uniforms.uZMove.value = s.depthMove;
