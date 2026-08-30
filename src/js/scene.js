@@ -340,6 +340,18 @@ export class VisualScene {
       c.getContext('2d').drawImage(bitmapOrCanvas, 0, 0);
       source = c;
     }
+    // never hold a texture larger than the display it fills — a 4K source on
+    // a 1440p screen would waste ~20MB per window for invisible detail
+    const maxW = this.renderer.domElement.width || 1920;
+    const maxH = this.renderer.domElement.height || 1080;
+    if (source.width > maxW || source.height > maxH) {
+      const scale = Math.min(maxW / source.width, maxH / source.height);
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(source.width * scale));
+      c.height = Math.max(1, Math.round(source.height * scale));
+      c.getContext('2d').drawImage(source, 0, 0, c.width, c.height);
+      source = c;
+    }
     const tex = new THREE.CanvasTexture(source);
     // sample in display space — our shaders write raw values to the framebuffer
     tex.colorSpace = THREE.NoColorSpace;

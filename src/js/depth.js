@@ -7,7 +7,10 @@
 
 export const DEPTH_GRID_W = 256;
 
-let ortPromise = null;
+export const DEFAULT_ONNX_MODEL =
+  'https://huggingface.co/onnx-community/depth-anything-v2-small/resolve/main/onnx/model_fp16.onnx';
+const MODEL_CACHE = 'dv-model-cache-v1';
+
 const resultCache = new Map(); // cacheKey -> {data,w,h}
 
 // ------------------------------------------------------------------ heuristic
@@ -89,88 +92,39 @@ function normalizePercentile(grid, loP, hiP) {
 
 // ----------------------------------------------------------------------- onnx
 
-const ORT_CDN = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.webgpu.min.mjs';
-export const DEFAULT_ONNX_MODEL =
-  'https://huggingface.co/onnx-community/depth-anything-v2-small/resolve/main/onnx/model_fp16.onnx';
-const MODEL_CACHE = 'dv-model-cache-v1';
-
-async function loadOrt() {
-  if (!ortPromise) {
-    ortPromise = (async () => {
-      const ort = await import(/* webpackIgnore: true */ ORT_CDN);
-      ort.env.wasm.numThreads = 1; // keep to no-SIMD-threads path for portability
-      return ort;
-    })();
-    ortPromise.catch(() => { ortPromise = null; });
-  }
-  return ortPromise;
-}
-
-async function fetchModelCached(url) {
-  if ('caches' in window) {
-    const cache = await caches.open(MODEL_CACHE);
-    const hit = await cache.match(url);
-    if (hit) return hit.blob();
-    const resp = await fetch(url);
-    if (!resp.ok) throw new Error(`model download failed (${resp.status})`);
-    await cache.put(url, resp.clone());
-    return resp.blob();
-  }
-  const resp = await fetch(url);
-  if (!resp.ok) throw new Error(`model download failed (${resp.status})`);
-  return resp.blob();
-}
-
 /** Returns {data,w,h} nearness grid from Depth-Anything. Throws on failure. */
 export async function onnxDepth(bitmap, modelUrl = DEFAULT_ONNX_MODEL, onStatus = () => {}) {
-  onStatus('loading runtime…');
-  const ort = await loadOrt();
-  onStatus('fetching model (first time only)…');
-  const blob = await fetchModelCached(modelUrl);
-  onStatus('estimating depth…');
-
-  const S = 518;
-  const pixels = drawScaled(bitmap, S, S).data;
-  const input = new Float32Array(1 * 3 * S * S);
-  for (let i = 0, p = 0; i < S * S; i++, p += 4) {
-    input[i] = (pixels[p] / 255 - 0.485) / 0.229;
-    input[S * S + i] = (pixels[p + 1] / 255 - 0.456) / 0.224;
-    input[2 * S * S + i] = (pixels[p + 2] / 255 - 0.406) / 0.225;
-  }
-
-  const modelBuf = await blob.arrayBuffer();
-  let session;
+  // AI inference runs in a short-lived module worker: the ONNX WASM heap
+  // (~300MB) is fully freed when the worker terminates after each estimate.
+  onStatus('running AI model…');
+  const worker = new Worker(new URL('./depth-worker.mjs', import.meta.url), { type: 'module' });
   try {
-    session = await ort.InferenceSession.create(modelBuf, { executionProviders: ['webgpu'], graphOptimizationLevel: 'all' });
-  } catch {
-    session = await ort.InferenceSession.create(modelBuf, { executionProviders: ['wasm'], graphOptimizationLevel: 'all' });
-  }
-  const feeds = { [session.inputNames[0]]: new ort.Tensor('float32', input, [1, 3, S, S]) };
-  const results = await session.run(feeds);
-  const outName = session.outputNames[0];
-  const out = results[outName]; // [1,1,S,S] disparity (bigger = closer)
-  const dims = out.dims;
-  const ow = dims[dims.length - 1], oh = dims[dims.length - 2];
-  const disp = out.data;
-
-  // resample disparity onto our shared grid size
-  const aspect = bitmap.height / bitmap.width;
-  const w = DEPTH_GRID_W;
-  const h = Math.max(32, Math.round(DEPTH_GRID_W * aspect));
-  const near = new Float32Array(w * h);
-  for (let y = 0; y < h; y++) {
-    const sy = Math.min(oh - 1, Math.floor(((y + 0.5) / h) * oh));
-    for (let x = 0; x < w; x++) {
-      const sx = Math.min(ow - 1, Math.floor(((x + 0.5) / w) * ow));
-      near[y * w + x] = disp[sy * ow + sx];
+    const result = await new Promise((resolve, reject) => {
+      worker.onmessage = (e) => (e.data.ok ? resolve(e.data) : reject(new Error(e.data.error)));
+      worker.onerror = (e) => reject(new Error(e.message || 'worker error'));
+      worker.postMessage({ bitmap, modelUrl, S: 518 });
+    });
+    onStatus('resampling depth grid…');
+    // resample the full-resolution disparity onto our shared grid size
+    const aspect = bitmap.height / bitmap.width;
+    const w = DEPTH_GRID_W;
+    const h = Math.max(32, Math.round(DEPTH_GRID_W * aspect));
+    const near = new Float32Array(w * h);
+    const ow = result.ow, oh = result.oh, disp = result.grid;
+    for (let y = 0; y < h; y++) {
+      const sy = Math.min(oh - 1, Math.floor(((y + 0.5) / h) * oh));
+      for (let x = 0; x < w; x++) {
+        const sx = Math.min(ow - 1, Math.floor(((x + 0.5) / w) * ow));
+        near[y * w + x] = disp[sy * ow + sx];
+      }
     }
+    normalizePercentile(near, 0.02, 0.98);
+    blurGrid(near, w, h, 1);
+    return { data: near, w, h };
+  } finally {
+    worker.terminate();
   }
-  normalizePercentile(near, 0.02, 0.98);
-  blurGrid(near, w, h, 1);
-  try { await session.release(); } catch {}
-  return { data: near, w, h };
 }
-
 /** cache-aware entry point */
 export async function estimateDepth(bitmap, mode, modelUrl, onStatus = () => {}) {
   if (mode === 'flat') return null;
