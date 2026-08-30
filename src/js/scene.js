@@ -22,6 +22,7 @@ const VERT = /* glsl */ `
   uniform float uZMove;
   uniform float uXYMove;
   uniform float uVis;
+  uniform float uExitPush;
   uniform sampler2D uBands;
 
   attribute vec3 aColor;
@@ -81,8 +82,9 @@ const VERT = /* glsl */ `
     pos.xy += vec2(sin(uTime * 3.1 + aRand * 40.0), cos(uTime * 2.6 + aRand * 30.0))
             * amp * 0.006 * uIntensity * uXYMove;
     pos.xy *= 1.0 + uBeat * 0.012 * uXYMove;
-    // idle exit: the cloud flies toward the camera as it fades out
-    pos.z += (1.0 - uVis) * 0.4;
+    // idle exit: 'fly-by' rush points toward the camera as they fade;
+    // the default clean fade just dissolves in place
+    pos.z += (1.0 - uVis) * uExitPush;
 
     vec4 mv = modelViewMatrix * vec4(pos, 1.0);
     gl_Position = projectionMatrix * mv;
@@ -190,6 +192,7 @@ export class VisualScene {
       uZMove: { value: 1 },
       uXYMove: { value: 1 },
       uVis: { value: 1 },
+      uExitPush: { value: 0 },
       uGlow: { value: 1.1 },
       uBands: { value: this.bandTex },
     };
@@ -361,6 +364,7 @@ export class VisualScene {
     this.uniforms.uXYMove.value = s.xyMove;
     this.overscan = s.overscan;
     this.hideBackdrop = !!s.hideBackdrop;
+    this.uniforms.uExitPush.value = s.flybyExit ? 0.4 : 0;
     this.setBandCount(s.bands);
     // size compensation: additive brightness ∝ point area (diameter²),
     // normalized so size ≈ 1 (diameter = spacing) is the reference look

@@ -228,7 +228,7 @@ function loop(now) {
   } else {
     quietSince = 0;
   }
-  const tau = target === 0 ? 110 : 250; // fast fly-by exit, gentler return
+  const tau = target === 0 ? 100 : 250; // clean 0.5s fade out, gentler return
   idleVis += (target - idleVis) * (1 - Math.exp(-spaced / tau));
   scene.setIdleVis(idleVis);
   if (target === 0 && idleVis < 0.004) return; // fully faded: sleep, rAF still watches for audio

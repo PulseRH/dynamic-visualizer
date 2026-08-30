@@ -17,6 +17,7 @@ const DEFAULTS = {
   overscan: 1.0,           // extra zoom so parallax never reveals edges
   overscanAuto: true,      // overscan follows the parallax setting
   hideBackdrop: false,     // black background while particles are on screen
+  flybyExit: false,        // idle exit: points rush the camera instead of a clean fade
   parallax: 0.8,
   audioSource: 'demo',     // 'system' | 'mic' | 'file' | 'demo'
   audioFileUrl: null,
