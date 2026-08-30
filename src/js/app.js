@@ -262,8 +262,12 @@ function loop(now) {
   }
   const tau = target === 0 ? 100 : 250; // clean 0.5s fade out, gentler return
   idleVis += (target - idleVis) * (1 - Math.exp(-spaced / tau));
-  scene.setIdleVis(idleVis, spaced);
-  if (target === 0 && idleVis < 0.004) return; // fully faded: sleep, rAF still watches for audio
+  // snap the endpoints so the faded state is exactly the plain wallpaper at
+  // full brightness (asymptotic easing would never quite get there)
+  if (target === 0 && idleVis < 0.02) idleVis = 0;
+  if (target === 1 && idleVis > 0.98) idleVis = 1;
+  scene.setIdleVis(idleVis);
+  if (target === 0 && idleVis === 0) return; // fully faded: sleep, rAF still watches for audio
 
   scene.render(analyzer, get('parallax'));
   ui.setLevel(analyzer.level);

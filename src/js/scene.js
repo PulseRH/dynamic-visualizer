@@ -245,7 +245,7 @@ export class VisualScene {
     // (cloudAspect × 1) at distance camBaseZ; the backdrop sits 0.02 farther,
     // so scaling its footprint by (camBaseZ + 0.02) / camBaseZ × overscan
     // projects it onto exactly the same screen rect as the particles.
-    const k = ((this.camBaseZ + 0.02) / this.camBaseZ) * (this.overscan || 1) * 1.02;
+    const k = ((this.camBaseZ + 0.02) / this.camBaseZ) * (this.overscan || 1);
     this.backdrop.scale.set(this.cloudAspect * k, k, 1);
   }
 
@@ -282,21 +282,15 @@ export class VisualScene {
   }
 
   /** idle envelope: 1 = particles live, 0 = plain wallpaper (audio silent).
-   *  Fades the cloud (flying toward the camera only in fly-by mode) and
-   *  brings the backdrop back with its own slower, smoother fade. */
-  setIdleVis(v, dtMs = 16) {
+   *  One envelope drives both layers: the cloud fades with v, the wallpaper
+   *  counter-fades with (1 - v) — a perfect crossfade that ends at the
+   *  wallpaper's exact normal brightness. */
+  setIdleVis(v) {
     this.idleVis = v;
     this.uniforms.uVis.value = v;
     if (this.backdrop && !this.backdrop.isDestroyed) {
       const base = this.hideBackdrop ? 0 : this.backdropBaseDim;
-      const target = base + (1 - base) * (1 - v);
-      // the wallpaper image fades on its own gentler curve
-      if (this.backdropDim === null || this.backdropDim === undefined) {
-        this.backdropDim = target; // snap after a backdrop rebuild
-      } else {
-        this.backdropDim += (target - this.backdropDim) * (1 - Math.exp(-Math.max(1, dtMs) / 650));
-      }
-      this.backdrop.material.uniforms.uDim.value = this.backdropDim;
+      this.backdrop.material.uniforms.uDim.value = base + (1 - base) * (1 - v);
     }
   }
 
@@ -338,7 +332,6 @@ export class VisualScene {
     this.backdrop.renderOrder = -1;
     this.backdrop.frustumCulled = false;
     this.backdropBaseDim = mode === 'dim' ? 0.17 : 0;
-    this.backdropDim = null; // snap to the current target on next setIdleVis
     this.scene.add(this.backdrop);
     this.setIdleVis(this.idleVis ?? 1); // apply the current idle envelope
     this._layoutBackdrop();
