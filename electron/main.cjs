@@ -228,6 +228,9 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
+  // Windows' occlusion tracker pauses rAF for covered/minimized windows —
+  // fatal for a wallpaper app whose windows live behind the desktop.
+  app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
   app.on('second-instance', () => {
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();

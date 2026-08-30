@@ -227,19 +227,22 @@ onChange((all, patch) => {
 });
 
 let lastRender = 0;
-let lastAudioT = 0;
+// Analysis ticker (preview only): a timer instead of rAF, so minimized or
+// covered states never stall the spectrum feed to the wallpaper windows.
+if (!isWallpaperWindow) {
+  let lastA = performance.now();
+  setInterval(() => {
+    const now = performance.now();
+    const dt = Math.min(50, now - lastA);
+    lastA = now;
+    const a = audio.frame(dt, now);
+    if (wallpaperAudioActive) bridge.sendSpectrum(a.bands, a.energy, a.beat);
+  }, 33);
+}
+
 function loop(now) {
   requestAnimationFrame(loop);
-
-  // analysis runs even while hidden (the preview feeds the wallpaper windows)
-  let analyzer;
-  if (isWallpaperWindow) {
-    analyzer = remoteAnalyzer;
-  } else {
-    analyzer = audio.frame(Math.min(50, now - (lastAudioT || now - 16)), now);
-    lastAudioT = now;
-    if (wallpaperAudioActive) bridge.sendSpectrum(analyzer.bands, analyzer.energy, analyzer.beat);
-  }
+  const analyzer = isWallpaperWindow ? remoteAnalyzer : audio.analyzer;
 
   if (document.hidden) return;
 
@@ -259,7 +262,7 @@ function loop(now) {
   } else {
     quietSince = 0;
   }
-  const tau = target === 0 ? 500 : 350; // slow dissolve out, gentle return
+  const tau = target === 0 ? 330 : 350; // ~1s dissolve out, gentle return
   idleVis += (target - idleVis) * (1 - Math.exp(-spaced / tau));
   // snap the endpoints so the faded state is exactly the plain wallpaper at
   // full brightness (asymptotic easing would never quite get there)
