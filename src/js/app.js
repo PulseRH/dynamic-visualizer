@@ -308,7 +308,7 @@ function advanceIdle(a, dtMs, now) {
   } else {
     quietSince = 0;
   }
-  const tau = target === 0 ? 160 : 250; // points clear in ~0.5s
+  const tau = target === 0 ? 155 : 250; // points clear in ~0.6s
   idleVis += (target - idleVis) * (1 - Math.exp(-Math.max(1, dtMs) / tau));
   // snap the endpoints so the faded state is exactly the plain wallpaper at
   // full brightness (asymptotic easing would never quite get there)
