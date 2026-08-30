@@ -290,16 +290,30 @@ export class VisualScene {
   }
 
   /** idle envelope: 1 = particles live, 0 = plain wallpaper (audio silent).
-   *  One envelope drives both layers: the cloud fades with v, the wallpaper
-   *  counter-fades with (1 - v) — a perfect crossfade that ends at the
-   *  wallpaper's exact normal brightness. */
-  setIdleVis(v) {
+   *  The cloud fades on this envelope; the wallpaper chases it on a slower
+   *  curve, so the points are fully gone before the image reaches full
+   *  opacity. backdropSettled() reports when that rise has completed. */
+  setIdleVis(v, dtMs = 16) {
     this.idleVis = v;
     this.uniforms.uVis.value = v;
     if (this.backdrop && !this.backdrop.isDestroyed) {
       const base = this.hideBackdrop ? 0 : this.backdropBaseDim;
-      this.backdrop.material.uniforms.uDim.value = base + (1 - base) * (1 - v);
+      const target = base + (1 - base) * (1 - v);
+      if (Math.abs(target - this.backdropDim) < 0.01) {
+        this.backdropDim = target; // settled
+      } else {
+        this.backdropDim += (target - this.backdropDim) * (1 - Math.exp(-Math.max(1, dtMs) / 400));
+      }
+      this.backdrop.material.uniforms.uDim.value = this.backdropDim;
     }
+  }
+
+  /** true when the wallpaper image has finished its rise after the points left */
+  backdropSettled() {
+    if (!this.backdrop || this.backdrop.isDestroyed) return true;
+    const base = this.hideBackdrop ? 0 : this.backdropBaseDim;
+    const target = base + (1 - base) * (1 - this.idleVis);
+    return Math.abs(this.backdropDim - target) < 0.005;
   }
 
   /** dim image backdrop ('black' | 'dim' | 'off') */

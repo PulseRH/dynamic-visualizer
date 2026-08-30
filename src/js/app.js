@@ -290,23 +290,25 @@ function loop(now) {
   const spaced = Math.max(0, now - lastRender);
   lastRender = now;
 
-  // idle envelope: fades start almost immediately on silence, but dissolve
-  // slowly (~1.5s) so the handoff reads as graceful, not abrupt
+  // idle envelope: ~0.15s after silence the points fade out fast; the
+  // wallpaper image chases on a slower curve and finishes after they're gone
   const silent = audio.mode !== 'demo' && get('idleSleep') && analyzer.energy < 0.01;
   let target = 1;
   if (silent) {
     if (!quietSince) quietSince = now;
-    target = now - quietSince > 200 ? 0 : 1;
+    target = now - quietSince > 150 ? 0 : 1;
   } else {
     quietSince = 0;
   }
-  const tau = target === 0 ? 330 : 350; // ~1s dissolve out, gentle return
+  const tau = target === 0 ? 100 : 250; // points clear quickly
   idleVis += (target - idleVis) * (1 - Math.exp(-spaced / tau));
   // snap the endpoints so the faded state is exactly the plain wallpaper at
   // full brightness (asymptotic easing would never quite get there)
   if (target === 0 && idleVis < 0.02) idleVis = 0;
   if (target === 1 && idleVis > 0.98) idleVis = 1;
-  scene.setIdleVis(idleVis);
+  scene.setIdleVis(idleVis, spaced);
+  // keep rendering until the wallpaper image has fully risen, then sleep
+  if (target === 0 && idleVis === 0 && scene.backdropSettled()) return;
   if (target === 0 && idleVis === 0) return; // fully faded: sleep, rAF still watches for audio
 
   scene.render(analyzer, get('parallax'));
