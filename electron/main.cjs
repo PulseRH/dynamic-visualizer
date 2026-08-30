@@ -294,6 +294,29 @@ ipcMain.handle('capture:stopPulse', () => { stopPulseCapture(); return { ok: tru
 //   Linux/X11: best-effort _NET_WM_WINDOW_TYPE_DESKTOP via xprop + wmctrl
 // ---------------------------------------------------------------------------
 let wallpaperWins = [];
+let cursorTimer = null;
+
+/** Feed the global cursor position to wallpaper windows so the wallpaper
+ *  subtly parallaxes with the mouse (they're click-through, so they get no
+ *  pointer events of their own). Normalized per window to -1..1. */
+function startCursorBroadcast() {
+  if (cursorTimer) return;
+  cursorTimer = setInterval(() => {
+    if (!wallpaperWins.length) return;
+    const pt = screen.getCursorScreenPoint();
+    for (const win of wallpaperWins) {
+      if (win.isDestroyed()) continue;
+      const b = win.getBounds();
+      const nx = Math.max(-1, Math.min(1, ((pt.x - b.x) / b.width) * 2 - 1));
+      const ny = Math.max(-1, Math.min(1, ((pt.y - b.y) / b.height) * 2 - 1));
+      win.webContents.send('cursor', { nx, ny });
+    }
+  }, 33);
+}
+
+function stopCursorBroadcast() {
+  if (cursorTimer) { clearInterval(cursorTimer); cursorTimer = null; }
+}
 let tray = null;
 let psBlockerId = null;
 let wallpaperActive = false;
@@ -596,6 +619,7 @@ async function doEnableWallpaperMode() {
     wallpaperActive = true;
     psBlockerId = powerSaveBlocker.start('prevent-app-suspension');
     ensureTray();
+    startCursorBroadcast();
     broadcastWallpaperState();
     return { ok: true };
   } catch (err) {
@@ -613,6 +637,7 @@ function disableWallpaperMode() {
   }
   wallpaperWins = [];
   wallpaperActive = false;
+  stopCursorBroadcast();
   if (psBlockerId !== null) { powerSaveBlocker.stop(psBlockerId); psBlockerId = null; }
   if (tray) { tray.destroy(); tray = null; }
   broadcastWallpaperState();

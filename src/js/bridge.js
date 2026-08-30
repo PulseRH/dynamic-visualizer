@@ -81,4 +81,9 @@ export const bridge = {
     if (ev) ev.onWallpaperState(cb);
     else cb(false);
   },
+
+  onCursor(cb) {
+    if (ev) return ev.onCursor(cb);
+    return () => {};
+  },
 };

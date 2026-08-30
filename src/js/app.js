@@ -136,7 +136,12 @@ async function rebuildCloud() {
 // ------------------------------------------------------- wallpaper mode
 
 const isWallpaperWindow = new URLSearchParams(location.search).get('wallpaper') === '1';
-if (isWallpaperWindow) document.body.classList.add('wallpaper');
+if (isWallpaperWindow) {
+  document.body.classList.add('wallpaper');
+  // wallpaper windows are click-through: the main process feeds us the global
+  // cursor so the wallpaper still parallaxes with the mouse
+  bridge.onCursor(({ nx, ny }) => scene.setExternalPointer(nx, ny));
+}
 
 async function toggleWallpaper() {
   if (isWallpaperWindow) return;

@@ -17,6 +17,11 @@ contextBridge.exposeInMainWorld('dv', {
     ipcRenderer.on('wallpaperMode:changed', handler);
     return () => ipcRenderer.removeListener('wallpaperMode:changed', handler);
   },
+  onCursor: (cb) => {
+    const handler = (_e, pt) => cb(pt);
+    ipcRenderer.on('cursor', handler);
+    return () => ipcRenderer.removeListener('cursor', handler);
+  },
   onPcm: (cb) => {
     const handler = (_e, data) => cb(data);
     ipcRenderer.on('capture:pcm', handler);

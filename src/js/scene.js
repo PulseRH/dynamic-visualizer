@@ -266,6 +266,12 @@ export class VisualScene {
     this._layoutBackdrop();
   }
 
+  /** external pointer feed (wallpaper windows track the global cursor) */
+  setExternalPointer(nx, ny) {
+    this.pointer.tx = nx;
+    this.pointer.ty = ny;
+  }
+
   /** dim image backdrop ('black' | 'dim' | 'off') */
   setBackdrop(bitmapOrCanvas, mode) {
     if (this.backdrop) {
@@ -380,13 +386,15 @@ export class VisualScene {
       / (2 * tanHalf * this.camBaseZ);
     this.uniforms.uCamZ.value = this.camBaseZ;
 
-    // gentle autonomous drift + pointer parallax ('audio' mode = pointer only)
-    const p = parallaxStrength * 0.06 * (this.autoMotion === false ? 0 : 1);
+    // pointer parallax is always available (it's user-driven); the autonomous
+    // drift is suppressed in 'audio' mode
+    const p = parallaxStrength * 0.06;
+    const drift = this.autoMotion ? 1 : 0;
     this.pointer.x += (this.pointer.tx - this.pointer.x) * Math.min(1, dt * 3);
     this.pointer.y += (this.pointer.ty - this.pointer.y) * Math.min(1, dt * 3);
-    const t = this.autoMotion === false ? 0 : this.time;
-    this.camera.position.x = Math.sin(t * 0.13) * p * 0.6 + this.pointer.x * p;
-    this.camera.position.y = Math.cos(t * 0.11) * p * 0.4 - this.pointer.y * p * 0.6;
+    const t = this.time;
+    this.camera.position.x = Math.sin(t * 0.13) * p * 0.6 * drift + this.pointer.x * p;
+    this.camera.position.y = Math.cos(t * 0.11) * p * 0.4 * drift - this.pointer.y * p * 0.6;
     this.camera.position.z = this.camBaseZ + analyzer.beat * 0.02;
     this.camera.lookAt(0, 0, 0.1);
 
