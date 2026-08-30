@@ -23,6 +23,7 @@ const VERT = /* glsl */ `
   uniform float uXYMove;
   uniform float uVis;
   uniform float uExitPush;
+  uniform vec3 uCursor;   // xy = cursor position in world space, z = ripple strength
   uniform sampler2D uBands;
 
   attribute vec3 aColor;
@@ -85,6 +86,12 @@ const VERT = /* glsl */ `
     // idle exit: 'fly-by' rush points toward the camera as they fade;
     // the default clean fade just dissolves in place
     pos.z += (1.0 - uVis) * uExitPush;
+
+    // cursor ripple: a soft radial swell that follows the mouse
+    float cd = distance(pos.xy, uCursor.xy);
+    float ripple = exp(-cd * cd * 4.0) * uCursor.z;
+    pos.z += ripple * 0.1;
+    pos.xy += (pos.xy - uCursor.xy) * ripple * 0.05;
 
     vec4 mv = modelViewMatrix * vec4(pos, 1.0);
     gl_Position = projectionMatrix * mv;
@@ -193,6 +200,7 @@ export class VisualScene {
       uXYMove: { value: 1 },
       uVis: { value: 1 },
       uExitPush: { value: 0 },
+      uCursor: { value: new THREE.Vector3(0, 0, 0) },
       uGlow: { value: 1.1 },
       uBands: { value: this.bandTex },
     };
@@ -363,6 +371,7 @@ export class VisualScene {
     this.uniforms.uXYMove.value = s.xyMove;
     this.overscan = s.overscan;
     this.hideBackdrop = !!s.hideBackdrop;
+    this.cursorRipple = !!s.cursorRipple;
     this.uniforms.uExitPush.value = s.flybyExit ? 0.4 : 0;
     this.setBandCount(s.bands);
     // size compensation: additive brightness ∝ point area (diameter²),
@@ -423,6 +432,19 @@ export class VisualScene {
     const t = this.time;
     this.camera.position.x = Math.sin(t * 0.13) * p * 0.6 * drift + this.pointer.x * p;
     this.camera.position.y = Math.cos(t * 0.11) * p * 0.4 * drift - this.pointer.y * p * 0.6;
+
+    // cursor ripple: strength rises with cursor speed, decays when it stops
+    const spd = Math.hypot(this.pointer.tx - (this._prevNx ?? 0), this.pointer.ty - (this._prevNy ?? 0)) / Math.max(dt, 0.001);
+    this._prevNx = this.pointer.tx;
+    this._prevNy = this.pointer.ty;
+    this.cursorStrength = Math.min(1, (this.cursorStrength ?? 0) * Math.exp(-dt / 0.3) + spd * 0.12);
+    const rippleOn = this.cursorRipple ? 1 : 0;
+    const halfH = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) * this.camBaseZ;
+    this.uniforms.uCursor.value.set(
+      this.pointer.x * halfH * this.camera.aspect * 2,
+      -this.pointer.y * halfH * 2,
+      this.cursorStrength * rippleOn,
+    );
     this.camera.position.z = this.camBaseZ + analyzer.beat * 0.02;
     this.camera.lookAt(0, 0, 0.1);
 

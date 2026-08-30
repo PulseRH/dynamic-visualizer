@@ -249,18 +249,17 @@ function loop(now) {
   const spaced = Math.max(0, now - lastRender);
   lastRender = now;
 
-  // idle envelope: ~0.6s after silence the points fly toward the camera and
-  // fade out in ~0.5s while the backdrop image returns to its full look; the
-  // render loop then sleeps until sound returns
+  // idle envelope: fades start almost immediately on silence, but dissolve
+  // slowly (~1.5s) so the handoff reads as graceful, not abrupt
   const silent = audio.mode !== 'demo' && get('idleSleep') && analyzer.energy < 0.01;
   let target = 1;
   if (silent) {
     if (!quietSince) quietSince = now;
-    target = now - quietSince > 600 ? 0 : 1;
+    target = now - quietSince > 200 ? 0 : 1;
   } else {
     quietSince = 0;
   }
-  const tau = target === 0 ? 100 : 250; // clean 0.5s fade out, gentler return
+  const tau = target === 0 ? 500 : 350; // slow dissolve out, gentle return
   idleVis += (target - idleVis) * (1 - Math.exp(-spaced / tau));
   // snap the endpoints so the faded state is exactly the plain wallpaper at
   // full brightness (asymptotic easing would never quite get there)

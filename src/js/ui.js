@@ -99,6 +99,7 @@ export class UI {
     $('invertBands').onchange = (e) => set({ invertBands: e.target.checked });
     $('hideBackdrop').onchange = (e) => set({ hideBackdrop: e.target.checked });
     $('flybyExit').onchange = (e) => set({ flybyExit: e.target.checked });
+    $('cursorRipple').onchange = (e) => set({ cursorRipple: e.target.checked });
 
     // Parallax auto-raises Overscan (so the edges stay hidden) until the user
     // takes manual control of Overscan.
@@ -195,6 +196,7 @@ export class UI {
     $('invertBands').checked = !!get('invertBands');
     $('hideBackdrop').checked = !!get('hideBackdrop');
     $('flybyExit').checked = !!get('flybyExit');
+    $('cursorRipple').checked = !!get('cursorRipple');
 
     const src = get('audioSource');
     const hints = {

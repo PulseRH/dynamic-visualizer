@@ -18,6 +18,7 @@ const DEFAULTS = {
   overscanAuto: true,      // overscan follows the parallax setting
   hideBackdrop: false,     // black background while particles are on screen
   flybyExit: false,        // idle exit: points rush the camera instead of a clean fade
+  cursorRipple: true,      // particles swell around the mouse cursor
   parallax: 0.8,
   audioSource: 'demo',     // 'system' | 'mic' | 'file' | 'demo'
   audioFileUrl: null,
