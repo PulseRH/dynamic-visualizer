@@ -112,7 +112,11 @@
         <input type="range" id="bands" min="8" max="128" step="4" />
         <span class="val"></span>
       </label>
-      <p class="hint">Intensity scales both motions; Depth move = toward/away from you, XY move = sideways shimmer. Set XY to 0 for depth-only motion.</p>
+      <label class="slider-row">Overscan
+        <input type="range" id="overscan" min="1" max="1.6" step="0.05" />
+        <span class="val"></span>
+      </label>
+      <p class="hint">Intensity scales both motions; Depth move = toward/away from you, XY move = sideways shimmer. Set XY to 0 for depth-only motion. Overscan zooms in a little extra so parallax never reveals an edge — it follows Parallax automatically, or set it yourself.</p>
     </section>
 
     <section>

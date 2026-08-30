@@ -14,6 +14,8 @@ const DEFAULTS = {
   xyMove: 1.0,             // lateral motion multiplier (x/y shimmer + swell)
   bands: 64,               // number of frequency bands = number of regions
   invertBands: false,      // flip band direction: bass toward viewer / far side
+  overscan: 1.0,           // extra zoom so parallax never reveals edges
+  overscanAuto: true,      // overscan follows the parallax setting
   parallax: 0.8,
   audioSource: 'demo',     // 'system' | 'mic' | 'file' | 'demo'
   audioFileUrl: null,

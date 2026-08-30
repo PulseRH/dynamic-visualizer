@@ -90,14 +90,30 @@ export class UI {
     slider('glow', 'glow', (v) => v.toFixed(2));
     slider('boost', 'boost', (v) => v.toFixed(2));
     slider('intensity', 'intensity', (v) => v.toFixed(2));
-    slider('bands', 'bands');
+    slider('bands', 'bands', (v) => String(v));
     slider('depthMove', 'depthMove', (v) => v.toFixed(2));
     slider('xyMove', 'xyMove', (v) => v.toFixed(2));
-    slider('parallax', 'parallax', (v) => v.toFixed(2));
 
     $('autoQuality').onchange = (e) => set({ autoQuality: e.target.checked });
     $('idleSleep').onchange = (e) => set({ idleSleep: e.target.checked });
     $('invertBands').onchange = (e) => set({ invertBands: e.target.checked });
+
+    // Parallax auto-raises Overscan (so the edges stay hidden) until the user
+    // takes manual control of Overscan.
+    const parallaxEl = $('parallax');
+    parallaxEl.oninput = () => {
+      const v = Number(parallaxEl.value);
+      parallaxEl.parentElement.querySelector('.val').textContent = v.toFixed(2);
+      const patch = { parallax: v };
+      if (get('overscanAuto')) patch.overscan = Math.round((1 + v * 0.15) * 20) / 20;
+      set(patch);
+    };
+    const overscanEl = $('overscan');
+    overscanEl.oninput = () => {
+      const v = Number(overscanEl.value);
+      overscanEl.parentElement.querySelector('.val').textContent = v.toFixed(2);
+      set({ overscan: v, overscanAuto: false });
+    };
   }
 
   _wireImageButtons() {
@@ -170,6 +186,7 @@ export class UI {
     setSlider('depthMove', get('depthMove'));
     setSlider('xyMove', get('xyMove'));
     setSlider('parallax', get('parallax'));
+    setSlider('overscan', get('overscan'));
 
     $('autoQuality').checked = get('autoQuality');
     $('idleSleep').checked = get('idleSleep');

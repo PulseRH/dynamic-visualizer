@@ -225,11 +225,12 @@ export class VisualScene {
 
   _fitCamera() {
     // COVER fit: keep the image's square pixels and zoom until it fills the
-    // screen, cropping overflow — like background-size: cover
+    // screen, cropping overflow — like background-size: cover. Overscan adds
+    // extra zoom so parallax offsets never reveal an edge.
     const halfH = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
     const dH = 0.5 / halfH;                                       // height just fills
     const dW = (this.cloudAspect / 2) / (halfH * this.camera.aspect); // width just fills
-    this.camBaseZ = Math.min(dH, dW);
+    this.camBaseZ = Math.min(dH, dW) / (this.overscan || 1);
   }
 
   _layoutBackdrop() {
@@ -353,6 +354,7 @@ export class VisualScene {
     this.uniforms.uBoost.value = s.boost;
     this.uniforms.uZMove.value = s.depthMove;
     this.uniforms.uXYMove.value = s.xyMove;
+    this.overscan = s.overscan;
     this.setBandCount(s.bands);
     // size compensation: additive brightness ∝ point area (diameter²),
     // normalized so size ≈ 1 (diameter = spacing) is the reference look
