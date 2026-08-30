@@ -299,6 +299,7 @@ export class VisualScene {
     if (this.backdrop && !this.backdrop.isDestroyed) {
       const base = this.hideBackdrop ? 0 : this.backdropBaseDim;
       const target = base + (1 - base) * (1 - v);
+      if (!Number.isFinite(this.backdropDim)) this.backdropDim = target;
       if (Math.abs(target - this.backdropDim) < 0.01) {
         this.backdropDim = target; // settled
       } else {
@@ -354,6 +355,7 @@ export class VisualScene {
     this.backdrop.renderOrder = -1;
     this.backdrop.frustumCulled = false;
     this.backdropBaseDim = mode === 'dim' ? 0.17 : 0;
+    this.backdropDim = this.backdropBaseDim; // matches target for idleVis = 1
     this.scene.add(this.backdrop);
     this.setIdleVis(this.idleVis ?? 1); // apply the current idle envelope
     this._layoutBackdrop();
