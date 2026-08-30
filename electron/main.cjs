@@ -221,6 +221,14 @@ function createWindow() {
     },
   });
   mainWindow.loadURL('app://bundle/src/index.html');
+  // Closing the preview while wallpaper mode is running hides it to the tray
+  // instead of quitting — the wallpaper (and its audio analysis) keep playing.
+  mainWindow.on('close', (e) => {
+    if (wallpaperActive && !app.isQuitting) {
+      e.preventDefault();
+      mainWindow.hide();
+    }
+  });
   mainWindow.on('closed', () => { mainWindow = null; });
 }
 
@@ -245,9 +253,20 @@ if (!gotLock) {
       callback(permission === 'media' || permission === 'audioCapture');
     });
     createWindow();
+    ensureTray(); // the app lives in the tray; closing the preview keeps it running
   });
 
-  app.on('window-all-closed', () => { app.quit(); });
+  // With wallpaper mode active, closing the preview only hides it — the
+  // wallpaper keeps playing and the app stays in the tray. Without wallpaper
+  // mode there is nothing to keep running, so closing quits.
+  app.on('window-all-closed', () => { if (!wallpaperActive) app.quit(); });
+  app.on('activate', () => { if (!mainWindow) createWindow(); });
+  app.on('before-quit', () => {
+    app.isQuitting = true;
+    stopCursorBroadcast();
+    stopPulseCapture();
+    if (tray) { tray.destroy(); tray = null; }
+  });
 }
 
 ipcMain.handle('app:info', () => ({
@@ -400,18 +419,32 @@ function makeTrayIcon() {
 }
 
 function ensureTray() {
-  if (tray) return;
+  if (tray) { refreshTrayMenu(); return; }
   tray = new Tray(makeTrayIcon());
-  tray.setToolTip('Dynamic Visualizer — wallpaper mode');
+  tray.setToolTip('Dynamic Visualizer');
+  tray.on('click', () => showPreview());
+  refreshTrayMenu();
+}
+
+function refreshTrayMenu() {
+  if (!tray) return;
   const menu = Menu.buildFromTemplate([
-    { label: 'Wallpaper mode: ON', enabled: false },
-    { label: 'Show preview', click: () => { if (mainWindow) { mainWindow.show(); mainWindow.focus(); } } },
-    { label: 'Stop wallpaper mode', click: () => disableWallpaperMode() },
+    { label: 'Open Dynamic Visualizer', click: () => showPreview() },
+    {
+      label: wallpaperActive ? 'Stop wallpaper mode' : 'Start wallpaper mode',
+      click: () => (wallpaperActive ? disableWallpaperMode() : enableWallpaperMode()),
+    },
     { type: 'separator' },
-    { label: 'Quit', click: () => app.quit() },
+    { label: 'Quit', click: () => { app.isQuitting = true; app.quit(); } },
   ]);
   tray.setContextMenu(menu);
-  tray.on('click', () => { if (mainWindow) { mainWindow.show(); mainWindow.focus(); } });
+}
+
+function showPreview() {
+  if (!mainWindow || mainWindow.isDestroyed()) createWindow();
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
 }
 
 function broadcastWallpaperState() {
@@ -661,7 +694,7 @@ function disableWallpaperMode() {
   wallpaperActive = false;
   stopCursorBroadcast();
   if (psBlockerId !== null) { powerSaveBlocker.stop(psBlockerId); psBlockerId = null; }
-  if (tray) { tray.destroy(); tray = null; }
+  refreshTrayMenu();
   broadcastWallpaperState();
 }
 
