@@ -90,6 +90,7 @@ export class UI {
     slider('glow', 'glow', (v) => v.toFixed(2));
     slider('boost', 'boost', (v) => v.toFixed(2));
     slider('intensity', 'intensity', (v) => v.toFixed(2));
+    slider('speedVol', 'speedVol', (v) => v.toFixed(2));
     slider('sensGain', 'sensGain', (v) => v.toFixed(2));
     slider('sensFloor', 'sensFloor', (v) => v.toFixed(2));
     slider('sensCurve', 'sensCurve', (v) => v.toFixed(2));
@@ -188,6 +189,7 @@ export class UI {
     setSlider('glow', get('glow'));
     setSlider('boost', get('boost'));
     setSlider('intensity', get('intensity'));
+    setSlider('speedVol', get('speedVol'));
     setSlider('sensGain', get('sensGain'));
     setSlider('sensFloor', get('sensFloor'));
     setSlider('sensCurve', get('sensCurve'));

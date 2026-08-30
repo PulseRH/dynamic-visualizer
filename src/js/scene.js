@@ -5,7 +5,6 @@
 import * as THREE from '../vendor/three.module.js';
 
 const VERT = /* glsl */ `
-  uniform float uTime;
   uniform float uEnergy;
   uniform float uBeat;
   uniform float uIntensity;
@@ -21,6 +20,8 @@ const VERT = /* glsl */ `
   uniform float uSizeComp;
   uniform float uZMove;
   uniform float uXYMove;
+  uniform float uXYTime;   // xy-motion clock, runs faster with volume
+  uniform float uWaveTime; // wave-phase clock, also volume-ramped
   uniform float uVis;
   uniform float uExitPush;
   uniform vec3 uCursor;   // xy = cursor position in world space, z = ripple strength
@@ -58,19 +59,19 @@ const VERT = /* glsl */ `
     float w;
     if (uMode < 0.5) {
       // traveling wave across the image
-      w = sin(uTime * 1.7 + uvw.x * 7.0 + near * 5.0 + aRand * 0.7);
+      w = sin(uWaveTime * 1.7 + uvw.x * 7.0 + near * 5.0 + aRand * 0.7);
     } else if (uMode < 1.5) {
       // radial ripple from the center
       float d = distance(uvw, vec2(0.5));
-      w = sin(d * 16.0 - uTime * 3.1 + near * 3.0) * (1.0 - d * 0.55);
+      w = sin(d * 16.0 - uWaveTime * 3.1 + near * 3.0) * (1.0 - d * 0.55);
     } else if (uMode < 2.5) {
       // horizontal slices pulsing like bars
       float row = floor(uvw.y * 28.0);
-      w = sin(uTime * 2.2 + row * 0.9) * 0.75 + sin(uTime * 5.3 + row * 2.1) * 0.25;
+      w = sin(uWaveTime * 2.2 + row * 0.9) * 0.75 + sin(uWaveTime * 5.3 + row * 2.1) * 0.25;
     } else if (uMode < 3.5) {
       // slow ambient drift (nice at idle / low energy)
-      w = sin(uvw.x * 9.0 + uTime * 0.5) * sin(uvw.y * 7.0 - uTime * 0.42) * 1.3
-        + sin(uTime * 0.8 + aRand * 6.2831) * 0.45;
+      w = sin(uvw.x * 9.0 + uWaveTime * 0.5) * sin(uvw.y * 7.0 - uWaveTime * 0.42) * 1.3
+        + sin(uWaveTime * 0.8 + aRand * 6.2831) * 0.45;
     } else {
       // pure audio: no self-motion at all — the spectrum alone displaces
       w = 1.0;
@@ -80,7 +81,7 @@ const VERT = /* glsl */ `
     disp += uBeat * 0.035 * uZMove * (0.15 + near);   // kicks push the cloud forward
 
     vec3 pos = vec3(position.xy, near * uDepthScale + disp);
-    pos.xy += vec2(sin(uTime * 3.1 + aRand * 40.0), cos(uTime * 2.6 + aRand * 30.0))
+    pos.xy += vec2(sin(uXYTime * 3.1 + aRand * 40.0), cos(uXYTime * 2.6 + aRand * 30.0))
             * amp * 0.006 * uIntensity * uXYMove;
     pos.xy *= 1.0 + uBeat * 0.012 * uXYMove;
     // idle exit: 'fly-by' rush points toward the camera as they fade;
@@ -199,6 +200,8 @@ export class VisualScene {
       uZMove: { value: 1 },
       uXYMove: { value: 1 },
       uVis: { value: 1 },
+      uXYTime: { value: 0 },
+      uWaveTime: { value: 0 },
       uExitPush: { value: 0 },
       uCursor: { value: new THREE.Vector3(0, 0, 0) },
       uGlow: { value: 1.1 },
@@ -403,6 +406,7 @@ export class VisualScene {
     this.hideBackdrop = !!s.hideBackdrop;
     this.cursorRipple = !!s.cursorRipple;
     this.uniforms.uExitPush.value = s.flybyExit ? 0.4 : 0;
+    this.speedVol = s.speedVol;
     this.setBandCount(s.bands);
     // size compensation: additive brightness ∝ point area (diameter²),
     // normalized so size ≈ 1 (diameter = spacing) is the reference look
@@ -440,7 +444,13 @@ export class VisualScene {
     }
     this.bandTex.needsUpdate = true;
 
-    this.uniforms.uTime.value = this.time;
+    // volume-ramped motion clocks: the louder the music, the faster the
+    // shimmer and waves travel (speedVol = 0 keeps them constant)
+    const speedVol = this.speedVol ?? 0;
+    this.xyTime = (this.xyTime ?? 0) + dt * (1 + analyzer.energy * speedVol * 1.5);
+    this.waveTime = (this.waveTime ?? 0) + dt * (1 + analyzer.energy * speedVol);
+    this.uniforms.uXYTime.value = this.xyTime;
+    this.uniforms.uWaveTime.value = this.waveTime;
     this.uniforms.uEnergy.value = analyzer.energy;
     this.uniforms.uBeat.value = analyzer.beat;
 

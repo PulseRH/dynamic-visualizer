@@ -22,6 +22,7 @@ const DEFAULTS = {
   sensGain: 1.0,           // input gain: how strongly sound drives everything
   sensFloor: 0.0,          // noise floor: below this level, no movement
   sensCurve: 1.5,          // response gamma: higher = quiet sounds move less
+  speedVol: 1.0,           // how much volume speeds up the motion (0 = fixed)
   parallax: 0.8,
   audioSource: 'demo',     // 'system' | 'mic' | 'file' | 'demo'
   audioFileUrl: null,
