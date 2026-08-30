@@ -1,0 +1,5 @@
+node_modules/
+dist/
+src/vendor/
+*.log
+assets/sample-wallpaper.jpg

@@ -1,0 +1,44 @@
+{
+  "name": "dynamic-visualizer",
+  "productName": "Dynamic Visualizer",
+  "version": "0.1.0",
+  "description": "Audio-reactive point-cloud music visualizer: turns your wallpaper into depth-layered waves that move with the music. Built with Electron + Three.js.",
+  "main": "electron/main.cjs",
+  "license": "MIT",
+  "author": "Loz",
+  "scripts": {
+    "start": "electron .",
+    "serve": "node tools/serve.mjs",
+    "postinstall": "node tools/vendor-three.mjs",
+    "dist:win": "npx electron-builder --win",
+    "dist:linux": "npx electron-builder --linux"
+  },
+  "dependencies": {
+    "koffi": "^3.1.6",
+    "three": "0.180.0"
+  },
+  "devDependencies": {
+    "electron": "^38.0.0"
+  },
+  "build": {
+    "appId": "dev.loz.dynamicvisualizer",
+    "files": [
+      "electron/**",
+      "src/**",
+      "package.json"
+    ],
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "AudioVideo"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    }
+  }
+}

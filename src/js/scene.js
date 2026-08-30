@@ -1,0 +1,372 @@
+// Three.js scene: the image as a depth-layered point cloud, displaced by
+// audio-driven waves in the vertex shader. One draw call for the cloud,
+// one for the backdrop. Per-frame CPU cost = a handful of uniform writes.
+
+import * as THREE from '../vendor/three.module.js';
+
+const VERT = /* glsl */ `
+  uniform float uTime;
+  uniform float uEnergy;
+  uniform float uBeat;
+  uniform float uIntensity;
+  uniform float uDepthScale;
+  uniform float uAspect;
+  uniform float uSize;
+  uniform float uCamZ;
+  uniform float uMode;
+  uniform float uBandMap;
+  uniform float uBoost;
+  uniform float uSizeComp;
+  uniform float uZMove;
+  uniform float uXYMove;
+  uniform sampler2D uBands;
+
+  attribute vec3 aColor;
+  attribute float aRand;
+
+  varying vec3 vColor;
+  varying float vAmp;
+
+  void main() {
+    float near = position.z;                 // 0..1, 1 = closest to viewer
+    vec2 uvw = vec2(position.x / uAspect + 0.5, position.y + 0.5);
+
+    // which region of the image listens to which frequency band:
+    // 0 = by depth layer, 1 = radial from center, 2 = bottom->top, 3 = left->right
+    float bt;
+    if (uBandMap < 0.5) {
+      bt = near;
+    } else if (uBandMap < 1.5) {
+      bt = clamp(distance(uvw, vec2(0.5)) * 1.25, 0.0, 1.0);   // center = bass, edges = highs
+    } else if (uBandMap < 2.5) {
+      bt = 1.0 - uvw.y;                                         // ground = bass, sky = highs
+    } else {
+      bt = uvw.x;                                               // left = bass, right = highs
+    }
+    float band = clamp(floor(bt * 63.0), 0.0, 63.0);
+    float amp = texture2D(uBands, vec2((band + 0.5) / 64.0, 0.5)).r;
+    amp = amp * amp;                          // perceptual response
+    float lightAmp = amp;                     // no global dimming: quiet
+                                              // regions keep their base light
+
+    float w;
+    if (uMode < 0.5) {
+      // traveling wave across the image
+      w = sin(uTime * 1.7 + uvw.x * 7.0 + near * 5.0 + aRand * 0.7);
+    } else if (uMode < 1.5) {
+      // radial ripple from the center
+      float d = distance(uvw, vec2(0.5));
+      w = sin(d * 16.0 - uTime * 3.1 + near * 3.0) * (1.0 - d * 0.55);
+    } else if (uMode < 2.5) {
+      // horizontal slices pulsing like bars
+      float row = floor(uvw.y * 28.0);
+      w = sin(uTime * 2.2 + row * 0.9) * 0.75 + sin(uTime * 5.3 + row * 2.1) * 0.25;
+    } else if (uMode < 3.5) {
+      // slow ambient drift (nice at idle / low energy)
+      w = sin(uvw.x * 9.0 + uTime * 0.5) * sin(uvw.y * 7.0 - uTime * 0.42) * 1.3
+        + sin(uTime * 0.8 + aRand * 6.2831) * 0.45;
+    } else {
+      // pure audio: no self-motion at all — the spectrum alone displaces
+      w = 1.0;
+    }
+
+    float disp = w * amp * uIntensity * uZMove * 0.11 * (0.35 + 0.65 * near);
+    disp += uBeat * 0.035 * uZMove * (0.15 + near);   // kicks push the cloud forward
+
+    vec3 pos = vec3(position.xy, near * uDepthScale + disp);
+    pos.xy += vec2(sin(uTime * 3.1 + aRand * 40.0), cos(uTime * 2.6 + aRand * 30.0))
+            * amp * 0.006 * uIntensity * uXYMove;
+    pos.xy *= 1.0 + uBeat * 0.012 * uXYMove;
+
+    vec4 mv = modelViewMatrix * vec4(pos, 1.0);
+    gl_Position = projectionMatrix * mv;
+
+    float ps = uSize * (1.0 + amp * 0.9 + uBeat * 0.4) * (uCamZ / -mv.z);
+    gl_PointSize = clamp(ps, 0.75, 24.0);
+
+    vAmp = lightAmp;
+    // every particle stays visible at base brightness; the loud/moving ones
+    // brighten on top, and dark particles catch a cool shimmer
+    float lum = max(aColor.r, max(aColor.g, aColor.b));
+    vec3 lit = aColor * (0.78 + uBoost * lightAmp)
+             + vec3(0.07, 0.09, 0.13) * lightAmp * (1.0 - lum) * 0.7;
+    // normalize for point size: bigger points overlap more, so dim per point
+    lit *= uSizeComp;
+    // points nearer the camera cover more screen: dim them the same way
+    lit /= sqrt(max(uCamZ / -mv.z, 0.5));
+    vColor = lit;
+  }
+`;
+
+const FRAG = /* glsl */ `
+  uniform float uGlow;
+  varying vec3 vColor;
+  varying float vAmp;
+
+  void main() {
+    vec2 c = gl_PointCoord - 0.5;
+    float d2 = dot(c, c);
+    if (d2 > 0.25) discard;
+    float a = smoothstep(0.25, 0.06, d2);
+    gl_FragColor = vec4(vColor * uGlow * a, a);   // premultiplied for additive
+  }
+`;
+
+const BACKDROP_VERT = /* glsl */ `
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+const BACKDROP_FRAG = /* glsl */ `
+  uniform sampler2D uTex;
+  uniform float uDim;
+  uniform float uAspect;
+  varying vec2 vUv;
+  void main() {
+    vec3 col = texture2D(uTex, vUv).rgb;
+    gl_FragColor = vec4(col * uDim, 1.0);
+  }
+`;
+
+const MODES = { wave: 0, ripple: 1, bands: 2, drift: 3, audio: 4 };
+const BAND_MAPS = { depth: 0, radial: 1, vertical: 2, horizontal: 3 };
+
+export class VisualScene {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: false,
+      alpha: false,
+      powerPreference: 'high-performance',
+      stencil: false,
+    });
+    this.renderer.setClearColor(0x000000, 1);
+    this.basePixelRatio = Math.min(window.devicePixelRatio || 1, 1.75);
+    this.quality = 1; // adaptive multiplier on pixel ratio
+
+    this.scene = new THREE.Scene();
+    this.camera = new THREE.PerspectiveCamera(50, 1, 0.05, 40);
+    this.camBaseZ = 1.9;
+    this.camera.position.set(0, 0, this.camBaseZ);
+
+    this.time = 0;
+    this.lastNow = performance.now();
+    this.pointer = { x: 0, y: 0, tx: 0, ty: 0 };
+
+    // 64-band spectrum texture (RGBA8 for universal support)
+    this.bandData = new Uint8Array(64 * 4);
+    this.bandTex = new THREE.DataTexture(this.bandData, 64, 1, THREE.RGBAFormat);
+    this.bandTex.magFilter = THREE.NearestFilter;
+    this.bandTex.minFilter = THREE.NearestFilter;
+    this.bandTex.needsUpdate = true;
+
+    this.uniforms = {
+      uTime: { value: 0 },
+      uEnergy: { value: 0 },
+      uBeat: { value: 0 },
+      uIntensity: { value: 1 },
+      uDepthScale: { value: 0.35 },
+      uAspect: { value: 1 },
+      uSize: { value: 2 },
+      uCamZ: { value: 1.4 },
+      uMode: { value: 1 },
+      uBandMap: { value: 1 },
+      uBoost: { value: 1 },
+      uSizeComp: { value: 1 },
+      uZMove: { value: 1 },
+      uXYMove: { value: 1 },
+      uGlow: { value: 1.1 },
+      uBands: { value: this.bandTex },
+    };
+
+    this.material = new THREE.ShaderMaterial({
+      uniforms: this.uniforms,
+      vertexShader: VERT,
+      fragmentShader: FRAG,
+      blending: THREE.AdditiveBlending,
+      depthTest: false,
+      depthWrite: false,
+      transparent: true,
+    });
+
+    this.points = null;
+    this.backdrop = null;
+    this.cloudAspect = 16 / 9;
+
+    this._resize();
+    window.addEventListener('resize', () => this._resize());
+    window.addEventListener('pointermove', (e) => {
+      this.pointer.tx = (e.clientX / window.innerWidth) * 2 - 1;
+      this.pointer.ty = (e.clientY / window.innerHeight) * 2 - 1;
+    });
+  }
+
+  _resize() {
+    const w = window.innerWidth, h = window.innerHeight;
+    this.renderer.setPixelRatio(this.basePixelRatio * this.quality);
+    this.renderer.setSize(w, h, false);
+    this.camera.aspect = w / h;
+    this.camera.updateProjectionMatrix();
+    this._fitCamera();
+    this._layoutBackdrop();
+  }
+
+  _fitCamera() {
+    // distance so the cloud (1 world unit tall) fills the frame; depth motion
+    // may slightly overflow the edges, which reads as immersive rather than wrong
+    const halfH = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
+    const needH = 0.5 * 1.12;
+    const needW = (this.cloudAspect / 2) * 1.12;
+    const dH = needH / halfH;
+    const dW = needW / (halfH * this.camera.aspect);
+    this.camBaseZ = Math.max(dH, dW);
+  }
+
+  _layoutBackdrop() {
+    if (!this.backdrop) return;
+    const dist = this.camBaseZ;
+    const halfH = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) * dist;
+    const halfW = halfH * this.camera.aspect;
+    this.backdrop.scale.set(halfW * 2.02, halfH * 2.02, 1);
+  }
+
+  /** rebuild geometry from sampled cloud arrays */
+  setCloud(cloud) {
+    if (this.points) {
+      this.scene.remove(this.points);
+      this.points.geometry.dispose();
+      this.points = null;
+    }
+    this.cloudAspect = cloud.aspect;
+    this.uniforms.uAspect.value = cloud.aspect;
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(cloud.positions, 3));
+    geo.setAttribute('aColor', new THREE.BufferAttribute(cloud.colors, 3));
+    geo.setAttribute('aRand', new THREE.BufferAttribute(cloud.rands, 1));
+    geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0.4), Math.max(cloud.aspect, 1));
+
+    this.points = new THREE.Points(geo, this.material);
+    this.points.frustumCulled = false;
+    this.scene.add(this.points);
+    // world spacing between points -> density-aware pixel size for the shader
+    const rows = Math.max(1, Math.round(Math.sqrt(cloud.count / cloud.aspect)));
+    this.spacingWorld = 1 / rows;
+    this._fitCamera();
+    this._layoutBackdrop();
+  }
+
+  /** dim image backdrop ('black' | 'dim' | 'off') */
+  setBackdrop(bitmapOrCanvas, mode) {
+    if (this.backdrop) {
+      this.scene.remove(this.backdrop);
+      this.backdrop.material.dispose();
+      this.backdrop = null;
+    }
+    if (mode === 'off' || !bitmapOrCanvas) {
+      this.renderer.setClearColor(0x000000, 1);
+      return;
+    }
+    // Texture.flipY has no effect for ImageBitmap sources (three.js uploads
+    // them as-is), so route them through a canvas to get correct orientation.
+    let source = bitmapOrCanvas;
+    if (typeof ImageBitmap !== 'undefined' && bitmapOrCanvas instanceof ImageBitmap) {
+      const c = document.createElement('canvas');
+      c.width = bitmapOrCanvas.width;
+      c.height = bitmapOrCanvas.height;
+      c.getContext('2d').drawImage(bitmapOrCanvas, 0, 0);
+      source = c;
+    }
+    const tex = new THREE.CanvasTexture(source);
+    // sample in display space — our shaders write raw values to the framebuffer
+    tex.colorSpace = THREE.NoColorSpace;
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    const mat = new THREE.ShaderMaterial({
+      uniforms: { uTex: { value: tex }, uDim: { value: mode === 'dim' ? 0.17 : 0 }, uAspect: { value: 1 } },
+      vertexShader: BACKDROP_VERT,
+      fragmentShader: BACKDROP_FRAG,
+      depthTest: false,
+      depthWrite: false,
+    });
+    this.backdrop = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
+    this.backdrop.position.z = -0.02;
+    this.backdrop.renderOrder = -1;
+    this.backdrop.frustumCulled = false;
+    this.scene.add(this.backdrop);
+    this._layoutBackdrop();
+  }
+
+  applySettings(s) {
+    this.uniforms.uIntensity.value = s.intensity;
+    this.uniforms.uDepthScale.value = s.depthScale;
+    this.uniforms.uMode.value = MODES[s.waveMode] ?? 1;
+    this.uniforms.uBandMap.value = BAND_MAPS[s.bandMap] ?? 0;
+    this.uniforms.uGlow.value = s.glow;
+    this.uniforms.uBoost.value = s.boost;
+    this.uniforms.uZMove.value = s.depthMove;
+    this.uniforms.uXYMove.value = s.xyMove;
+    // size compensation: additive brightness ∝ point area (diameter²),
+    // normalized so size ≈ 1 (diameter = spacing) is the reference look
+    this.uniforms.uSizeComp.value =
+      1 / THREE.MathUtils.clamp(s.pointSize * s.pointSize, 0.35, 6);
+    this.pointSizeSetting = s.pointSize;
+    // 'audio' mode = zero autonomous motion: no camera drift, spectrum only
+    this.autoMotion = s.waveMode !== 'audio';
+    this._fitCamera();
+  }
+
+  setQuality(q) {
+    if (q === this.quality) return;
+    this.quality = q;
+    this.renderer.setPixelRatio(this.basePixelRatio * this.quality);
+  }
+
+  /** one frame; audio analyzer supplies bands/energy/beat. dt is clamped. */
+  render(analyzer, parallaxStrength) {
+    const now = performance.now();
+    let dt = (now - this.lastNow) / 1000;
+    this.lastNow = now;
+    dt = Math.min(dt, 0.05);
+    this.time += dt;
+
+    const bands = analyzer.bands;
+    for (let i = 0; i < 64; i++) {
+      this.bandData[i * 4] = Math.min(255, bands[i] * 255) | 0;
+      this.bandData[i * 4 + 1] = this.bandData[i * 4];
+      this.bandData[i * 4 + 2] = this.bandData[i * 4];
+      this.bandData[i * 4 + 3] = 255;
+    }
+    this.bandTex.needsUpdate = true;
+
+    this.uniforms.uTime.value = this.time;
+    this.uniforms.uEnergy.value = analyzer.energy;
+    this.uniforms.uBeat.value = analyzer.beat;
+
+    // point size in pixels when the cloud is at rest distance:
+    //   pointSize=1.0 means a point's diameter equals the point spacing
+    const hPx = this.renderer.domElement.height; // drawing-buffer pixels
+    const tanHalf = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
+    this.uniforms.uSize.value =
+      (this.pointSizeSetting || 1) * hPx * (this.spacingWorld || 1 / 300)
+      / (2 * tanHalf * this.camBaseZ);
+    this.uniforms.uCamZ.value = this.camBaseZ;
+
+    // gentle autonomous drift + pointer parallax ('audio' mode = pointer only)
+    const p = parallaxStrength * 0.06 * (this.autoMotion === false ? 0 : 1);
+    this.pointer.x += (this.pointer.tx - this.pointer.x) * Math.min(1, dt * 3);
+    this.pointer.y += (this.pointer.ty - this.pointer.y) * Math.min(1, dt * 3);
+    const t = this.autoMotion === false ? 0 : this.time;
+    this.camera.position.x = Math.sin(t * 0.13) * p * 0.6 + this.pointer.x * p;
+    this.camera.position.y = Math.cos(t * 0.11) * p * 0.4 - this.pointer.y * p * 0.6;
+    this.camera.position.z = this.camBaseZ + analyzer.beat * 0.02;
+    this.camera.lookAt(0, 0, 0.1);
+
+    this.renderer.render(this.scene, this.camera);
+    return dt;
+  }
+}

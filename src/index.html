@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self' app:; img-src 'self' app: blob: data: https://cdn.jsdelivr.net; media-src 'self' app: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' app: blob: 'wasm-unsafe-eval' https://cdn.jsdelivr.net; connect-src 'self' app: blob: https://cdn.jsdelivr.net https://huggingface.co https://*.hf.co; worker-src 'self' app: blob:;" />
+  <title>Dynamic Visualizer</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <canvas id="gl"></canvas>
+
+  <div id="hud">
+    <div class="chip brand">
+      <span class="dot" id="audioDot"></span>
+      <span id="audioLabel">no audio</span>
+    </div>
+
+    <div class="spacer"></div>
+
+    <div class="chip stats" id="statsChip" title="render stats">– fps · – pts</div>
+    <button class="chip icon-btn" id="gearBtn" title="Settings" aria-label="Settings">⚙</button>
+  </div>
+
+  <aside id="panel" class="closed">
+    <div class="panel-head">
+      <h2>Settings</h2>
+      <button id="closePanel" class="icon-btn" aria-label="Close">✕</button>
+    </div>
+
+    <section>
+      <h3>Image</h3>
+      <div class="row">
+        <button id="useWallpaper" class="btn">Use wallpaper</button>
+        <button id="uploadImage" class="btn">Upload…</button>
+      </div>
+      <div class="thumb-wrap"><img id="imgThumb" alt="" /></div>
+      <p class="hint">Tip: drag &amp; drop or paste (Ctrl+V) an image any time.</p>
+    </section>
+
+    <section>
+      <h3>Depth</h3>
+      <div class="seg" id="depthSeg">
+        <button data-v="auto" class="on">Heuristic</button>
+        <button data-v="onnx">AI model</button>
+        <button data-v="flat">Flat</button>
+      </div>
+      <label class="slider-row">Depth strength
+        <input type="range" id="depthScale" min="0" max="1.5" step="0.01" />
+        <span class="val"></span>
+      </label>
+      <p class="hint">Heuristic = instant luminance/salience guess. AI = Depth-Anything ONNX, downloaded once (needs the model URL to be reachable).</p>
+    </section>
+
+    <section>
+      <h3>Points</h3>
+      <label class="slider-row">Count
+        <input type="range" id="pointCount" min="20000" max="400000" step="10000" />
+        <span class="val"></span>
+      </label>
+      <label class="slider-row">Size
+        <input type="range" id="pointSize" min="0.4" max="3" step="0.05" />
+        <span class="val"></span>
+      </label>
+      <label class="slider-row">Glow
+        <input type="range" id="glow" min="0.2" max="2.5" step="0.05" />
+        <span class="val"></span>
+      </label>
+      <label class="slider-row">Audio boost
+        <input type="range" id="boost" min="0" max="3" step="0.05" />
+        <span class="val"></span>
+      </label>
+      <p class="hint">Glow = overall particle brightness (all points). Boost = extra brightness only on the loud, moving ones. Point size is auto-compensated so the overall brightness stays put.</p>
+    </section>
+
+    <section>
+      <h3>Motion</h3>
+      <div class="seg" id="waveSeg">
+        <button data-v="audio">Audio</button>
+        <button data-v="wave">Wave</button>
+        <button data-v="ripple">Ripple</button>
+        <button data-v="bands">Bands</button>
+        <button data-v="drift">Drift</button>
+      </div>
+      <p class="hint">Bands affect the image where you map them:</p>
+      <div class="seg" id="bandMapSeg">
+        <button data-v="radial">Radial</button>
+        <button data-v="vertical">Vert</button>
+        <button data-v="horizontal">Horiz</button>
+        <button data-v="depth">Depth</button>
+      </div>
+      <p class="hint" id="bandMapHint"></p>
+      <label class="slider-row">Intensity
+        <input type="range" id="intensity" min="0" max="2.5" step="0.05" />
+        <span class="val"></span>
+      </label>
+      <label class="slider-row">Depth move
+        <input type="range" id="depthMove" min="0" max="3" step="0.05" />
+        <span class="val"></span>
+      </label>
+      <label class="slider-row">XY move
+        <input type="range" id="xyMove" min="0" max="3" step="0.05" />
+        <span class="val"></span>
+      </label>
+      <label class="slider-row">Parallax
+        <input type="range" id="parallax" min="0" max="2" step="0.05" />
+        <span class="val"></span>
+      </label>
+      <p class="hint">Intensity scales both motions; Depth move = toward/away from you, XY move = sideways shimmer. Set XY to 0 for depth-only motion.</p>
+    </section>
+
+    <section>
+      <h3>Audio</h3>
+      <div class="seg" id="audioSeg">
+        <button data-v="system">System</button>
+        <button data-v="mic">Mic</button>
+        <button data-v="file">File</button>
+        <button data-v="demo">Demo</button>
+      </div>
+      <div class="level-wrap"><div id="levelBar"></div></div>
+      <p class="hint" id="audioHint"></p>
+    </section>
+
+    <section>
+      <h3>Wallpaper mode</h3>
+      <button id="wallpaperToggle" class="btn full">Run as my wallpaper</button>
+      <p class="hint">Puts the visualizer fullscreen <b>behind your desktop icons</b>, click-through — it behaves like the OS wallpaper. Music keeps playing through it. Exit anytime from the tray icon (or this button).</p>
+    </section>
+
+    <section>
+      <h3>Performance</h3>
+      <div class="seg" id="fpsSeg">
+        <button data-v="30">30 fps</button>
+        <button data-v="60">60 fps</button>
+        <button data-v="0">Max</button>
+      </div>
+      <label class="check-row"><input type="checkbox" id="autoQuality" /> Adaptive resolution (keep fans quiet)</label>
+      <label class="check-row"><input type="checkbox" id="idleSleep" /> Sleep when music stops</label>
+    </section>
+
+    <footer>
+      <span id="aboutInfo"></span>
+    </footer>
+  </aside>
+
+  <div id="toasts"></div>
+  <div id="dropOverlay">Drop image to visualize</div>
+
+  <input type="file" id="fileImage" accept="image/*" hidden />
+  <input type="file" id="fileAudio" accept="audio/*" hidden />
+
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>
