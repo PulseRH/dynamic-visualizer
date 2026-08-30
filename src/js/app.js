@@ -262,7 +262,7 @@ function loop(now) {
   }
   const tau = target === 0 ? 100 : 250; // clean 0.5s fade out, gentler return
   idleVis += (target - idleVis) * (1 - Math.exp(-spaced / tau));
-  scene.setIdleVis(idleVis);
+  scene.setIdleVis(idleVis, spaced);
   if (target === 0 && idleVis < 0.004) return; // fully faded: sleep, rAF still watches for audio
 
   scene.render(analyzer, get('parallax'));

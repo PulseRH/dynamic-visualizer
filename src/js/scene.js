@@ -241,16 +241,12 @@ export class VisualScene {
 
   _layoutBackdrop() {
     if (!this.backdrop) return;
-    // same cover transform as the cloud, so backdrop pixels sit exactly
-    // under their particles (no stretching on any aspect ratio).
-    // NB: the backdrop sits BEHIND the cloud plane, so the camera-to-backdrop
-    // distance is camBaseZ + 0.02 — getting this sign wrong shrinks the plane
-    // and shows black bars around the idle image.
-    const dist = this.camBaseZ + 0.02;
-    const halfH = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) * dist;
-    const halfW = halfH * this.camera.aspect;
-    const s = Math.max((halfW * 2) / this.cloudAspect, halfH * 2) * 1.02;
-    this.backdrop.scale.set(this.cloudAspect * s, s, 1);
+    // Pixel-lock the backdrop to the cloud: the cloud's world footprint is
+    // (cloudAspect × 1) at distance camBaseZ; the backdrop sits 0.02 farther,
+    // so scaling its footprint by (camBaseZ + 0.02) / camBaseZ × overscan
+    // projects it onto exactly the same screen rect as the particles.
+    const k = ((this.camBaseZ + 0.02) / this.camBaseZ) * (this.overscan || 1) * 1.02;
+    this.backdrop.scale.set(this.cloudAspect * k, k, 1);
   }
 
   /** rebuild geometry from sampled cloud arrays */
@@ -286,15 +282,21 @@ export class VisualScene {
   }
 
   /** idle envelope: 1 = particles live, 0 = plain wallpaper (audio silent).
-   *  Fades the cloud out (flying toward the camera) and brings the backdrop
-   *  image back; with hideBackdrop, the image only exists while fading. */
-  setIdleVis(v) {
+   *  Fades the cloud (flying toward the camera only in fly-by mode) and
+   *  brings the backdrop back with its own slower, smoother fade. */
+  setIdleVis(v, dtMs = 16) {
     this.idleVis = v;
     this.uniforms.uVis.value = v;
     if (this.backdrop && !this.backdrop.isDestroyed) {
       const base = this.hideBackdrop ? 0 : this.backdropBaseDim;
-      this.backdrop.material.uniforms.uDim.value =
-        base + (1 - base) * (1 - v);
+      const target = base + (1 - base) * (1 - v);
+      // the wallpaper image fades on its own gentler curve
+      if (this.backdropDim === null || this.backdropDim === undefined) {
+        this.backdropDim = target; // snap after a backdrop rebuild
+      } else {
+        this.backdropDim += (target - this.backdropDim) * (1 - Math.exp(-Math.max(1, dtMs) / 650));
+      }
+      this.backdrop.material.uniforms.uDim.value = this.backdropDim;
     }
   }
 
@@ -336,6 +338,7 @@ export class VisualScene {
     this.backdrop.renderOrder = -1;
     this.backdrop.frustumCulled = false;
     this.backdropBaseDim = mode === 'dim' ? 0.17 : 0;
+    this.backdropDim = null; // snap to the current target on next setIdleVis
     this.scene.add(this.backdrop);
     this.setIdleVis(this.idleVis ?? 1); // apply the current idle envelope
     this._layoutBackdrop();
