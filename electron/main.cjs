@@ -713,3 +713,15 @@ ipcMain.on('spectrum', (event, bands, energy, beat) => {
     }
   }
 });
+
+// Same idea for depth grids: the preview runs the (heavy) depth estimate once
+// and every wallpaper window reuses the result instead of loading its own
+// AI runtime.
+ipcMain.on('depthgrid', (event, payload) => {
+  if (!wallpaperWins.length) return;
+  for (const win of wallpaperWins) {
+    if (!win.isDestroyed() && win.webContents !== event.sender) {
+      win.webContents.send('depthgrid', payload);
+    }
+  }
+});

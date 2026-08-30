@@ -100,4 +100,13 @@ export const bridge = {
     if (ev) return ev.onSpectrum(cb);
     return () => {};
   },
+
+  sendDepthGrid(payload) {
+    if (ev) ev.sendDepthGrid(payload);
+  },
+
+  onDepthGrid(cb) {
+    if (ev) return ev.onDepthGrid(cb);
+    return () => {};
+  },
 };

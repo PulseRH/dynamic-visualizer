@@ -18,6 +18,8 @@ const audio = new AudioEngine();
 
 let currentImage = null;      // canvas or ImageBitmap currently visualized
 let currentImageUrl = null;   // for the thumbnail
+let relayedDepth = null;      // depth grid received from the preview window
+let awaitingRelay = false;    // wallpaper window: waiting for the preview's grid
 let rebuildToken = 0;
 let idleVis = 1;
 let idleTarget = 1;
@@ -130,19 +132,35 @@ async function rebuildCloud() {
   if (!currentImage) return;
   const token = ++rebuildToken;
   const depthMode = get('depthMode');
+  const imageKey = currentImageUrl || 'procedural';
 
   let depth = null;
   if (depthMode !== 'flat') {
-    if (depthMode === 'onnx') ui.toast('Running AI depth model…', '', 8000);
-    try {
-      depth = await estimateDepth(currentImage, depthMode, DEFAULT_ONNX_MODEL, (s) => {
-        if (depthMode === 'onnx') ui.toast(`Depth: ${s}`, '', 2500);
-      });
-      if (depthMode === 'onnx') ui.toast('AI depth ready', '', 2000);
-    } catch (err) {
-      console.warn('depth failed', err);
-      ui.toast(`AI depth unavailable (${err.message}) — using heuristic`, 'err', 5000);
+    // wallpaper windows reuse the depth grid computed by the preview window
+    if (isWallpaperWindow && relayedDepth && relayedDepth.key === imageKey) {
+      depth = { data: relayedDepth.data, w: relayedDepth.w, h: relayedDepth.h };
+    } else if (isWallpaperWindow) {
+      // relay hasn't arrived yet: show the fast heuristic now, upgrade when
+      // the preview broadcasts the real grid
       depth = await estimateDepth(currentImage, 'auto', DEFAULT_ONNX_MODEL);
+      if (token !== rebuildToken) return;
+      awaitingRelay = true;
+    } else {
+      if (depthMode === 'onnx') ui.toast('Running AI depth model…', '', 8000);
+      try {
+        depth = await estimateDepth(currentImage, depthMode, DEFAULT_ONNX_MODEL, (s) => {
+          if (depthMode === 'onnx') ui.toast(`Depth: ${s}`, '', 2500);
+        });
+        if (depthMode === 'onnx') ui.toast('AI depth ready', '', 2000);
+      } catch (err) {
+        console.warn('depth failed', err);
+        ui.toast(`AI depth unavailable (${err.message}) — using heuristic`, 'err', 5000);
+        depth = await estimateDepth(currentImage, 'auto', DEFAULT_ONNX_MODEL);
+      }
+      // share the grid so wallpaper windows never need the AI runtime
+      if (depth && !isWallpaperWindow) {
+        bridge.sendDepthGrid({ key: imageKey, data: depth.data, w: depth.w, h: depth.h });
+      }
     }
   }
   if (token !== rebuildToken) return; // superseded
@@ -179,6 +197,17 @@ if (isWallpaperWindow) {
     remoteAnalyzer.beat = beat;
     remoteAnalyzer.level = energy;
     remoteAnalyzer.lastUpdate = performance.now();
+  });
+  // depth grids are computed once in the preview and relayed here — this
+  // window never loads the AI runtime
+  bridge.onDepthGrid((payload) => {
+    if (!payload || !payload.data) return;
+    relayedDepth = { key: payload.key, data: new Float32Array(payload.data), w: payload.w, h: payload.h };
+    if (awaitingRelay) {
+      awaitingRelay = false;
+      clearTimeout(countTimer);
+      countTimer = setTimeout(() => rebuildCloud(), 120);
+    }
   });
 }
 
@@ -317,7 +346,11 @@ function loop(now) {
   }
 
   const cap = get('fpsCap');
-  const interval = cap > 0 ? 1000 / cap : 0;
+  // wallpaper mode on: the preview is just a control mirror — throttle it
+  // hard, the wallpaper windows carry the real render
+  let effectiveCap = cap;
+  if (!isWallpaperWindow && wallpaperAudioActive) effectiveCap = Math.min(effectiveCap, 15);
+  const interval = effectiveCap > 0 ? 1000 / effectiveCap : 0;
   if (now - lastRender < interval - 0.75) return;
   const spaced = Math.max(0, now - lastRender);
   lastRender = now;

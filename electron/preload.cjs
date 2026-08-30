@@ -29,6 +29,12 @@ contextBridge.exposeInMainWorld('dv', {
     ipcRenderer.on('spectrum', handler);
     return () => ipcRenderer.removeListener('spectrum', handler);
   },
+  sendDepthGrid: (payload) => ipcRenderer.send('depthgrid', payload),
+  onDepthGrid: (cb) => {
+    const handler = (_e, payload) => cb(payload);
+    ipcRenderer.on('depthgrid', handler);
+    return () => ipcRenderer.removeListener('depthgrid', handler);
+  },
   onPcm: (cb) => {
     const handler = (_e, data) => cb(data);
     ipcRenderer.on('capture:pcm', handler);
