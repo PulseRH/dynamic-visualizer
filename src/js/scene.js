@@ -303,7 +303,9 @@ export class VisualScene {
       if (Math.abs(target - this.backdropDim) < 0.01) {
         this.backdropDim = target; // settled
       } else {
-        this.backdropDim += (target - this.backdropDim) * (1 - Math.exp(-Math.max(1, dtMs) / 400));
+        // rise gently when going idle, clear quickly when music returns
+        const tau = target > this.backdropDim ? 300 : 150;
+        this.backdropDim += (target - this.backdropDim) * (1 - Math.exp(-Math.max(1, dtMs) / tau));
       }
       this.backdrop.material.uniforms.uDim.value = this.backdropDim;
     }

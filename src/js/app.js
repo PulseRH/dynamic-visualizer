@@ -20,6 +20,8 @@ let currentImage = null;      // canvas or ImageBitmap currently visualized
 let currentImageUrl = null;   // for the thumbnail
 let rebuildToken = 0;
 let idleVis = 1;
+let idleTarget = 1;
+let lastIdleT = 0;
 let qualityTimer = 0;
 let statTimer = 0;
 let frameEMA = 16;
@@ -266,7 +268,27 @@ onChange((all, patch) => {
 
 let lastRender = 0;
 // Analysis ticker (preview only): a timer instead of rAF, so minimized or
-// covered states never stall the spectrum feed to the wallpaper windows.
+// covered states never stall the spectrum feed or the idle envelope for the
+// wallpaper windows.
+function advanceIdle(a, dtMs, now) {
+  const silent = audio.mode !== 'demo' && get('idleSleep') && a.energy < 0.01;
+  let target = 1;
+  if (silent) {
+    if (!quietSince) quietSince = now;
+    target = now - quietSince > 150 ? 0 : 1;
+  } else {
+    quietSince = 0;
+  }
+  const tau = target === 0 ? 100 : 250; // points clear quickly
+  idleVis += (target - idleVis) * (1 - Math.exp(-Math.max(1, dtMs) / tau));
+  // snap the endpoints so the faded state is exactly the plain wallpaper at
+  // full brightness (asymptotic easing would never quite get there)
+  if (target === 0 && idleVis < 0.02) idleVis = 0;
+  if (target === 1 && idleVis > 0.98) idleVis = 1;
+  idleTarget = target;
+  scene.setIdleVis(idleVis, dtMs);
+}
+
 if (!isWallpaperWindow) {
   let lastA = performance.now();
   setInterval(() => {
@@ -274,6 +296,7 @@ if (!isWallpaperWindow) {
     const dt = Math.min(50, now - lastA);
     lastA = now;
     const a = audio.frame(dt, now);
+    advanceIdle(a, dt, now);
     if (wallpaperAudioActive) bridge.sendSpectrum(a.bands, a.energy, a.beat);
   }, 33);
 }
@@ -284,32 +307,21 @@ function loop(now) {
 
   if (document.hidden) return;
 
+  // wallpaper windows advance their own envelope from the relayed spectrum
+  if (isWallpaperWindow) {
+    const spaced = Math.min(50, now - (lastIdleT || now - 16));
+    lastIdleT = now;
+    advanceIdle(analyzer, spaced, now);
+  }
+
   const cap = get('fpsCap');
   const interval = cap > 0 ? 1000 / cap : 0;
   if (now - lastRender < interval - 0.75) return;
   const spaced = Math.max(0, now - lastRender);
   lastRender = now;
 
-  // idle envelope: ~0.15s after silence the points fade out fast; the
-  // wallpaper image chases on a slower curve and finishes after they're gone
-  const silent = audio.mode !== 'demo' && get('idleSleep') && analyzer.energy < 0.01;
-  let target = 1;
-  if (silent) {
-    if (!quietSince) quietSince = now;
-    target = now - quietSince > 150 ? 0 : 1;
-  } else {
-    quietSince = 0;
-  }
-  const tau = target === 0 ? 100 : 250; // points clear quickly
-  idleVis += (target - idleVis) * (1 - Math.exp(-spaced / tau));
-  // snap the endpoints so the faded state is exactly the plain wallpaper at
-  // full brightness (asymptotic easing would never quite get there)
-  if (target === 0 && idleVis < 0.02) idleVis = 0;
-  if (target === 1 && idleVis > 0.98) idleVis = 1;
-  scene.setIdleVis(idleVis, spaced);
-  // keep rendering until the wallpaper image has fully risen, then sleep
-  if (target === 0 && idleVis === 0 && scene.backdropSettled()) return;
-  if (target === 0 && idleVis === 0) return; // fully faded: sleep, rAF still watches for audio
+  // once the points are gone AND the wallpaper has finished rising: sleep
+  if (idleTarget === 0 && idleVis === 0 && scene.backdropSettled()) return;
 
   scene.render(analyzer, get('parallax'));
   ui.setLevel(analyzer.level);
