@@ -109,4 +109,28 @@ export const bridge = {
     if (ev) return ev.onDepthGrid(cb);
     return () => {};
   },
+
+  requestDepthGrid() {
+    if (ev) ev.requestDepthGrid();
+  },
+
+  onDepthGridRequest(cb) {
+    if (ev) return ev.onDepthGridRequest(cb);
+    return () => {};
+  },
+
+  async getConfig() {
+    if (ev) return ev.getConfig();
+    return {};
+  },
+
+  async setConfig(patch) {
+    if (ev) return ev.setConfig(patch);
+    return {};
+  },
+
+  onGameMode(cb) {
+    if (ev) return ev.onGameMode(cb);
+    return () => {};
+  },
 };

@@ -2,6 +2,7 @@
 // through callbacks.
 
 import { get, set, onChange, getAll } from './settings.js';
+import { bridge } from './bridge.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -19,6 +20,7 @@ export class UI {
     this._wireSliders();
     this._wireImageButtons();
     this._wireDragDrop();
+    this._wireStartup();
     this._syncAll();
 
     let lastInteract = performance.now();
@@ -121,6 +123,17 @@ export class UI {
       overscanEl.parentElement.querySelector('.val').textContent = v.toFixed(2);
       set({ overscan: v, overscanAuto: false });
     };
+  }
+
+  async _wireStartup() {
+    const cfg = await bridge.getConfig();
+    const la = $('#launchAtStartup');
+    const st = $('#startInTray');
+    if (!la || !st) return;
+    la.checked = !!cfg.launchAtStartup;
+    st.checked = !!cfg.startInTray;
+    la.onchange = async (e) => { await bridge.setConfig({ launchAtStartup: e.target.checked }); };
+    st.onchange = async (e) => { await bridge.setConfig({ startInTray: e.target.checked }); };
   }
 
   _wireImageButtons() {

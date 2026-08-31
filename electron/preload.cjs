@@ -35,6 +35,32 @@ contextBridge.exposeInMainWorld('dv', {
     ipcRenderer.on('depthgrid', handler);
     return () => ipcRenderer.removeListener('depthgrid', handler);
   },
+  requestDepthGrid: () => ipcRenderer.send('depthgrid:request'),
+  onDepthGridRequest: (cb) => {
+    const handler = () => cb();
+    ipcRenderer.on('depthgrid:send', handler);
+    return () => ipcRenderer.removeListener('depthgrid:send', handler);
+  },
+  getConfig: () => ipcRenderer.invoke('config:get'),
+  setConfig: (patch) => ipcRenderer.invoke('config:set', patch),
+  onGameMode: (cb) => {
+    const handler = (_e, on) => cb(on);
+    ipcRenderer.on('gamemode', handler);
+    return () => ipcRenderer.removeListener('gamemode', handler);
+  },
+  requestDepthGrid: () => ipcRenderer.send('depthgrid:request'),
+  onDepthGridRequest: (cb) => {
+    const handler = () => cb();
+    ipcRenderer.on('depthgrid:send', handler);
+    return () => ipcRenderer.removeListener('depthgrid:send', handler);
+  },
+  getConfig: () => ipcRenderer.invoke('config:get'),
+  setConfig: (patch) => ipcRenderer.invoke('config:set', patch),
+  onGameMode: (cb) => {
+    const handler = (_e, on) => cb(on);
+    ipcRenderer.on('gamemode', handler);
+    return () => ipcRenderer.removeListener('gamemode', handler);
+  },
   onPcm: (cb) => {
     const handler = (_e, data) => cb(data);
     ipcRenderer.on('capture:pcm', handler);

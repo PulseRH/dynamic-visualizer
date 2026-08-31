@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, ipcMain, dialog, session, protocol, net, screen, Tray, Menu, nativeImage, powerSaveBlocker } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, session, protocol, net, screen, Tray, Menu, nativeImage, powerSaveBlocker, globalShortcut } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const zlib = require('zlib');
@@ -246,22 +246,29 @@ if (!gotLock) {
     }
   });
 
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
     registerAppProtocol();
     // Allow microphone / loopback capture without prompts.
     session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
       callback(permission === 'media' || permission === 'audioCapture');
     });
-    createWindow();
-    ensureTray(); // the app lives in the tray; closing the preview keeps it running
+    ensureTray();
+    registerGameHotkey(); // Ctrl+Alt+D hides the wallpaper for gaming
+    registerGameHotkey();
+    // restore wallpaper mode if it was left on, and honor tray-start
+    const cfg = readConfig();
+    if (cfg.wallpaperMode) await enableWallpaperMode();
+    if (!cfg.startInTray) createWindow();
   });
 
   // With wallpaper mode active, closing the preview only hides it — the
   // wallpaper keeps playing and the app stays in the tray. Without wallpaper
   // mode there is nothing to keep running, so closing quits.
-  app.on('window-all-closed', () => { if (!wallpaperActive) app.quit(); });
+  // tray app: closing the last window never quits — Quit lives in the tray
+  app.on('window-all-closed', () => {});
   app.on('activate', () => { if (!mainWindow) createWindow(); });
   app.on('before-quit', () => {
+    if (globalShortcut) globalShortcut.unregisterAll();
     app.isQuitting = true;
     stopCursorBroadcast();
     stopPulseCapture();
@@ -426,6 +433,28 @@ function ensureTray() {
   refreshTrayMenu();
 }
 
+// ----------------------------------------------------------------- config
+function configPath() { return path.join(app.getPath('userData'), 'config.json'); }
+function readConfig() { try { return JSON.parse(fs.readFileSync(configPath(), 'utf8')); } catch { return {}; } }
+function writeConfig(cfg) { try { fs.writeFileSync(configPath(), JSON.stringify(cfg, null, 2)); } catch {} }
+
+let gameMode = false;
+function setGameMode(on) {
+  gameMode = on;
+  for (const win of wallpaperWins) {
+    if (win.isDestroyed()) continue;
+    if (on) win.hide(); else win.showInactive();
+  }
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) win.webContents.send('gamemode', on);
+  }
+  refreshTrayMenu();
+}
+
+function registerGameHotkey() {
+  try { globalShortcut.register('CommandOrControl+Alt+D', () => setGameMode(!gameMode)); } catch {}
+}
+
 function refreshTrayMenu() {
   if (!tray) return;
   const menu = Menu.buildFromTemplate([
@@ -434,6 +463,7 @@ function refreshTrayMenu() {
       label: wallpaperActive ? 'Stop wallpaper mode' : 'Start wallpaper mode',
       click: () => (wallpaperActive ? disableWallpaperMode() : enableWallpaperMode()),
     },
+    { label: (gameMode ? '✓ ' : '') + 'Game mode (hide wallpaper)', click: () => setGameMode(!gameMode) },
     { type: 'separator' },
     { label: 'Quit', click: () => { app.isQuitting = true; app.quit(); } },
   ]);
@@ -644,7 +674,7 @@ async function doEnableWallpaperMode() {
       win.setIgnoreMouseEvents(true); // clicks pass through: it *is* the desktop
       await new Promise((resolve) => {
         win.webContents.once('did-finish-load', resolve);
-        win.loadURL('app://bundle/src/index.html?wallpaper=1');
+        win.loadURL('app://bundle/src/index.html?wallpaper=1' + (created.length === 0 ? '&primary=1' : ''));
       });
       // show first — SetParent on a hidden window can be refused by win32
       win.showInactive();
@@ -672,6 +702,7 @@ async function doEnableWallpaperMode() {
 
     wallpaperWins = created;
     wallpaperActive = true;
+    const cfg = readConfig(); cfg.wallpaperMode = true; writeConfig(cfg);
     psBlockerId = powerSaveBlocker.start('prevent-app-suspension');
     ensureTray();
     startCursorBroadcast();
@@ -692,6 +723,7 @@ function disableWallpaperMode() {
   }
   wallpaperWins = [];
   wallpaperActive = false;
+  const cfg = readConfig(); cfg.wallpaperMode = false; writeConfig(cfg);
   stopCursorBroadcast();
   if (psBlockerId !== null) { powerSaveBlocker.stop(psBlockerId); psBlockerId = null; }
   refreshTrayMenu();
@@ -701,6 +733,16 @@ function disableWallpaperMode() {
 ipcMain.handle('wallpaperMode:enable', () => enableWallpaperMode());
 ipcMain.handle('wallpaperMode:disable', () => { disableWallpaperMode(); return { ok: true }; });
 ipcMain.handle('wallpaperMode:state', () => wallpaperActive);
+
+ipcMain.handle('config:get', () => readConfig());
+ipcMain.handle('config:set', (_e, patch) => {
+    const cfg = { ...readConfig(), ...patch };
+    writeConfig(cfg);
+    if (typeof patch.launchAtStartup === 'boolean') {
+      app.setLoginItemSettings({ openAtLogin: patch.launchAtStartup, args: ['--hidden'] });
+    }
+    return cfg;
+  });
 
 // The preview window is the single audio capture source; its analysis is
 // relayed to every wallpaper window (secondary loopback captures come back

@@ -110,7 +110,7 @@
         <span class="val"></span>
       </label>
       <label class="slider-row">Speed ↔ volume
-        <input type="range" id="speedVol" min="0" max="3" step="0.05" />
+        <input type="range" id="speedVol" min="0" max="5" step="0.05" />
         <span class="val"></span>
       </label>
       <label class="check-row"><input type="checkbox" id="cursorRipple" /> Cursor ripple</label>
@@ -154,6 +154,13 @@
       <h3>Wallpaper mode</h3>
       <button id="wallpaperToggle" class="btn full">Run as my wallpaper</button>
       <p class="hint">Puts the visualizer fullscreen <b>behind your desktop icons</b>, click-through — it behaves like the OS wallpaper. Music keeps playing through it. Exit anytime from the tray icon (or this button).</p>
+    </section>
+
+    <section>
+      <h3>Startup & games</h3>
+      <label class="check-row"><input type="checkbox" id="launchAtStartup" /> Start with Windows</label>
+      <label class="check-row"><input type="checkbox" id="startInTray" /> Start minimized in tray (wallpaper auto-on)</label>
+      <p class="hint">Game mode: press <b>Ctrl+Alt+D</b> or use the tray menu to hide the wallpaper and free the GPU while gaming. Same keys to bring it back.</p>
     </section>
 
     <section>

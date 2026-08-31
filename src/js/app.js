@@ -19,7 +19,8 @@ const audio = new AudioEngine();
 let currentImage = null;      // canvas or ImageBitmap currently visualized
 let currentImageUrl = null;   // for the thumbnail
 let relayedDepth = null;      // depth grid received from the preview window
-let awaitingRelay = false;    // wallpaper window: waiting for the preview's grid
+let awaitingRelay = false;
+let gameMode = false;    // wallpaper window: waiting for the preview's grid
 let rebuildToken = 0;
 let idleVis = 1;
 let idleTarget = 1;
@@ -173,7 +174,9 @@ async function rebuildCloud() {
 
 // ------------------------------------------------------- wallpaper mode
 
-const isWallpaperWindow = new URLSearchParams(location.search).get('wallpaper') === '1';
+const wallParams = new URLSearchParams(location.search);
+const isWallpaperWindow = wallParams.get('wallpaper') === '1';
+const isPrimaryWallpaper = isWallpaperWindow && wallParams.get('primary') === '1';
 // The preview window is the single audio capture source; wallpaper windows
 // render from the spectrum it broadcasts (secondary loopback captures come
 // back silent on Windows, so per-window capture is not viable).
@@ -345,6 +348,7 @@ if (!isWallpaperWindow) {
 function loop(now) {
   requestAnimationFrame(loop);
   const analyzer = isWallpaperWindow ? remoteAnalyzer : audio.analyzer;
+  if (gameMode) return;
 
   if (document.hidden) return;
 
@@ -402,8 +406,7 @@ window.__dv = { audio, scene, get, set, loadUrl: (u) => loadFromUrl(u), rebuild:
     currentImage = makeProceduralImage();
     setMainImage(currentImage, null);
   }
-  if (!isWallpaperWindow) {
-    // wallpaper windows render from the preview's relayed spectrum instead
+  if (!isWallpaperWindow || isPrimaryWallpaper) {
     await switchAudio(get('audioSource'), { fileUrl: get('audioFileUrl') });
   }
   requestAnimationFrame(loop);
