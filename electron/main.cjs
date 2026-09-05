@@ -254,11 +254,14 @@ if (!gotLock) {
     });
     ensureTray();
     registerGameHotkey(); // Ctrl+Alt+D hides the wallpaper for gaming
-    registerGameHotkey();
     // restore wallpaper mode if it was left on, and honor tray-start
     const cfg = readConfig();
+    // auto game mode defaults on: any fullscreen app hides the wallpaper
+    if (cfg.autoGameMode === undefined) { cfg.autoGameMode = true; writeConfig(cfg); }
+    if (cfg.autoGameMode) startAutoGameWatcher();
     if (cfg.wallpaperMode) await enableWallpaperMode();
-    if (!cfg.startInTray) createWindow();
+    // login launches pass --hidden: start in the tray regardless of startInTray
+    if (!cfg.startInTray && !process.argv.includes('--hidden')) createWindow();
   });
 
   // With wallpaper mode active, closing the preview only hides it — the
@@ -438,6 +441,24 @@ function configPath() { return path.join(app.getPath('userData'), 'config.json')
 function readConfig() { try { return JSON.parse(fs.readFileSync(configPath(), 'utf8')); } catch { return {}; } }
 function writeConfig(cfg) { try { fs.writeFileSync(configPath(), JSON.stringify(cfg, null, 2)); } catch {} }
 
+const RUN_KEY = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run';
+const LOGIN_VALUE = 'Dynamic Visualizer';
+function setLoginItem(enable) {
+  if (process.platform !== 'win32') {
+    try { app.setLoginItemSettings({ openAtLogin: !!enable }); } catch {}
+    return;
+  }
+  // Electron's setLoginItemSettings silently drops the registry write when
+  // path/args are passed, and its plain call can't launch the app in dev —
+  // manage the Run key directly. Dev needs the app dir as electron.exe's
+  // first argument; packaged builds launch their own exe.
+  const cmd = `"${process.execPath}"${app.isPackaged ? '' : ` "${PROJECT_ROOT}"`} --hidden`;
+  const regArgs = enable
+    ? ['add', RUN_KEY, '/v', LOGIN_VALUE, '/t', 'REG_SZ', '/d', cmd, '/f']
+    : ['delete', RUN_KEY, '/v', LOGIN_VALUE, '/f'];
+  run('reg', regArgs, 4000);
+}
+
 let gameMode = false;
 function setGameMode(on) {
   gameMode = on;
@@ -455,6 +476,101 @@ function registerGameHotkey() {
   try { globalShortcut.register('CommandOrControl+Alt+D', () => setGameMode(!gameMode)); } catch {}
 }
 
+// ---------------------------------------------------------- auto game mode
+// While enabled, watch the foreground window: when a normal app covers an
+// entire monitor (borderless or exclusive fullscreen), enter game mode; when
+// it leaves, bring the wallpaper back. The manual hotkey still works — the
+// watcher only reacts to *changes* in fullscreen state, it never fights a
+// manual toggle until the fullscreen state itself changes.
+
+const SHELL_CLASSES = new Set([
+  'Progman', 'WorkerW', 'Shell_TrayWnd', 'Shell_SecondaryTrayWnd',
+  'Windows.UI.Core.CoreWindow', 'XamlExplorerHostIslandWindow',
+]);
+
+let dwmIsCloaked = undefined;
+function dwmWindowCloaked(hwnd) {
+  if (dwmIsCloaked === undefined) {
+    try {
+      const dwm = koffi.load('dwmapi.dll');
+      const fn = dwm.func('int32 __stdcall DwmGetWindowAttribute(intptr_t h, uint attr, void *val, uint cb)');
+      dwmIsCloaked = (h) => {
+        try {
+          const val = Buffer.alloc(4);
+          return fn(h, 14 /* DWMWA_CLOAKED */, val, 4) === 0 && val.readUInt32LE(0) !== 0;
+        } catch { return false; }
+      };
+    } catch { dwmIsCloaked = null; }
+  }
+  return dwmIsCloaked ? dwmIsCloaked(hwnd) : false;
+}
+
+/** True when the foreground window is a real app covering an entire monitor.
+ *  Excludes our own windows, the desktop/shell and cloaked UWP hosts. */
+function isFullscreenAppForeground() {
+  if (process.platform !== 'win32') return false;
+  const w = getWin32();
+  const hwnd = w.GetForegroundWindow();
+  if (!hwnd) return false;
+
+  const pid = Buffer.alloc(4);
+  w.GetWindowThreadProcessId(hwnd, pid);
+  if (pid.readUInt32LE(0) === process.pid) return false; // our preview/wallpaper windows
+  if (w.IsIconic(hwnd)) return false;
+
+  const clsBuf = Buffer.alloc(512);
+  w.GetClassNameW(hwnd, clsBuf, 256);
+  if (SHELL_CLASSES.has(clsBuf.toString('utf16le').split('\0')[0])) return false;
+
+  // suspended UWP apps keep a cloaked window in the foreground
+  if (dwmWindowCloaked(hwnd)) return false;
+
+  // small overlay/tool windows never count, even at monitor size
+  const WS_EX_TOOLWINDOW = 0x00000080n;
+  const ex = w.GetWindowLongPtrW(hwnd, -20 /* GWL_EXSTYLE */);
+  if ((typeof ex === 'bigint' ? ex : BigInt(Math.round(Number(ex)))) & WS_EX_TOOLWINDOW) return false;
+
+  const r = { L: 0, T: 0, R: 0, B: 0 };
+  if (!w.GetWindowRect(hwnd, r)) return false;
+  const hmon = w.MonitorFromWindow(hwnd, 2 /* MONITOR_DEFAULTTONEAREST */);
+  if (!hmon) return false;
+  // MONITORINFO layout: cbSize, rcMonitor (4×int32), rcWork (4×int32), dwFlags
+  const mi = Buffer.alloc(40);
+  mi.writeUInt32LE(40, 0);
+  if (!w.GetMonitorInfoW(hmon, mi)) return false;
+  const mL = mi.readInt32LE(4), mT = mi.readInt32LE(8), mR = mi.readInt32LE(12), mB = mi.readInt32LE(16);
+  // 1px tolerance absorbs rounding on scaled displays
+  return Math.abs(r.L - mL) <= 1 && Math.abs(r.T - mT) <= 1 &&
+         Math.abs(r.R - mR) <= 1 && Math.abs(r.B - mB) <= 1;
+}
+
+let autoGameTimer = null;
+let autoPrevFullscreen = null; // last raw reading — act only on changes
+
+function startAutoGameWatcher() {
+  if (autoGameTimer || process.platform !== 'win32' || !koffi) return;
+  autoPrevFullscreen = null;
+  autoGameTimer = setInterval(() => {
+    let fs = false;
+    try { fs = isFullscreenAppForeground(); } catch {}
+    if (autoPrevFullscreen !== null && fs !== autoPrevFullscreen) setGameMode(fs);
+    autoPrevFullscreen = fs;
+  }, 1000);
+}
+
+function stopAutoGameWatcher() {
+  if (autoGameTimer) { clearInterval(autoGameTimer); autoGameTimer = null; }
+  autoPrevFullscreen = null;
+}
+
+function setAutoGameEnabled(on) {
+  const cfg = readConfig();
+  cfg.autoGameMode = !!on;
+  writeConfig(cfg);
+  if (cfg.autoGameMode) startAutoGameWatcher(); else stopAutoGameWatcher();
+  refreshTrayMenu();
+}
+
 function refreshTrayMenu() {
   if (!tray) return;
   const menu = Menu.buildFromTemplate([
@@ -464,6 +580,7 @@ function refreshTrayMenu() {
       click: () => (wallpaperActive ? disableWallpaperMode() : enableWallpaperMode()),
     },
     { label: (gameMode ? '✓ ' : '') + 'Game mode (hide wallpaper)', click: () => setGameMode(!gameMode) },
+    { label: (readConfig().autoGameMode ? '✓ ' : '') + 'Auto game mode (any fullscreen app)', click: () => setAutoGameEnabled(!readConfig().autoGameMode) },
     { type: 'separator' },
     { label: 'Quit', click: () => { app.isQuitting = true; app.quit(); } },
   ]);
@@ -518,6 +635,15 @@ function getWin32() {
     SetWindowLongPtrW: user32.func('intptr_t __stdcall SetWindowLongPtrW(intptr_t h, int i, intptr_t v)'),
     GetWindowRect: user32.func('bool __stdcall GetWindowRect(intptr_t h, _Out_ DvRect *r)'),
     GetClientRect: user32.func('bool __stdcall GetClientRect(intptr_t h, _Out_ DvRect *r)'),
+    // auto game mode: fullscreen detection
+    GetForegroundWindow: user32.func('intptr_t __stdcall GetForegroundWindow()'),
+    IsIconic: user32.func('bool __stdcall IsIconic(intptr_t h)'),
+    GetWindowThreadProcessId: user32.func('uint32 __stdcall GetWindowThreadProcessId(intptr_t h, void *pid)'),
+    GetClassNameW: user32.func('int __stdcall GetClassNameW(intptr_t h, void *buf, int maxCount)'),
+    MonitorFromWindow: user32.func('intptr_t __stdcall MonitorFromWindow(intptr_t h, uint flags)'),
+    // MONITORINFO goes through a raw Buffer: koffi zeroes _Out_ structs, and
+    // GetMonitorInfoW rejects them because cbSize must be set by the caller
+    GetMonitorInfoW: user32.func('bool __stdcall GetMonitorInfoW(intptr_t hmon, void *mi)'),
     // NB: SetParent returns the previous parent HWND (NULL on failure or when
     // there was none) — it is NOT a bool. Success is verified via GetAncestor.
     SetParent: user32.func('intptr_t __stdcall SetParent(intptr_t child, intptr_t parent)'),
@@ -738,9 +864,8 @@ ipcMain.handle('config:get', () => readConfig());
 ipcMain.handle('config:set', (_e, patch) => {
     const cfg = { ...readConfig(), ...patch };
     writeConfig(cfg);
-    if (typeof patch.launchAtStartup === 'boolean') {
-      app.setLoginItemSettings({ openAtLogin: patch.launchAtStartup, args: ['--hidden'] });
-    }
+    if (typeof patch.launchAtStartup === 'boolean') setLoginItem(patch.launchAtStartup);
+    if (typeof patch.autoGameMode === 'boolean') setAutoGameEnabled(patch.autoGameMode);
     return cfg;
   });
 
@@ -764,6 +889,19 @@ ipcMain.on('depthgrid', (event, payload) => {
   for (const win of wallpaperWins) {
     if (!win.isDestroyed() && win.webContents !== event.sender) {
       win.webContents.send('depthgrid', payload);
+    }
+  }
+});
+
+// A wallpaper window asks for the current depth grid when it spins up (it
+// boots after the preview already estimated, so the original broadcast
+// missed it). Forward the ask to the preview — the only window running the
+// AI model — which replies with a fresh 'depthgrid'.
+ipcMain.on('depthgrid:request', (event) => {
+  const sender = event.sender;
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed() && win.webContents !== sender && !wallpaperWins.includes(win)) {
+      win.webContents.send('depthgrid:send');
     }
   }
 });

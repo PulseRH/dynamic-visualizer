@@ -407,6 +407,7 @@ export class VisualScene {
     this.cursorRipple = !!s.cursorRipple;
     this.uniforms.uExitPush.value = s.flybyExit ? 0.4 : 0;
     this.speedVol = s.speedVol;
+    this.musicParallax = s.musicParallax || 0;
     this.setBandCount(s.bands);
     // size compensation: additive brightness ∝ point area (diameter²),
     // normalized so size ≈ 1 (diameter = spacing) is the reference look
@@ -435,12 +436,18 @@ export class VisualScene {
 
     const bands = analyzer.bands;
     const count = Math.min(this.bandCount, bands.length);
+    // bass level for music parallax, folded into the texture loop — no extra
+    // pass (the lowest quarter of bands)
+    let lowSum = 0, lowN = 0;
+    const q = Math.max(1, count >> 2);
     for (let i = 0; i < count; i++) {
-      const v = Math.min(255, bands[i] * 255) | 0;
+      const b = bands[i];
+      const v = Math.min(255, b * 255) | 0;
       this.bandData[i * 4] = v;
       this.bandData[i * 4 + 1] = v;
       this.bandData[i * 4 + 2] = v;
       this.bandData[i * 4 + 3] = 255;
+      if (i < q) { lowSum += b; lowN++; }
     }
     this.bandTex.needsUpdate = true;
 
@@ -469,9 +476,27 @@ export class VisualScene {
     const drift = this.autoMotion ? 1 : 0;
     this.pointer.x += (this.pointer.tx - this.pointer.x) * Math.min(1, dt * 3);
     this.pointer.y += (this.pointer.ty - this.pointer.y) * Math.min(1, dt * 3);
+    // music parallax: the camera sways side to side on the volume-ramped
+    // clock (amplitude follows the music's energy), and bass pushes it down —
+    // independent of the pointer. (Spectrum tilt can't drive x: music is
+    // nearly always bass-heavy, so it would pin to one side.)
+    const mp = (this.musicParallax || 0) * 0.075;
+    if (mp > 0) {
+      const sway = Math.sin((this.xyTime ?? 0) * 0.7) * Math.min(1, analyzer.energy * 2.5);
+      const bass = lowN ? lowSum / lowN : 0;
+      // adaptive normalize: chase a slowly-decaying peak of the bass level so
+      // any track and input gain drives the full vertical range
+      this.bassPeak = Math.max(bass, (this.bassPeak ?? 0.3) * Math.exp(-dt / 8));
+      const bassN = this.bassPeak > 0.03 ? Math.min(1, bass / this.bassPeak) : 0;
+      this.musicPx = (this.musicPx ?? 0) + (sway - (this.musicPx ?? 0)) * Math.min(1, dt * 4);
+      this.musicPy = (this.musicPy ?? 0) + (bassN - (this.musicPy ?? 0)) * Math.min(1, dt * 4);
+    } else {
+      this.musicPx = 0;
+      this.musicPy = 0;
+    }
     const t = this.time;
-    this.camera.position.x = Math.sin(t * 0.13) * p * 0.6 * drift + this.pointer.x * p;
-    this.camera.position.y = Math.cos(t * 0.11) * p * 0.4 * drift - this.pointer.y * p * 0.6;
+    this.camera.position.x = Math.sin(t * 0.13) * p * 0.6 * drift + this.pointer.x * p + (this.musicPx ?? 0) * mp;
+    this.camera.position.y = Math.cos(t * 0.11) * p * 0.4 * drift - this.pointer.y * p * 0.6 - (this.musicPy ?? 0) * mp * 1.4;
 
     // cursor ripple: strength rises with cursor speed, decays when it stops
     const spd = Math.hypot(this.pointer.tx - (this._prevNx ?? 0), this.pointer.ty - (this._prevNy ?? 0)) / Math.max(dt, 0.001);

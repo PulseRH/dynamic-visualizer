@@ -20,7 +20,8 @@ let currentImage = null;      // canvas or ImageBitmap currently visualized
 let currentImageUrl = null;   // for the thumbnail
 let relayedDepth = null;      // depth grid received from the preview window
 let awaitingRelay = false;
-let gameMode = false;    // wallpaper window: waiting for the preview's grid
+let lastDepthGrid = null;     // this window's last computed grid (preview: for re-sends)
+let gameMode = false;    // true: a game/app owns the screen — pause rendering
 let rebuildToken = 0;
 let idleVis = 1;
 let idleTarget = 1;
@@ -146,6 +147,7 @@ async function rebuildCloud() {
       depth = await estimateDepth(currentImage, 'auto', DEFAULT_ONNX_MODEL);
       if (token !== rebuildToken) return;
       awaitingRelay = true;
+      bridge.requestDepthGrid(); // ask the preview to re-send its grid
     } else {
       if (depthMode === 'onnx') ui.toast('Running AI depth model…', '', 8000);
       try {
@@ -160,7 +162,8 @@ async function rebuildCloud() {
       }
       // share the grid so wallpaper windows never need the AI runtime
       if (depth && !isWallpaperWindow) {
-        bridge.sendDepthGrid({ key: imageKey, data: depth.data, w: depth.w, h: depth.h });
+        lastDepthGrid = { key: imageKey, data: depth.data, w: depth.w, h: depth.h };
+        bridge.sendDepthGrid(lastDepthGrid);
       }
     }
   }
@@ -213,6 +216,12 @@ if (isWallpaperWindow) {
     }
   });
 }
+
+// a freshly-enabled wallpaper window asks for the current grid (it booted
+// after the preview estimated, so the original broadcast missed it)
+bridge.onDepthGridRequest(() => {
+  if (!isWallpaperWindow && lastDepthGrid) bridge.sendDepthGrid(lastDepthGrid);
+});
 
 async function toggleWallpaper() {
   if (isWallpaperWindow) return;
@@ -399,6 +408,8 @@ window.__dv = { audio, scene, get, set, loadUrl: (u) => loadFromUrl(u), rebuild:
 (async function boot() {
   audio.setBandCount(get('bands'));
   applyAudioResponse();
+  // game mode (manual hotkey or auto-fullscreen): every window stops rendering
+  bridge.onGameMode((on) => { gameMode = on; });
   try {
     await loadInitialImage();
   } catch (err) {

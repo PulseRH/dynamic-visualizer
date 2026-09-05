@@ -109,6 +109,10 @@
         <input type="range" id="parallax" min="0" max="2" step="0.05" />
         <span class="val"></span>
       </label>
+      <label class="slider-row">Music parallax
+        <input type="range" id="musicParallax" min="0" max="1" step="0.05" />
+        <span class="val"></span>
+      </label>
       <label class="slider-row">Speed ↔ volume
         <input type="range" id="speedVol" min="0" max="5" step="0.05" />
         <span class="val"></span>
@@ -160,7 +164,8 @@
       <h3>Startup & games</h3>
       <label class="check-row"><input type="checkbox" id="launchAtStartup" /> Start with Windows</label>
       <label class="check-row"><input type="checkbox" id="startInTray" /> Start minimized in tray (wallpaper auto-on)</label>
-      <p class="hint">Game mode: press <b>Ctrl+Alt+D</b> or use the tray menu to hide the wallpaper and free the GPU while gaming. Same keys to bring it back.</p>
+      <label class="check-row"><input type="checkbox" id="autoGameMode" /> Auto game mode: hide wallpaper when an app goes fullscreen</label>
+      <p class="hint">Game mode: press <b>Ctrl+Alt+D</b> or use the tray menu to hide the wallpaper and free the GPU while gaming. Same keys to bring it back. With <b>auto game mode</b> on (Windows), any app that fills the screen — a game, a video — hides the wallpaper for you and brings it back when you leave.</p>
     </section>
 
     <section>

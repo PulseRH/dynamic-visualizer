@@ -114,7 +114,16 @@ export class UI {
       const v = Number(parallaxEl.value);
       parallaxEl.parentElement.querySelector('.val').textContent = v.toFixed(2);
       const patch = { parallax: v };
-      if (get('overscanAuto')) patch.overscan = Math.round((1 + v * 0.15) * 20) / 20;
+      // music parallax shifts the camera too — count it in the auto overscan
+      if (get('overscanAuto')) patch.overscan = Math.round((1 + (v + get('musicParallax')) * 0.15) * 20) / 20;
+      set(patch);
+    };
+    const musicEl = $('musicParallax');
+    musicEl.oninput = () => {
+      const v = Number(musicEl.value);
+      musicEl.parentElement.querySelector('.val').textContent = v.toFixed(2);
+      const patch = { musicParallax: v };
+      if (get('overscanAuto')) patch.overscan = Math.round((1 + (get('parallax') + v) * 0.15) * 20) / 20;
       set(patch);
     };
     const overscanEl = $('overscan');
@@ -129,11 +138,16 @@ export class UI {
     const cfg = await bridge.getConfig();
     const la = $('#launchAtStartup');
     const st = $('#startInTray');
+    const ag = $('#autoGameMode');
     if (!la || !st) return;
     la.checked = !!cfg.launchAtStartup;
     st.checked = !!cfg.startInTray;
     la.onchange = async (e) => { await bridge.setConfig({ launchAtStartup: e.target.checked }); };
     st.onchange = async (e) => { await bridge.setConfig({ startInTray: e.target.checked }); };
+    if (ag) {
+      ag.checked = !!cfg.autoGameMode;
+      ag.onchange = async (e) => { await bridge.setConfig({ autoGameMode: e.target.checked }); };
+    }
   }
 
   _wireImageButtons() {
@@ -210,6 +224,7 @@ export class UI {
     setSlider('depthMove', get('depthMove'));
     setSlider('xyMove', get('xyMove'));
     setSlider('parallax', get('parallax'));
+    setSlider('musicParallax', get('musicParallax'));
     setSlider('overscan', get('overscan'));
 
     $('autoQuality').checked = get('autoQuality');

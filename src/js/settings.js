@@ -24,6 +24,7 @@ const DEFAULTS = {
   sensCurve: 1.5,          // response gamma: higher = quiet sounds move less
   speedVol: 1.0,           // how much volume speeds up the motion (0 = fixed)
   parallax: 0.8,
+  musicParallax: 0,        // camera sway driven by the music itself (0 = off)
   audioSource: 'demo',     // 'system' | 'mic' | 'file' | 'demo'
   audioFileUrl: null,
   fpsCap: 30,              // 30 | 60 | 0 (uncapped)
