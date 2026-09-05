@@ -157,7 +157,8 @@
     <section>
       <h3>Wallpaper mode</h3>
       <button id="wallpaperToggle" class="btn full">Run as my wallpaper</button>
-      <p class="hint">Puts the visualizer fullscreen <b>behind your desktop icons</b>, click-through — it behaves like the OS wallpaper. Music keeps playing through it. Exit anytime from the tray icon (or this button).</p>
+      <label class="check-row"><input type="checkbox" id="wallpaperPrimaryOnly" /> Main monitor only (other displays keep the OS wallpaper)</label>
+      <p class="hint">Puts the visualizer fullscreen <b>behind your desktop icons</b>, click-through — it behaves like the OS wallpaper. Music keeps playing through it. Exit anytime from the tray icon (or this button). Main-monitor-only roughly halves the GPU work on multi-monitor setups — every animated screen costs render time <b>and</b> Desktop Window Manager composition.</p>
     </section>
 
     <section>
@@ -172,6 +173,7 @@
       <h3>Performance</h3>
       <div class="seg" id="fpsSeg">
         <button data-v="30">30 fps</button>
+        <button data-v="24">24 fps</button>
         <button data-v="60">60 fps</button>
         <button data-v="0">Max</button>
       </div>

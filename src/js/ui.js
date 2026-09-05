@@ -148,6 +148,11 @@ export class UI {
       ag.checked = !!cfg.autoGameMode;
       ag.onchange = async (e) => { await bridge.setConfig({ autoGameMode: e.target.checked }); };
     }
+    const mo = $('#wallpaperPrimaryOnly');
+    if (mo) {
+      mo.checked = !!cfg.wallpaperPrimaryOnly;
+      mo.onchange = async (e) => { await bridge.setConfig({ wallpaperPrimaryOnly: e.target.checked }); };
+    }
   }
 
   _wireImageButtons() {

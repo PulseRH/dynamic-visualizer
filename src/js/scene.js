@@ -436,9 +436,9 @@ export class VisualScene {
 
     const bands = analyzer.bands;
     const count = Math.min(this.bandCount, bands.length);
-    // bass level for music parallax, folded into the texture loop — no extra
-    // pass (the lowest quarter of bands)
-    let lowSum = 0, lowN = 0;
+    // bass + treble levels for music parallax, folded into the texture loop
+    // (lowest vs highest quarter of bands)
+    let lowSum = 0, highSum = 0, lowN = 0, highN = 0;
     const q = Math.max(1, count >> 2);
     for (let i = 0; i < count; i++) {
       const b = bands[i];
@@ -448,6 +448,7 @@ export class VisualScene {
       this.bandData[i * 4 + 2] = v;
       this.bandData[i * 4 + 3] = 255;
       if (i < q) { lowSum += b; lowN++; }
+      else if (i >= count - q) { highSum += b; highN++; }
     }
     this.bandTex.needsUpdate = true;
 
@@ -476,19 +477,32 @@ export class VisualScene {
     const drift = this.autoMotion ? 1 : 0;
     this.pointer.x += (this.pointer.tx - this.pointer.x) * Math.min(1, dt * 3);
     this.pointer.y += (this.pointer.ty - this.pointer.y) * Math.min(1, dt * 3);
-    // music parallax: the camera sways side to side on the volume-ramped
-    // clock (amplitude follows the music's energy), and bass pushes it down —
-    // independent of the pointer. (Spectrum tilt can't drive x: music is
-    // nearly always bass-heavy, so it would pin to one side.)
+    // music parallax: bass-vs-treble tilt drives x, bass level drives y —
+    // independent of the pointer. Music is nearly always bass-heavy, so the
+    // raw tilt would pin to one side: subtract its own slow average (the
+    // offset) so it centers, then scale the deviation to the full -1..1 range
+    // against a decaying peak — the camera moves both ways, and moves more.
     const mp = (this.musicParallax || 0) * 0.075;
     if (mp > 0) {
-      const sway = Math.sin((this.xyTime ?? 0) * 0.7) * Math.min(1, analyzer.energy * 2.5);
+      const raw = (lowN && highN) ? (lowSum / lowN - highSum / highN) : 0;
+      this.tiltBase = this.tiltBase === undefined
+        ? raw
+        : this.tiltBase + (raw - this.tiltBase) * Math.min(1, dt * 0.1);
+      const dev = raw - this.tiltBase;
+      this.tiltPeak = Math.max(Math.abs(dev), (this.tiltPeak ?? 0.1) * Math.exp(-dt / 10));
+      const tilt = Math.max(-1, Math.min(1, dev / Math.max(this.tiltPeak, 0.05)));
       const bass = lowN ? lowSum / lowN : 0;
-      // adaptive normalize: chase a slowly-decaying peak of the bass level so
-      // any track and input gain drives the full vertical range
-      this.bassPeak = Math.max(bass, (this.bassPeak ?? 0.3) * Math.exp(-dt / 8));
-      const bassN = this.bassPeak > 0.03 ? Math.min(1, bass / this.bassPeak) : 0;
-      this.musicPx = (this.musicPx ?? 0) + (sway - (this.musicPx ?? 0)) * Math.min(1, dt * 4);
+      // y gets the same treatment as x: subtract the bass level's own slow
+      // average so it centers, then scale the deviation to the full -1..1
+      // range against a decaying peak — bass hits pull the camera down, bass
+      // drops lift it up, and quiet tracks still move
+      this.bassBase = this.bassBase === undefined
+        ? bass
+        : this.bassBase + (bass - this.bassBase) * Math.min(1, dt * 0.1);
+      const bdev = bass - this.bassBase;
+      this.bassDevPeak = Math.max(Math.abs(bdev), (this.bassDevPeak ?? 0.1) * Math.exp(-dt / 10));
+      const bassN = Math.max(-1, Math.min(1, bdev / Math.max(this.bassDevPeak, 0.05)));
+      this.musicPx = (this.musicPx ?? 0) + (tilt - (this.musicPx ?? 0)) * Math.min(1, dt * 4);
       this.musicPy = (this.musicPy ?? 0) + (bassN - (this.musicPy ?? 0)) * Math.min(1, dt * 4);
     } else {
       this.musicPx = 0;

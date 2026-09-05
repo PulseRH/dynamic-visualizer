@@ -779,7 +779,11 @@ function enableWallpaperMode() {
 async function doEnableWallpaperMode() {
   const created = [];
   try {
-    const displays = screen.getAllDisplays();
+    // main-monitor-only: the other displays keep the OS wallpaper — every
+    // animated window costs render time AND a DWM recomposition per frame
+    const displays = readConfig().wallpaperPrimaryOnly
+      ? [screen.getPrimaryDisplay()]
+      : screen.getAllDisplays();
     for (const display of displays) {
       const b = display.bounds;
       const win = new BrowserWindow({
@@ -866,6 +870,11 @@ ipcMain.handle('config:set', (_e, patch) => {
     writeConfig(cfg);
     if (typeof patch.launchAtStartup === 'boolean') setLoginItem(patch.launchAtStartup);
     if (typeof patch.autoGameMode === 'boolean') setAutoGameEnabled(patch.autoGameMode);
+    // the wallpaper layout depends on this setting — rebuild it live
+    if (typeof patch.wallpaperPrimaryOnly === 'boolean' && wallpaperActive) {
+      disableWallpaperMode();
+      enableWallpaperMode();
+    }
     return cfg;
   });
 

@@ -27,7 +27,7 @@ const DEFAULTS = {
   musicParallax: 0,        // camera sway driven by the music itself (0 = off)
   audioSource: 'demo',     // 'system' | 'mic' | 'file' | 'demo'
   audioFileUrl: null,
-  fpsCap: 30,              // 30 | 60 | 0 (uncapped)
+  fpsCap: 30,              // 30 | 24 | 60 | 0 (uncapped)
   autoQuality: true,
   idleSleep: true,
 };
