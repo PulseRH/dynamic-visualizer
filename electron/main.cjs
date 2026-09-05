@@ -8,6 +8,34 @@ const { spawn } = require('child_process');
 const { pipeline } = require('stream');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
+
+// Dev builds run with their own profile so the installed build can run at
+// the same time (both would otherwise claim the same single-instance lock
+// and user data). First dev launch copies the installed profile's settings,
+// storage and model cache — minus wallpaper mode, so the two don't fight
+// over the desktop.
+if (!app.isPackaged) {
+  const devData = path.join(app.getPath('appData'), 'dynamic-visualizer-dev');
+  const instData = path.join(app.getPath('appData'), 'Dynamic Visualizer');
+  if (!fs.existsSync(devData) && fs.existsSync(instData)) {
+    try {
+      fs.cpSync(instData, devData, {
+        recursive: true,
+        filter: (s) => !/(GPUCache|Code Cache|ShaderCache|DawnCache|DawnGraphiteCache|DawnWebGPUCache|Crashpad|logs)$/.test(s),
+      });
+      const cfgPath = path.join(devData, 'config.json');
+      if (fs.existsSync(cfgPath)) {
+        const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+        cfg.wallpaperMode = false;
+        fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+      }
+      console.log('[dev profile] copied installed profile ->', devData);
+    } catch (err) {
+      console.log('[dev profile] migration failed:', err.message);
+    }
+  }
+  app.setPath('userData', devData);
+}
 const SERVE_EXTENSIONS = new Set([
   '.html', '.css', '.js', '.mjs', '.cjs', '.json', '.txt',
   '.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.ico', '.avif',
@@ -248,6 +276,19 @@ if (!gotLock) {
 
   app.whenReady().then(async () => {
     registerAppProtocol();
+    // surface renderer errors (shader compiles, exceptions) in the main log
+    app.on('web-contents-created', (_e, wc) => {
+      wc.on('console-message', (e) => {
+        if (e.level >= 2) console.log('[renderer]', e.message);
+      });
+    });
+    // TEMP: verify eqCurve reaches the live analyzer
+    setInterval(() => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      mainWindow.webContents.executeJavaScript(
+        `JSON.stringify({ eq: window.__dv.get('eqCurve'), aeq: window.__dv.audio.analyzer.eq, b1: +window.__dv.audio.analyzer.bands[1].toFixed(3), b32: +window.__dv.audio.analyzer.bands[32].toFixed(3), b50: +window.__dv.audio.analyzer.bands[50].toFixed(3) })`
+      ).then((r) => console.log('[diag]', r)).catch(() => {});
+    }, 3000);
     // Allow microphone / loopback capture without prompts.
     session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
       callback(permission === 'media' || permission === 'audioCapture');
@@ -357,10 +398,12 @@ function startCursorBroadcast() {
     const pt = screen.getCursorScreenPoint();
     for (const win of wallpaperWins) {
       if (win.isDestroyed()) continue;
-      const b = win.getBounds();
-      const nx = Math.max(-1, Math.min(1, ((pt.x - b.x) / b.width) * 2 - 1));
-      const ny = Math.max(-1, Math.min(1, ((pt.y - b.y) / b.height) * 2 - 1));
-      win.webContents.send('cursor', { nx, ny });
+      try {
+        const b = win.getBounds();
+        const nx = Math.max(-1, Math.min(1, ((pt.x - b.x) / b.width) * 2 - 1));
+        const ny = Math.max(-1, Math.min(1, ((pt.y - b.y) / b.height) * 2 - 1));
+        win.webContents.send('cursor', { nx, ny });
+      } catch { /* window tearing down between the check and the send */ }
     }
   }, 33);
 }
@@ -461,6 +504,7 @@ function setLoginItem(enable) {
 
 let gameMode = false;
 function setGameMode(on) {
+  console.log('[gamemode]', on ? 'ON' : 'off');
   gameMode = on;
   for (const win of wallpaperWins) {
     if (win.isDestroyed()) continue;
@@ -866,6 +910,7 @@ ipcMain.handle('wallpaperMode:state', () => wallpaperActive);
 
 ipcMain.handle('config:get', () => readConfig());
 ipcMain.handle('config:set', (_e, patch) => {
+    console.log('[config] set', JSON.stringify(patch));
     const cfg = { ...readConfig(), ...patch };
     writeConfig(cfg);
     if (typeof patch.launchAtStartup === 'boolean') setLoginItem(patch.launchAtStartup);
@@ -881,11 +926,11 @@ ipcMain.handle('config:set', (_e, patch) => {
 // The preview window is the single audio capture source; its analysis is
 // relayed to every wallpaper window (secondary loopback captures come back
 // silent on Windows, so per-window capture is not viable).
-ipcMain.on('spectrum', (event, bands, energy, beat) => {
+ipcMain.on('spectrum', (event, bands, energy, beat, loud) => {
   if (!wallpaperWins.length) return;
   for (const win of wallpaperWins) {
     if (!win.isDestroyed() && win.webContents !== event.sender) {
-      win.webContents.send('spectrum', bands, energy, beat);
+      win.webContents.send('spectrum', bands, energy, beat, loud);
     }
   }
 });

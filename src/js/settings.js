@@ -22,9 +22,20 @@ const DEFAULTS = {
   sensGain: 1.0,           // input gain: how strongly sound drives everything
   sensFloor: 0.0,          // noise floor: below this level, no movement
   sensCurve: 1.5,          // response gamma: higher = quiet sounds move less
+  eqCurve: 0,              // equal-loudness weighting: motion follows hearing (0 = off, 2 = max)
+  tiltEQ: 0,               // spectral tilt: -1 bass-reactive, +1 highs-reactive
+  tiltPivot: 0.5,          // where the tilt crosses zero (0 bass end, 1 highs end)
+  stickyIn: 0.5,           // band attack: 0 = jump instantly, 1 = reluctant
+  stickyOut: 0.5,          // band release: 0 = drop instantly, 1 = long hold
   speedVol: 1.0,           // how much volume speeds up the motion (0 = fixed)
+  motionSpeed: 1.0,        // base tempo of wave/shimmer motion (0 = music-driven only)
   parallax: 0.8,
   musicParallax: 0,        // camera sway driven by the music itself (0 = off)
+  dynamics: 0.7,           // loud-vs-quiet contrast: 0 = constant, 1 = proportional
+  centeredMotion: false,   // audio mode: quiet bands pull back, loud push forward
+  kickStrength: 1.0,       // beat kick multiplier (0 = kicks off)
+  previewPaused: false,    // freeze the preview window (wallpaper keeps running)
+  previewFullQuality: false, // don't throttle the preview while wallpaper mode is on
   audioSource: 'demo',     // 'system' | 'mic' | 'file' | 'demo'
   audioFileUrl: null,
   fpsCap: 30,              // 30 | 24 | 60 | 0 (uncapped)

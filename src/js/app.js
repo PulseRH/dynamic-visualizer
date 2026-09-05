@@ -188,6 +188,7 @@ const remoteAnalyzer = {
   energy: 0,
   beat: 0,
   level: 0,
+  loud: 0,
   lastUpdate: 0,
 };
 let wallpaperAudioActive = false;
@@ -196,12 +197,13 @@ if (isWallpaperWindow) {
   // wallpaper windows are click-through: the main process feeds us the global
   // cursor so the wallpaper still parallaxes with the mouse
   bridge.onCursor(({ nx, ny }) => scene.setExternalPointer(nx, ny));
-  bridge.onSpectrum((bands, energy, beat) => {
+  bridge.onSpectrum((bands, energy, beat, loud) => {
     const n = Math.min(bands.length, remoteAnalyzer.bands.length);
     for (let i = 0; i < n; i++) remoteAnalyzer.bands[i] = bands[i];
     remoteAnalyzer.energy = energy;
     remoteAnalyzer.beat = beat;
     remoteAnalyzer.level = energy;
+    remoteAnalyzer.loud = loud;
     remoteAnalyzer.lastUpdate = performance.now();
   });
   // depth grids are computed once in the preview and relayed here — this
@@ -281,6 +283,11 @@ function applyAudioResponse() {
   a.sensitivity = get('sensGain');
   a.floor = get('sensFloor');
   a.curve = get('sensCurve');
+  a.eq = get('eqCurve');
+  a.tiltEQ = get('tiltEQ');
+  a.tiltPivot = get('tiltPivot');
+  a.stickyIn = get('stickyIn');
+  a.stickyOut = get('stickyOut');
 }
 
 onChange((all, patch) => {
@@ -350,7 +357,7 @@ if (!isWallpaperWindow) {
     lastA = now;
     const a = audio.frame(dt, now);
     advanceIdle(a, dt, now);
-    if (wallpaperAudioActive) bridge.sendSpectrum(a.bands, a.energy, a.beat);
+    if (wallpaperAudioActive) bridge.sendSpectrum(a.bands, a.energy, a.beat, a.loud);
   }, 33);
 }
 
@@ -358,6 +365,8 @@ function loop(now) {
   requestAnimationFrame(loop);
   const analyzer = isWallpaperWindow ? remoteAnalyzer : audio.analyzer;
   if (gameMode) return;
+  // preview window paused: hold the last frame (wallpaper windows ignore it)
+  if (get('previewPaused') && !isWallpaperWindow) return;
 
   if (document.hidden) return;
 
@@ -370,9 +379,11 @@ function loop(now) {
 
   const cap = get('fpsCap');
   // wallpaper mode on: the preview is just a control mirror — throttle it
-  // hard, the wallpaper windows carry the real render
+  // hard, unless Full quality preview is on
   let effectiveCap = cap;
-  if (!isWallpaperWindow && wallpaperAudioActive) effectiveCap = Math.min(effectiveCap, 15);
+  if (!isWallpaperWindow && wallpaperAudioActive && !get('previewFullQuality')) {
+    effectiveCap = Math.min(effectiveCap, 15);
+  }
   const interval = effectiveCap > 0 ? 1000 / effectiveCap : 0;
   if (now - lastRender < interval - 0.75) return;
   const spaced = Math.max(0, now - lastRender);
@@ -410,6 +421,12 @@ window.__dv = { audio, scene, get, set, loadUrl: (u) => loadFromUrl(u), rebuild:
   applyAudioResponse();
   // game mode (manual hotkey or auto-fullscreen): every window stops rendering
   bridge.onGameMode((on) => { gameMode = on; });
+  // wallpaper mode may have been restored before this window existed — the
+  // broadcast was missed, so pick up the current state directly
+  bridge.isWallpaperActive().then((on) => {
+    wallpaperAudioActive = on;
+    ui.setWallpaperActive(on);
+  });
   try {
     await loadInitialImage();
   } catch (err) {

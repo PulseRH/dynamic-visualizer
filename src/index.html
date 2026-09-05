@@ -46,7 +46,7 @@
         <button data-v="onnx">AI model</button>
         <button data-v="flat">Flat</button>
       </div>
-      <label class="slider-row">Depth strength
+      <label class="slider-row"><span class="lbl">Depth strength<span class="q" data-tip="How strongly the depth layers separate. 0 flattens the cloud into a single plane."></span></span>
         <input type="range" id="depthScale" min="0" max="1.5" step="0.01" />
         <span class="val"></span>
       </label>
@@ -55,24 +55,23 @@
 
     <section>
       <h3>Points</h3>
-      <label class="slider-row">Count
+      <label class="slider-row"><span class="lbl">Count<span class="q" data-tip="Number of particles sampled from the image. More = denser image, more GPU work."></span></span>
         <input type="range" id="pointCount" min="20000" max="400000" step="10000" />
         <span class="val"></span>
       </label>
-      <label class="slider-row">Size
+      <label class="slider-row"><span class="lbl">Size<span class="q" data-tip="Particle size. Auto-compensated so the overall brightness stays put when you resize."></span></span>
         <input type="range" id="pointSize" min="0.4" max="3" step="0.05" />
         <span class="val"></span>
       </label>
-      <label class="slider-row">Glow
+      <label class="slider-row"><span class="lbl">Glow<span class="q" data-tip="Overall particle brightness, all points."></span></span>
         <input type="range" id="glow" min="0.2" max="2.5" step="0.05" />
         <span class="val"></span>
       </label>
-      <label class="slider-row">Audio boost
+      <label class="slider-row"><span class="lbl">Audio boost<span class="q" data-tip="Extra brightness only on the loud, moving points."></span></span>
         <input type="range" id="boost" min="0" max="3" step="0.05" />
         <span class="val"></span>
       </label>
-      <label class="check-row"><input type="checkbox" id="hideBackdrop" /> Hide background image (points only)</label>
-      <p class="hint">Glow = overall particle brightness (all points). Boost = extra brightness only on the loud, moving ones. Point size is auto-compensated so the overall brightness stays put.</p>
+      <label class="check-row"><input type="checkbox" id="hideBackdrop" /> Hide background image<span class="q" data-tip="Draw a black background while particles are visible — the image itself is not drawn."></span></label>
     </section>
 
     <section>
@@ -92,54 +91,88 @@
         <button data-v="depth">Depth</button>
       </div>
       <p class="hint" id="bandMapHint"></p>
-      <label class="check-row"><input type="checkbox" id="invertBands" /> Invert bands (bass toward viewer)</label>
-      <label class="slider-row">Intensity
+      <label class="check-row"><input type="checkbox" id="invertBands" /> Invert bands<span class="q" data-tip="Swaps which end gets the bass. On Depth: bass moves to the front layers. On the others it flips the direction."></span></label>
+      <label class="slider-row"><span class="lbl">Intensity<span class="q" data-tip="Overall strength of the music-driven wave motion."></span></span>
         <input type="range" id="intensity" min="0" max="2.5" step="0.05" />
         <span class="val"></span>
       </label>
-      <label class="slider-row">Depth move
+      <label class="slider-row"><span class="lbl">Depth move<span class="q" data-tip="How much points push toward and away from you with the music."></span></span>
         <input type="range" id="depthMove" min="0" max="3" step="0.05" />
         <span class="val"></span>
       </label>
-      <label class="slider-row">XY move
+      <label class="slider-row"><span class="lbl">XY move<span class="q" data-tip="How much points shimmer sideways with the music."></span></span>
         <input type="range" id="xyMove" min="0" max="3" step="0.05" />
         <span class="val"></span>
       </label>
-      <label class="slider-row">Parallax
+      <label class="slider-row"><span class="lbl">Parallax<span class="q" data-tip="Camera shifts as you move the cursor, so the image has depth."></span></span>
         <input type="range" id="parallax" min="0" max="2" step="0.05" />
         <span class="val"></span>
       </label>
-      <label class="slider-row">Music parallax
+      <label class="slider-row"><span class="lbl">Music parallax<span class="q" data-tip="Camera drift driven by the music: the spectrum balance sways it sideways, bass pushes it down."></span></span>
         <input type="range" id="musicParallax" min="0" max="1" step="0.05" />
         <span class="val"></span>
       </label>
-      <label class="slider-row">Speed ↔ volume
+      <label class="slider-row"><span class="lbl">Dynamics<span class="q" data-tip="How much loud passages move more than quiet ones — affects all motion, camera included. 0 = constant, 1 = proportional."></span></span>
+        <input type="range" id="dynamics" min="0" max="1" step="0.05" />
+        <span class="val"></span>
+      </label>
+      <label class="slider-row"><span class="lbl">Beat kick<span class="q" data-tip="Strength of the push on detected bass hits. Kicks scale with how hard the hit is; 0 = off."></span></span>
+        <input type="range" id="kickStrength" min="0" max="1" step="0.05" />
+        <span class="val"></span>
+      </label>
+      <label class="check-row"><input type="checkbox" id="centeredMotion" /> Centered motion<span class="q" data-tip="Quiet bands pull points back while loud bands push them forward, instead of only pushing forward."></span></label>
+      <label class="slider-row"><span class="lbl">Speed ↔ volume<span class="q" data-tip="How much louder music speeds up the wave and shimmer motion."></span></span>
         <input type="range" id="speedVol" min="0" max="5" step="0.05" />
         <span class="val"></span>
       </label>
-      <label class="check-row"><input type="checkbox" id="cursorRipple" /> Cursor ripple</label>
-      <label class="slider-row">Input gain
+      <label class="slider-row"><span class="lbl">Motion speed<span class="q" data-tip="Base tempo of the wave and shimmer motion, independent of volume. 0 freezes ambient motion entirely."></span></span>
+        <input type="range" id="motionSpeed" min="0" max="3" step="0.05" />
+        <span class="val"></span>
+      </label>
+      <label class="check-row"><input type="checkbox" id="cursorRipple" /> Cursor ripple<span class="q" data-tip="Points swell softly around the cursor position."></span></label>
+      <label class="slider-row"><span class="lbl">Input gain<span class="q" data-tip="Amplifies the captured audio before analysis."></span></span>
         <input type="range" id="sensGain" min="0.2" max="3" step="0.05" />
         <span class="val"></span>
       </label>
-      <label class="slider-row">Noise floor
+      <label class="slider-row"><span class="lbl">Noise floor<span class="q" data-tip="Sounds below this level produce no motion — hides room noise and hum."></span></span>
         <input type="range" id="sensFloor" min="0" max="0.5" step="0.01" />
         <span class="val"></span>
       </label>
-      <label class="slider-row">Curve
+      <label class="slider-row"><span class="lbl">Curve<span class="q" data-tip="Response gamma. Higher = quiet sounds move less and only peaks move."></span></span>
         <input type="range" id="sensCurve" min="0.5" max="4" step="0.05" />
         <span class="val"></span>
       </label>
-      <p class="hint">Response shaping: gain scales the input, the floor mutes quiet sounds, and the curve decides how much quieter sounds move than loud ones. Higher curve = only peaks move.</p>
-      <label class="slider-row">Bands
+      <details class="fold">
+        <summary>Advanced response</summary>
+        <label class="slider-row"><span class="lbl">Hearing curve<span class="q" data-tip="Blends toward equal-loudness weighting: mids and highs that you hear clearly move more, sub-bass less. Above 1 only the ear's peak region keeps moving — set high to test."></span></span>
+          <input type="range" id="eqCurve" min="0" max="4" step="0.05" />
+          <span class="val"></span>
+        </label>
+        <label class="slider-row"><span class="lbl">Tilt EQ<span class="q" data-tip="Spectral tilt applied before normalization. Positive = highs move more (on Depth: the front), negative = bass moves more."></span></span>
+          <input type="range" id="tiltEQ" min="-1" max="1" step="0.05" />
+          <span class="val"></span>
+        </label>
+        <label class="slider-row"><span class="lbl">Tilt point<span class="q" data-tip="Where the tilt pivots between cut and boost. Lower pivots toward bass, higher toward highs."></span></span>
+          <input type="range" id="tiltPivot" min="0" max="1" step="0.05" />
+          <span class="val"></span>
+        </label>
+        <label class="slider-row"><span class="lbl">Stickiness in<span class="q" data-tip="How fast bands jump up when sound rises. 0 = instant, 1 = reluctant."></span></span>
+          <input type="range" id="stickyIn" min="0" max="1" step="0.05" />
+          <span class="val"></span>
+        </label>
+        <label class="slider-row"><span class="lbl">Stickiness out<span class="q" data-tip="How long bands hold after sound drops. 0 = drop instantly, 1 = long hold."></span></span>
+          <input type="range" id="stickyOut" min="0" max="1" step="0.05" />
+          <span class="val"></span>
+        </label>
+      </details>
+      <label class="slider-row"><span class="lbl">Bands<span class="q" data-tip="How many frequency bands the image is divided into."></span></span>
         <input type="range" id="bands" min="8" max="128" step="4" />
         <span class="val"></span>
       </label>
-      <label class="slider-row">Overscan
+      <label class="slider-row"><span class="lbl">Overscan<span class="q" data-tip="Extra zoom so parallax never reveals an edge. Follows Parallax automatically unless you move it yourself."></span></span>
         <input type="range" id="overscan" min="1" max="1.6" step="0.05" />
         <span class="val"></span>
       </label>
-      <p class="hint">Intensity scales both motions; Depth move = toward/away from you, XY move = sideways shimmer. Set XY to 0 for depth-only motion. Overscan zooms in a little extra so parallax never reveals an edge — it follows Parallax automatically, or set it yourself.</p>
     </section>
 
     <section>
@@ -157,16 +190,16 @@
     <section>
       <h3>Wallpaper mode</h3>
       <button id="wallpaperToggle" class="btn full">Run as my wallpaper</button>
-      <label class="check-row"><input type="checkbox" id="wallpaperPrimaryOnly" /> Main monitor only (other displays keep the OS wallpaper)</label>
-      <p class="hint">Puts the visualizer fullscreen <b>behind your desktop icons</b>, click-through — it behaves like the OS wallpaper. Music keeps playing through it. Exit anytime from the tray icon (or this button). Main-monitor-only roughly halves the GPU work on multi-monitor setups — every animated screen costs render time <b>and</b> Desktop Window Manager composition.</p>
+      <label class="check-row"><input type="checkbox" id="wallpaperPrimaryOnly" /> Main monitor only<span class="q" data-tip="Create the wallpaper only on the main display; other monitors keep the OS wallpaper. Saves GPU work — every animated screen costs render time and desktop composition."></span></label>
+      <p class="hint">Runs fullscreen behind your desktop icons, click-through like a real wallpaper. Exit from the tray icon or the button above.</p>
     </section>
 
     <section>
-      <h3>Startup & games</h3>
-      <label class="check-row"><input type="checkbox" id="launchAtStartup" /> Start with Windows</label>
-      <label class="check-row"><input type="checkbox" id="startInTray" /> Start minimized in tray (wallpaper auto-on)</label>
-      <label class="check-row"><input type="checkbox" id="autoGameMode" /> Auto game mode: hide wallpaper when an app goes fullscreen</label>
-      <p class="hint">Game mode: press <b>Ctrl+Alt+D</b> or use the tray menu to hide the wallpaper and free the GPU while gaming. Same keys to bring it back. With <b>auto game mode</b> on (Windows), any app that fills the screen — a game, a video — hides the wallpaper for you and brings it back when you leave.</p>
+      <h3>Startup &amp; games</h3>
+      <label class="check-row"><input type="checkbox" id="launchAtStartup" /> Start with Windows<span class="q" data-tip="Launch at login, minimized to the tray."></span></label>
+      <label class="check-row"><input type="checkbox" id="startInTray" /> Start minimized in tray<span class="q" data-tip="Normal launches start hidden in the tray. Wallpaper mode still restores if it was left on."></span></label>
+      <label class="check-row"><input type="checkbox" id="autoGameMode" /> Auto game mode<span class="q" data-tip="Any app that fills the screen — a game, a video — hides the wallpaper and pauses rendering until you leave it."></span></label>
+      <p class="hint">Manual toggle: <b>Ctrl+Alt+D</b> or the tray menu.</p>
     </section>
 
     <section>
@@ -177,9 +210,11 @@
         <button data-v="60">60 fps</button>
         <button data-v="0">Max</button>
       </div>
-      <label class="check-row"><input type="checkbox" id="autoQuality" /> Adaptive resolution (keep fans quiet)</label>
-      <label class="check-row"><input type="checkbox" id="idleSleep" /> Sleep when music stops</label>
-      <label class="check-row"><input type="checkbox" id="flybyExit" /> Fly-by idle exit (points rush the camera)</label>
+      <label class="check-row"><input type="checkbox" id="autoQuality" /> Adaptive resolution<span class="q" data-tip="Lowers render resolution automatically when frame time runs over budget, raises it back when there is headroom."></span></label>
+      <label class="check-row"><input type="checkbox" id="previewPaused" /> Pause preview window<span class="q" data-tip="Freeze the preview window completely — the wallpaper keeps running. Saves GPU."></span></label>
+      <label class="check-row"><input type="checkbox" id="previewFullQuality" /> Full quality preview<span class="q" data-tip="While wallpaper mode is on, the preview normally mirrors at 15 fps to save GPU. This removes the throttle."></span></label>
+      <label class="check-row"><input type="checkbox" id="idleSleep" /> Sleep when music stops<span class="q" data-tip="Points fade out and rendering stops entirely while the music is silent."></span></label>
+      <label class="check-row"><input type="checkbox" id="flybyExit" /> Fly-by idle exit<span class="q" data-tip="On idle exit, points rush toward the camera instead of fading in place."></span></label>
     </section>
 
     <footer>

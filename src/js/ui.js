@@ -4,7 +4,7 @@
 import { get, set, onChange, getAll } from './settings.js';
 import { bridge } from './bridge.js';
 
-const $ = (id) => document.getElementById(id);
+const $ = (sel) => document.getElementById(sel.replace(/^#/, ''));
 
 export class UI {
   constructor(callbacks) {
@@ -21,6 +21,7 @@ export class UI {
     this._wireImageButtons();
     this._wireDragDrop();
     this._wireStartup();
+    this._wireTooltips();
     this._syncAll();
 
     let lastInteract = performance.now();
@@ -93,19 +94,31 @@ export class UI {
     slider('boost', 'boost', (v) => v.toFixed(2));
     slider('intensity', 'intensity', (v) => v.toFixed(2));
     slider('speedVol', 'speedVol', (v) => v.toFixed(2));
+    slider('motionSpeed', 'motionSpeed', (v) => v.toFixed(2));
     slider('sensGain', 'sensGain', (v) => v.toFixed(2));
     slider('sensFloor', 'sensFloor', (v) => v.toFixed(2));
     slider('sensCurve', 'sensCurve', (v) => v.toFixed(2));
+    slider('eqCurve', 'eqCurve', (v) => v.toFixed(2));
+    slider('tiltEQ', 'tiltEQ', (v) => v.toFixed(2));
+    slider('tiltPivot', 'tiltPivot', (v) => v.toFixed(2));
+    slider('stickyIn', 'stickyIn', (v) => v.toFixed(2));
+    slider('stickyOut', 'stickyOut', (v) => v.toFixed(2));
     slider('bands', 'bands', (v) => String(v));
     slider('depthMove', 'depthMove', (v) => v.toFixed(2));
     slider('xyMove', 'xyMove', (v) => v.toFixed(2));
+    slider('dynamics', 'dynamics', (v) => v.toFixed(2));
+    slider('kickStrength', 'kickStrength', (v) => v.toFixed(2));
 
     $('autoQuality').onchange = (e) => set({ autoQuality: e.target.checked });
+    $('previewPaused').onchange = (e) => set({ previewPaused: e.target.checked });
+    $('previewFullQuality').onchange = (e) => set({ previewFullQuality: e.target.checked });
     $('idleSleep').onchange = (e) => set({ idleSleep: e.target.checked });
     $('invertBands').onchange = (e) => set({ invertBands: e.target.checked });
     $('hideBackdrop').onchange = (e) => set({ hideBackdrop: e.target.checked });
     $('flybyExit').onchange = (e) => set({ flybyExit: e.target.checked });
     $('cursorRipple').onchange = (e) => set({ cursorRipple: e.target.checked });
+    const cmw = $('centeredMotion');
+    if (cmw) cmw.onchange = (e) => set({ centeredMotion: e.target.checked });
 
     // Parallax auto-raises Overscan (so the edges stay hidden) until the user
     // takes manual control of Overscan.
@@ -159,6 +172,41 @@ export class UI {
     $('useWallpaper').onclick = () => this.cb.onImagePicked({ kind: 'wallpaper' });
     $('uploadImage').onclick = () => this.cb.onImagePicked({ kind: 'upload' });
     $('wallpaperToggle').onclick = () => this.cb.onWallpaperToggle();
+  }
+
+  /** floating "?" tooltips: a single body-level box so the scrollable
+   *  settings panel (overflow + transform) can never clip them */
+  _wireTooltips() {
+    let box = document.getElementById('tipBox');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'tipBox';
+      document.body.appendChild(box);
+    }
+    const place = (q) => {
+      box.textContent = q.dataset.tip || '';
+      box.style.display = 'block';
+      box.style.visibility = 'hidden';
+      const r = q.getBoundingClientRect();
+      const br = box.getBoundingClientRect();
+      let left = r.left - br.width - 10;
+      if (left < 8) left = Math.min(r.right + 10, window.innerWidth - br.width - 8);
+      let top = r.top + r.height / 2 - br.height / 2;
+      top = Math.max(8, Math.min(top, window.innerHeight - br.height - 8));
+      box.style.left = `${Math.round(left)}px`;
+      box.style.top = `${Math.round(top)}px`;
+      box.style.visibility = 'visible';
+    };
+    const hide = () => { box.style.display = 'none'; };
+    document.addEventListener('mouseover', (e) => {
+      const q = e.target.closest ? e.target.closest('.q') : null;
+      if (q) place(q); else hide();
+    });
+    document.addEventListener('scroll', () => {
+      const q = document.querySelector('.q:hover');
+      if (q) place(q); else hide();
+    }, true);
+    window.addEventListener('blur', hide);
   }
 
   _wireDragDrop() {
@@ -222,22 +270,34 @@ export class UI {
     setSlider('boost', get('boost'));
     setSlider('intensity', get('intensity'));
     setSlider('speedVol', get('speedVol'));
+    setSlider('motionSpeed', get('motionSpeed'));
     setSlider('sensGain', get('sensGain'));
     setSlider('sensFloor', get('sensFloor'));
     setSlider('sensCurve', get('sensCurve'));
+    setSlider('eqCurve', get('eqCurve'));
+    setSlider('tiltEQ', get('tiltEQ'));
+    setSlider('tiltPivot', get('tiltPivot'));
+    setSlider('stickyIn', get('stickyIn'));
+    setSlider('stickyOut', get('stickyOut'));
     setSlider('bands', get('bands'));
     setSlider('depthMove', get('depthMove'));
     setSlider('xyMove', get('xyMove'));
     setSlider('parallax', get('parallax'));
     setSlider('musicParallax', get('musicParallax'));
+    setSlider('dynamics', get('dynamics'));
+    setSlider('kickStrength', get('kickStrength'));
     setSlider('overscan', get('overscan'));
 
     $('autoQuality').checked = get('autoQuality');
+    $('previewPaused').checked = !!get('previewPaused');
+    $('previewFullQuality').checked = !!get('previewFullQuality');
     $('idleSleep').checked = get('idleSleep');
     $('invertBands').checked = !!get('invertBands');
     $('hideBackdrop').checked = !!get('hideBackdrop');
     $('flybyExit').checked = !!get('flybyExit');
     $('cursorRipple').checked = !!get('cursorRipple');
+    const cm = $('centeredMotion');
+    if (cm) cm.checked = !!get('centeredMotion');
 
     const src = get('audioSource');
     const hints = {

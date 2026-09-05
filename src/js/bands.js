@@ -20,11 +20,20 @@ export class BandAnalyzer {
     this.level = 0;                                   // for the UI meter
     this.peak = 0.001;                                // running normalization peak
     this.bassAvg = 0.001;                             // long-term bass average
+    this.loud = 0;                                    // raw loudness vs slow peak
+    this.loudPeak = 0.001;                            // slow reference for `loud`
     this.lastBeatAt = 0;
     this._edges = null;
     this._edgeSr = 0;
-    this.smoothUp = 0.5;
-    this.smoothDown = 0.12;
+    this.eq = 0;                // equal-loudness blend: 0 = flat, 1 = full A-weight
+    this._eqW = null;           // per-band A-weight, max-normalized to 1
+    this._eqSr = 0;
+    this._eqBins = 0;
+    this._wraw = new Float32Array(count);       // tilt+EQ weighted spectrum
+    this.tiltEQ = 0;            // spectral tilt: -1 bass-reactive, +1 highs-reactive
+    this.tiltPivot = 0.5;       // where the tilt crosses zero (0 = bass end, 1 = highs)
+    this.stickyIn = 0.5;        // attack: how fast bands jump up (0 fast, 1 reluctant)
+    this.stickyOut = 0.5;       // release: how long bands hold after a drop
   }
 
   /** log-spaced band edges in FFT-bin units */
@@ -61,24 +70,77 @@ export class BandAnalyzer {
   fromFloat(mags, sampleRate) {
     const bins = mags.length;
     const { lo, hi } = this.edges(bins, sampleRate);
+    this._updateEqWeights(bins, sampleRate, lo, hi);
     for (let b = 0; b < this.count; b++) {
       let sum = 0;
-      for (let i = lo[b]; i < hi[b]; i++) sum += mags[i];
+      // NaN guard: a device switch / capture hiccup can hand over garbage
+      // samples; one NaN here would permanently poison bands + energy
+      for (let i = lo[b]; i < hi[b]; i++) {
+        const m = mags[i];
+        if (Number.isFinite(m)) sum += m;
+      }
       this.raw[b] = (sum / (hi[b] - lo[b])) * 2.5;
     }
     this._finish();
   }
 
+  /** per-band A-weight (equal-loudness) at the band centers, max-normalized
+   *  to 1 so enabling it doesn't shift overall scale */
+  _updateEqWeights(bins, sampleRate, lo, hi) {
+    if (this._eqW && this._eqSr === sampleRate && this._eqBins === bins) return;
+    this._eqSr = sampleRate;
+    this._eqBins = bins;
+    const w = new Float32Array(this.count);
+    let mx = 0;
+    for (let b = 0; b < this.count; b++) {
+      const f = Math.max(10, ((lo[b] + hi[b]) / 2) * (sampleRate / 2) / bins);
+      const f2 = f * f;
+      const ra = (12194 ** 2 * f2 * f2) /
+        ((f2 + 20.6 ** 2) * Math.sqrt((f2 + 107.7 ** 2) * (f2 + 737.9 ** 2)) * (f2 + 12194 ** 2));
+      w[b] = Math.pow(10, (20 * Math.log10(ra) + 2.0) / 20);
+      if (w[b] > mx) mx = w[b];
+    }
+    if (mx > 0) for (let b = 0; b < this.count; b++) w[b] /= mx;
+    this._eqW = w;
+  }
+
   _finish() {
     const { bands, raw } = this;
-    // running peak normalization with slow decay keeps the look consistent
+    // tilt EQ + perceptual weighting -> the working spectrum. The tilt runs
+    // BEFORE the peak normalizer (bass<->highs, +/-6 dB per unit at the
+    // extremes, pivoting at tiltPivot): the running peak cancels the overall
+    // scale, so only the balance shifts instead of every band getting more
+    // energetic.
+    const tilt = Math.max(-1, Math.min(1, this.tiltEQ ?? 0));
+    const pivot = Math.max(0, Math.min(1, this.tiltPivot ?? 0.5));
+    const eqOn = this.eq > 0 && this._eqW;
     let mx = 0.001, bass = 0;
     for (let b = 0; b < this.count; b++) {
-      if (raw[b] > mx) mx = raw[b];
-      if (b < 10) bass += raw[b];
+      const t = this.count > 1 ? b / (this.count - 1) : 0;
+      let v = raw[b] * Math.pow(10, (tilt * 6 * (t - pivot) * 2) / 20);
+      if (eqOn) {
+        // eq 0..1 blends flat -> full equal-loudness weight; above 1 the
+        // weight becomes an exponent, so low-hearing bands mute fast and
+        // only the ear's peak region keeps moving
+        const w = this._eqW[b];
+        v *= this.eq <= 1 ? 1 + this.eq * (w - 1) : Math.pow(Math.max(w, 0.005), this.eq);
+      }
+      this._wraw[b] = v;
+      if (v > mx) mx = v;
+      if (b < 10) bass += raw[b];   // beat detection: physical bass, untilted
     }
     this.peak = Math.max(mx, this.peak * 0.996);
     const norm = 1 / this.peak;
+
+    // loudness of the working spectrum (what actually drives the visuals):
+    // unlike `energy` this isn't re-inflated by a fast peak follower, so it
+    // genuinely drops in bridges. Peak decays ~2-3 min for track calibration.
+    let sq = 0;
+    for (let b = 0; b < this.count; b++) sq += this._wraw[b] * this._wraw[b];
+    let rms = Math.sqrt(sq / this.count);
+    if (!Number.isFinite(rms)) rms = 0;
+    this.loudPeak = Math.max(rms, this.loudPeak * 0.9998);
+    this.loud = clamp01(rms / Math.max(this.loudPeak, 0.001));
 
     // user response curve: gain -> noise floor -> gamma. Quiet input ends up
     // small; only peaks reach full movement.
@@ -89,15 +151,24 @@ export class BandAnalyzer {
       return Math.pow(v, curve);
     };
 
+    // stickiness split into attack ("in") and release ("out"): how fast
+    // bands jump up when sound rises, and how long they hold after a drop.
+    // 0 = instant, 1 = reluctant/long hold
+    const sIn = Math.max(0, Math.min(1, this.stickyIn ?? 0.5));
+    const sOut = Math.max(0, Math.min(1, this.stickyOut ?? 0.5));
+    const up = 0.9 - 0.6 * sIn;
+    const down = 0.5 - 0.46 * sOut;
+
     bass = shape(clamp01(bass / 10));
     this.bassEnergy = bass;
     this.bassAvg = this.bassAvg * 0.995 + this.bassEnergy * 0.005;
 
     let energy = 0;
     for (let b = 0; b < this.count; b++) {
-      const v = shape(raw[b]);
+      let v = shape(this._wraw[b]);
+      if (!Number.isFinite(v)) v = 0;
       const prev = bands[b];
-      bands[b] = prev + (v - prev) * (v > prev ? this.smoothUp : this.smoothDown);
+      bands[b] = prev + (v - prev) * (v > prev ? up : down);
       energy += bands[b];
     }
     this.energy = clamp01((energy / this.count) * 2.2);
@@ -111,12 +182,14 @@ export class BandAnalyzer {
     if (this.beat < 0.001) this.beat = 0;
   }
 
-  /** crude energy-flux kick detector; returns true on a fresh beat */
+  /** crude energy-flux kick detector; returns true on a fresh beat.
+   *  The kick's strength follows the hit: a quiet sub-bass swell barely
+   *  nudges `beat`, a heavy slam gets the full value. */
   maybeBeat(nowMs) {
     if (this.bassEnergy > 0.28 && this.bassEnergy > this.bassAvg * 1.45 && nowMs - this.lastBeatAt > 180) {
       this.lastBeatAt = nowMs;
-      this.beat = 1;
-      return true;
+      this.beat = clamp01((this.bassEnergy - 0.28) / 0.35);
+      return this.beat > 0;
     }
     return false;
   }

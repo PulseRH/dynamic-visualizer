@@ -22,6 +22,8 @@ const VERT = /* glsl */ `
   uniform float uXYMove;
   uniform float uXYTime;   // xy-motion clock, runs faster with volume
   uniform float uWaveTime; // wave-phase clock, also volume-ramped
+  uniform float uCentered; // 1: audio mode displaces around rest (both ways)
+  uniform float uDyn;      // Dynamics slider: loud passages move more
   uniform float uVis;
   uniform float uExitPush;
   uniform vec3 uCursor;   // xy = cursor position in world space, z = ripple strength
@@ -73,17 +75,19 @@ const VERT = /* glsl */ `
       w = sin(uvw.x * 9.0 + uWaveTime * 0.5) * sin(uvw.y * 7.0 - uWaveTime * 0.42) * 1.3
         + sin(uWaveTime * 0.8 + aRand * 6.2831) * 0.45;
     } else {
-      // pure audio: no self-motion at all — the spectrum alone displaces
-      w = 1.0;
+      // pure audio: no self-motion, the spectrum alone displaces. Centered
+      // mode re-centers the response around rest: quiet bands pull back,
+      // loud bands push forward, ~0.4 sits at rest
+      w = mix(1.0, amp * 2.0 - 0.8, uCentered);
     }
 
-    float disp = w * amp * uIntensity * uZMove * 0.11 * (0.35 + 0.65 * near);
-    disp += uBeat * 0.035 * uZMove * (0.15 + near);   // kicks push the cloud forward
+    float disp = w * amp * uIntensity * uZMove * 0.11 * (0.35 + 0.65 * near) * uDyn;
+    disp += uBeat * 0.035 * uZMove * (0.15 + near) * uDyn;   // kicks push the cloud forward
 
     vec3 pos = vec3(position.xy, near * uDepthScale + disp);
     pos.xy += vec2(sin(uXYTime * 3.1 + aRand * 40.0), cos(uXYTime * 2.6 + aRand * 30.0))
-            * amp * 0.006 * uIntensity * uXYMove;
-    pos.xy *= 1.0 + uBeat * 0.012 * uXYMove;
+            * amp * 0.006 * uIntensity * uXYMove * uDyn;
+    pos.xy *= 1.0 + uBeat * 0.012 * uXYMove * uDyn;
     // idle exit: 'fly-by' rush points toward the camera as they fade;
     // the default clean fade just dissolves in place
     pos.z += (1.0 - uVis) * uExitPush;
@@ -97,7 +101,7 @@ const VERT = /* glsl */ `
     vec4 mv = modelViewMatrix * vec4(pos, 1.0);
     gl_Position = projectionMatrix * mv;
 
-    float ps = uSize * (1.0 + amp * 0.9 + uBeat * 0.4) * (uCamZ / -mv.z);
+    float ps = uSize * (1.0 + amp * 0.9 + uBeat * 0.4 * uDyn) * (uCamZ / -mv.z);
     gl_PointSize = clamp(ps, 0.75, 24.0);
 
     vAmp = lightAmp;
@@ -202,6 +206,8 @@ export class VisualScene {
       uVis: { value: 1 },
       uXYTime: { value: 0 },
       uWaveTime: { value: 0 },
+      uCentered: { value: 0 },
+      uDyn: { value: 1 },
       uExitPush: { value: 0 },
       uCursor: { value: new THREE.Vector3(0, 0, 0) },
       uGlow: { value: 1.1 },
@@ -407,7 +413,11 @@ export class VisualScene {
     this.cursorRipple = !!s.cursorRipple;
     this.uniforms.uExitPush.value = s.flybyExit ? 0.4 : 0;
     this.speedVol = s.speedVol;
+    this.motionSpeed = s.motionSpeed;
     this.musicParallax = s.musicParallax || 0;
+    this.dynamics = s.dynamics;
+    this.kickStrength = s.kickStrength;
+    this.uniforms.uCentered.value = s.centeredMotion ? 1 : 0;
     this.setBandCount(s.bands);
     // size compensation: additive brightness ∝ point area (diameter²),
     // normalized so size ≈ 1 (diameter = spacing) is the reference look
@@ -453,14 +463,16 @@ export class VisualScene {
     this.bandTex.needsUpdate = true;
 
     // volume-ramped motion clocks: the louder the music, the faster the
-    // shimmer and waves travel (speedVol = 0 keeps them constant)
+    // shimmer and waves travel (speedVol = 0 keeps them constant). Motion
+    // speed is the base tempo multiplier on top.
     const speedVol = this.speedVol ?? 0;
-    this.xyTime = (this.xyTime ?? 0) + dt * (1 + analyzer.energy * speedVol * 1.5);
-    this.waveTime = (this.waveTime ?? 0) + dt * (1 + analyzer.energy * speedVol);
+    const mspd = Math.max(0, this.motionSpeed ?? 1);
+    this.xyTime = (this.xyTime ?? 0) + dt * mspd * (1 + analyzer.energy * speedVol * 1.5);
+    this.waveTime = (this.waveTime ?? 0) + dt * mspd * (1 + analyzer.energy * speedVol);
     this.uniforms.uXYTime.value = this.xyTime;
     this.uniforms.uWaveTime.value = this.waveTime;
     this.uniforms.uEnergy.value = analyzer.energy;
-    this.uniforms.uBeat.value = analyzer.beat;
+    this.uniforms.uBeat.value = analyzer.beat * (this.kickStrength ?? 1);
 
     // point size in pixels when the cloud is at rest distance:
     //   pointSize=1.0 means a point's diameter equals the point spacing
@@ -483,34 +495,59 @@ export class VisualScene {
     // offset) so it centers, then scale the deviation to the full -1..1 range
     // against a decaying peak — the camera moves both ways, and moves more.
     const mp = (this.musicParallax || 0) * 0.075;
+    // Dynamics slider: how much loud passages move more than quiet ones.
+    // RMS-style EMA of energy ("how loud now") against a slowly-decaying
+    // peak (track-level calibration); 0 = constant, 1 = fully proportional
+    // Dynamics slider: how much loud passages move more than quiet ones.
+    // Uses `loud` — raw-signal loudness normalized against a slowly-decaying
+    // peak — because `energy` is auto-normalized by the analyzer's peak
+    // follower and barely dips in bridges; `loud` genuinely drops.
+    let mamp = 1;
+    if ((this.dynamics ?? 0) > 0) {
+      const loud = Number.isFinite(analyzer.loud) ? analyzer.loud : 0;
+      if (!Number.isFinite(this.loudEma)) this.loudEma = loud;
+      this.loudEma += (loud - this.loudEma) * Math.min(1, dt * 0.5);
+      const dyn = Math.max(0, Math.min(1, this.loudEma));
+      mamp = 1 - (this.dynamics ?? 0) * (1 - dyn);
+    }
+    // Dynamics drives ALL motion, not just the parallax camera
+    this.uniforms.uDyn.value = mamp;
     if (mp > 0) {
-      const raw = (lowN && highN) ? (lowSum / lowN - highSum / highN) : 0;
+      let raw = (lowN && highN) ? (lowSum / lowN - highSum / highN) : 0;
+      if (!Number.isFinite(raw)) raw = 0;
       this.tiltBase = this.tiltBase === undefined
         ? raw
         : this.tiltBase + (raw - this.tiltBase) * Math.min(1, dt * 0.1);
+      if (!Number.isFinite(this.tiltBase)) this.tiltBase = raw;
       const dev = raw - this.tiltBase;
       this.tiltPeak = Math.max(Math.abs(dev), (this.tiltPeak ?? 0.1) * Math.exp(-dt / 10));
+      if (!Number.isFinite(this.tiltPeak)) this.tiltPeak = 0.1;
       const tilt = Math.max(-1, Math.min(1, dev / Math.max(this.tiltPeak, 0.05)));
-      const bass = lowN ? lowSum / lowN : 0;
+      let bass = lowN ? lowSum / lowN : 0;
       // y gets the same treatment as x: subtract the bass level's own slow
       // average so it centers, then scale the deviation to the full -1..1
       // range against a decaying peak — bass hits pull the camera down, bass
       // drops lift it up, and quiet tracks still move
+      if (!Number.isFinite(bass)) bass = 0;
       this.bassBase = this.bassBase === undefined
         ? bass
         : this.bassBase + (bass - this.bassBase) * Math.min(1, dt * 0.1);
+      if (!Number.isFinite(this.bassBase)) this.bassBase = bass;
       const bdev = bass - this.bassBase;
       this.bassDevPeak = Math.max(Math.abs(bdev), (this.bassDevPeak ?? 0.1) * Math.exp(-dt / 10));
+      if (!Number.isFinite(this.bassDevPeak)) this.bassDevPeak = 0.1;
       const bassN = Math.max(-1, Math.min(1, bdev / Math.max(this.bassDevPeak, 0.05)));
       this.musicPx = (this.musicPx ?? 0) + (tilt - (this.musicPx ?? 0)) * Math.min(1, dt * 4);
       this.musicPy = (this.musicPy ?? 0) + (bassN - (this.musicPy ?? 0)) * Math.min(1, dt * 4);
+      if (!Number.isFinite(this.musicPx)) this.musicPx = 0;
+      if (!Number.isFinite(this.musicPy)) this.musicPy = 0;
     } else {
       this.musicPx = 0;
       this.musicPy = 0;
     }
     const t = this.time;
-    this.camera.position.x = Math.sin(t * 0.13) * p * 0.6 * drift + this.pointer.x * p + (this.musicPx ?? 0) * mp;
-    this.camera.position.y = Math.cos(t * 0.11) * p * 0.4 * drift - this.pointer.y * p * 0.6 - (this.musicPy ?? 0) * mp * 1.4;
+    this.camera.position.x = Math.sin(t * 0.13) * p * 0.6 * drift + this.pointer.x * p + (this.musicPx ?? 0) * mp * mamp;
+    this.camera.position.y = Math.cos(t * 0.11) * p * 0.4 * drift - this.pointer.y * p * 0.6 - (this.musicPy ?? 0) * mp * 1.4 * mamp;
 
     // cursor ripple: strength rises with cursor speed, decays when it stops
     const spd = Math.hypot(this.pointer.tx - (this._prevNx ?? 0), this.pointer.ty - (this._prevNy ?? 0)) / Math.max(dt, 0.001);
@@ -524,7 +561,7 @@ export class VisualScene {
       -this.pointer.y * halfH * 2,
       this.cursorStrength * rippleOn,
     );
-    this.camera.position.z = this.camBaseZ + analyzer.beat * 0.02;
+    this.camera.position.z = this.camBaseZ + analyzer.beat * (this.kickStrength ?? 1) * 0.02;
     this.camera.lookAt(0, 0, 0.1);
 
     this.renderer.render(this.scene, this.camera);
