@@ -19,6 +19,8 @@ const VERT = /* glsl */ `
   uniform float uBandCount;
   uniform float uInvert;
   uniform float uBoost;
+  uniform mat3 uHue;
+  uniform float uHueEnabled;
   uniform float uSizeComp;
   uniform float uZMove;
   uniform float uXYMove;
@@ -120,7 +122,7 @@ const VERT = /* glsl */ `
     lit *= uSizeComp;
     // points nearer the camera cover more screen: dim them the same way
     lit /= sqrt(max(uCamZ / -mv.z, 0.5));
-    vColor = lit;
+    vColor = uHueEnabled > 0.5 ? max(uHue * lit, vec3(0.0)) : lit;
   }
 `;
 
@@ -151,9 +153,12 @@ const BACKDROP_FRAG = /* glsl */ `
   uniform sampler2D uTex;
   uniform float uDim;
   uniform float uAspect;
+  uniform mat3 uHue;
+  uniform float uHueEnabled;
   varying vec2 vUv;
   void main() {
     vec3 col = texture2D(uTex, vUv).rgb;
+    if (uHueEnabled > 0.5) col = max(uHue * col, vec3(0.0));
     gl_FragColor = vec4(col * uDim, 1.0);
   }
 `;
@@ -207,6 +212,8 @@ export class VisualScene {
       uBandCount: { value: 64 },
       uInvert: { value: 0 },
       uBoost: { value: 1 },
+      uHue: { value: new THREE.Matrix3() },
+      uHueEnabled: { value: 0 },
       uSizeComp: { value: 1 },
       uZMove: { value: 1 },
       uXYMove: { value: 1 },
@@ -375,7 +382,10 @@ export class VisualScene {
     tex.minFilter = THREE.LinearFilter;
     tex.magFilter = THREE.LinearFilter;
     const mat = new THREE.ShaderMaterial({
-      uniforms: { uTex: { value: tex }, uDim: { value: mode === 'dim' ? 0.17 : 0 }, uAspect: { value: 1 } },
+      uniforms: {
+        uTex: { value: tex }, uDim: { value: mode === 'dim' ? 0.17 : 0 }, uAspect: { value: 1 },
+        uHue: this.uniforms.uHue, uHueEnabled: this.uniforms.uHueEnabled,
+      },
       vertexShader: BACKDROP_VERT,
       fragmentShader: BACKDROP_FRAG,
       depthTest: false,
@@ -406,7 +416,20 @@ export class VisualScene {
     this.uniforms.uBandCount.value = n;
   }
 
+  _setHue(degrees) {
+    const angle = degrees * Math.PI / 180;
+    const c = Math.cos(angle), h = Math.sin(angle);
+    // Hue-rotate matrix around the neutral axis: grayscale stays neutral.
+    this.uniforms.uHue.value.set(
+      0.213 + 0.787 * c - 0.213 * h, 0.715 - 0.715 * c - 0.715 * h, 0.072 - 0.072 * c + 0.928 * h,
+      0.213 - 0.213 * c + 0.143 * h, 0.715 + 0.285 * c + 0.140 * h, 0.072 - 0.072 * c - 0.283 * h,
+      0.213 - 0.213 * c - 0.787 * h, 0.715 - 0.715 * c + 0.715 * h, 0.072 + 0.928 * c + 0.072 * h,
+    );
+  }
+
   applySettings(s) {
+    this.hueReaction = s.hueReaction || 0;
+    this.uniforms.uHueEnabled.value = this.hueReaction > 0 ? 1 : 0;
     this.uniforms.uIntensity.value = s.intensity;
     this.uniforms.uDepthScale.value = s.depthScale;
     this.uniforms.uMode.value = MODES[s.waveMode] ?? 1;
@@ -453,6 +476,12 @@ export class VisualScene {
     this.lastNow = now;
     dt = Math.min(dt, 0.05);
     this.time += dt;
+
+    if (this.hueReaction > 0) {
+      const energy = Number.isFinite(analyzer.energy) ? analyzer.energy : 0;
+      const beat = Number.isFinite(analyzer.beat) ? analyzer.beat : 0;
+      this._setHue(this.hueReaction * Math.min(1, Math.max(0, energy * 1.5 + beat * 0.25)));
+    }
 
     const bands = analyzer.bands;
     const count = Math.min(this.bandCount, bands.length);
