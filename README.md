@@ -26,12 +26,16 @@ a few percent CPU and holds a steady frame rate without spinning fans.
 - **Motion styles**: audio-driven spectrum displacement (no self-motion — the
   image only moves when the music does), traveling wave, radial ripple,
   band bars, or ambient drift.
-- **Depth guessing, two ways**
+- **Depth estimation**
   - *Heuristic* (default): instant luminance/saturation/position prior — no
     downloads, works offline.
-  - *AI model*: Depth-Anything-V2-small via onnxruntime-web, fetched once and
-    cached in the browser Cache API. Falls back to the heuristic if the model
-    can't be fetched.
+  - *AI fast*: Depth Anything V2 Small via onnxruntime-web (~50 MB download).
+  - *AI detail*: Depth Anything V2 Base (~195 MB download). It can give finer
+    depth, but takes longer and uses more memory while processing a new image.
+    The Base model is licensed CC-BY-NC-4.0 for non-commercial use.
+  - AI models are fetched only when selected, cached in the browser Cache API,
+    and fall back to the heuristic if unavailable. The depth worker exits after
+    each image; model choice does not change animation workload.
 - **Audio sources**
   - **System loopback** — visualize whatever the OS is playing
     (Windows: WASAPI loopback via Electron desktop capture; macOS works too).
@@ -118,8 +122,8 @@ src/js/ui.js           settings panel wiring, toasts, drag & drop / paste
 
 ## Notes & limitations
 
-- The AI depth model downloads from Hugging Face/CDN on first use (~100 MB);
-  after that it's cached. Without network the heuristic is used automatically.
+- AI depth models download from Hugging Face on first use and are cached. Without
+  network the heuristic is used automatically.
 - Windows wallpaper is read from the registry (`HKCU\Control Panel\Desktop`),
   including the `TranscodedWallpaper` fallback.
 - Wallpaper mode on Windows reparents a window into the desktop (WorkerW /

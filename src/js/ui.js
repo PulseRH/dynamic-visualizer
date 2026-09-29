@@ -62,7 +62,7 @@ export class UI {
         };
       });
     };
-    seg('depthSeg', 'depthMode', () => this.cb.onDepthChanged());
+    seg('depthSeg', 'depthMode');
     seg('waveSeg', 'waveMode');
     seg('bandMapSeg', 'bandMap');
     seg('fpsSeg', 'fpsCap', (v) => set({ fpsCap: Number(v) }));

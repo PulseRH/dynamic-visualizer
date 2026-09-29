@@ -1,6 +1,6 @@
 // Depth-Anything inference worker. Runs in its own process-like scope and is
-// terminated after each estimate so the ONNX WASM heap (~300MB) is fully
-// freed instead of lingering in the renderer.
+// terminated after each estimate so ONNX runtime memory is released instead
+// of lingering in the renderer.
 
 let ortPromise = null;
 const MODEL_CACHE = 'dv-model-cache-v1';

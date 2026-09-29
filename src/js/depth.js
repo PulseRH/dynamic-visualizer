@@ -2,14 +2,20 @@
 // 1 = close to viewer) used to lift the point cloud into layered waves.
 //
 //  heuristic : instant, zero-dependency luminance/saturation/position prior.
-//  onnx      : Depth-Anything-V2-small via onnxruntime-web (downloaded once,
-//              cached in the Cache API). Needs network the first time.
+//  onnx      : Depth-Anything-V2-small (fast AI option).
+//  onnx-base : Depth-Anything-V2-base (more detailed, slower AI option).
+//  Both models are downloaded on first use and cached in the Cache API.
 
 export const DEPTH_GRID_W = 256;
 
 export const DEFAULT_ONNX_MODEL =
   'https://huggingface.co/onnx-community/depth-anything-v2-small/resolve/main/onnx/model_fp16.onnx';
-const MODEL_CACHE = 'dv-model-cache-v1';
+export const BASE_ONNX_MODEL =
+  'https://huggingface.co/onnx-community/depth-anything-v2-base/resolve/main/onnx/model_fp16.onnx';
+
+export function depthModelUrl(mode) {
+  return mode === 'onnx-base' ? BASE_ONNX_MODEL : mode === 'onnx' ? DEFAULT_ONNX_MODEL : null;
+}
 
 // Cache per image object: different wallpapers often share the same resolution.
 // Weak keys let old images and their depth grids be reclaimed after a switch.
@@ -95,15 +101,24 @@ function normalizePercentile(grid, loP, hiP) {
 // ----------------------------------------------------------------------- onnx
 
 /** Returns {data,w,h} nearness grid from Depth-Anything. Throws on failure. */
-export async function onnxDepth(bitmap, modelUrl = DEFAULT_ONNX_MODEL, onStatus = () => {}) {
-  // AI inference runs in a short-lived module worker: the ONNX WASM heap
-  // (~300MB) is fully freed when the worker terminates after each estimate.
+export async function onnxDepth(bitmap, modelUrl = DEFAULT_ONNX_MODEL, onStatus = () => {}, signal) {
+  // AI inference runs in a short-lived module worker so its ONNX runtime
+  // memory is released after each estimate, especially for the Base model.
   onStatus('running AI model…');
   const worker = new Worker(new URL('./depth-worker.mjs', import.meta.url), { type: 'module' });
   try {
     const result = await new Promise((resolve, reject) => {
-      worker.onmessage = (e) => (e.data.ok ? resolve(e.data) : reject(new Error(e.data.error)));
-      worker.onerror = (e) => reject(new Error(e.message || 'worker error'));
+      const abort = () => reject(new DOMException('Depth estimate cancelled', 'AbortError'));
+      if (signal?.aborted) { abort(); return; }
+      signal?.addEventListener('abort', abort, { once: true });
+      worker.onmessage = (e) => {
+        signal?.removeEventListener('abort', abort);
+        e.data.ok ? resolve(e.data) : reject(new Error(e.data.error));
+      };
+      worker.onerror = (e) => {
+        signal?.removeEventListener('abort', abort);
+        reject(new Error(e.message || 'worker error'));
+      };
       worker.postMessage({ bitmap, modelUrl, S: 518 });
     });
     onStatus('resampling depth grid…');
@@ -128,14 +143,15 @@ export async function onnxDepth(bitmap, modelUrl = DEFAULT_ONNX_MODEL, onStatus 
   }
 }
 /** cache-aware entry point */
-export async function estimateDepth(bitmap, mode, modelUrl, onStatus = () => {}) {
+export async function estimateDepth(bitmap, mode, modelUrl, onStatus = () => {}, signal) {
   if (mode === 'flat') return null;
-  const key = `${mode}:${modelUrl || ''}`;
+  const selectedModel = modelUrl || depthModelUrl(mode);
+  const key = `${mode}:${selectedModel || ''}`;
   let imageCache = resultCache.get(bitmap);
   if (imageCache?.has(key)) return imageCache.get(key);
   let result;
-  if (mode === 'onnx') {
-    result = await onnxDepth(bitmap, modelUrl || DEFAULT_ONNX_MODEL, onStatus);
+  if (selectedModel) {
+    result = await onnxDepth(bitmap, selectedModel, onStatus, signal);
   } else {
     result = heuristicDepth(bitmap);
   }

@@ -1,7 +1,7 @@
 // Central settings store with persistence. Everything the UI touches lives here.
 const DEFAULTS = {
   imageUrl: null,          // explicit image (blob or app:// URL); null = try wallpaper, then procedural
-  depthMode: 'auto',       // 'auto' (heuristic) | 'onnx' | 'flat'
+  depthMode: 'auto',       // 'auto' | 'onnx' (small) | 'onnx-base' | 'flat'
   depthScale: 0.35,
   pointCount: 160000,
   pointSize: 1.0,

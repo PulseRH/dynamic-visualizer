@@ -8,7 +8,7 @@ import { VisualScene } from './scene.js';
 import { AudioEngine } from './audio.js';
 import { AudioActivity } from './audio-activity.js';
 import { sampleImageToCloud, makeProceduralImage } from './sampler.js';
-import { estimateDepth, DEFAULT_ONNX_MODEL } from './depth.js';
+import { estimateDepth, depthModelUrl } from './depth.js';
 import { copySpectrumBands } from './spectrum-relay.js';
 import { UI } from './ui.js';
 import { bridge, platform } from './bridge.js';
@@ -25,6 +25,7 @@ let awaitingRelay = false;
 let lastDepthGrid = null;     // this window's last computed grid (preview: for re-sends)
 let gameMode = false;    // true: a game/app owns the screen — pause rendering
 let rebuildToken = 0;
+let activeDepthAbort = null;
 let idleVis = 1;
 let idleTarget = 1;
 let lastIdleT = 0;
@@ -59,7 +60,6 @@ function calibrateEnergy() {
 const ui = new UI({
   onImagePicked: (source) => handleImagePick(source),
   onAudioMode: (mode, opts) => switchAudio(mode, opts),
-  onDepthChanged: () => rebuildCloud(),
   onWallpaperToggle: () => toggleWallpaper(),
   pickAudioFile: async () => {
     const picked = await bridge.chooseAudioFile();
@@ -159,36 +159,44 @@ async function loadInitialImage() {
 async function rebuildCloud() {
   if (!currentImage) return;
   const token = ++rebuildToken;
+  activeDepthAbort?.abort();
+  activeDepthAbort = null;
   const depthMode = get('depthMode');
   const imageKey = currentImageUrl || 'procedural';
+  const aiModelUrl = depthModelUrl(depthMode);
 
   let depth = null;
   if (depthMode !== 'flat') {
     // wallpaper windows reuse the depth grid computed by the preview window
-    if (isWallpaperWindow && relayedDepth && relayedDepth.key === imageKey) {
+    if (isWallpaperWindow && relayedDepth?.key === imageKey && relayedDepth.mode === depthMode) {
       depth = { data: relayedDepth.data, w: relayedDepth.w, h: relayedDepth.h };
     } else if (isWallpaperWindow) {
       // relay hasn't arrived yet: show the fast heuristic now, upgrade when
       // the preview broadcasts the real grid
-      depth = await estimateDepth(currentImage, 'auto', DEFAULT_ONNX_MODEL);
+      depth = await estimateDepth(currentImage, 'auto');
       if (token !== rebuildToken) return;
       awaitingRelay = true;
       bridge.requestDepthGrid(); // ask the preview to re-send its grid
     } else {
-      if (depthMode === 'onnx') ui.toast('Running AI depth model…', '', 8000);
+      if (aiModelUrl) ui.toast(`Running ${depthMode === 'onnx-base' ? 'detailed' : 'fast'} AI depth model…`, '', 8000);
+      const controller = aiModelUrl ? new AbortController() : null;
+      activeDepthAbort = controller;
       try {
-        depth = await estimateDepth(currentImage, depthMode, DEFAULT_ONNX_MODEL, (s) => {
-          if (depthMode === 'onnx') ui.toast(`Depth: ${s}`, '', 2500);
-        });
-        if (depthMode === 'onnx') ui.toast('AI depth ready', '', 2000);
+        depth = await estimateDepth(currentImage, depthMode, aiModelUrl, (s) => {
+          if (aiModelUrl && token === rebuildToken) ui.toast(`Depth: ${s}`, '', 2500);
+        }, controller?.signal);
+        if (token !== rebuildToken) return;
+        if (aiModelUrl) ui.toast('AI depth ready', '', 2000);
       } catch (err) {
+        if (controller?.signal.aborted || token !== rebuildToken) return;
         console.warn('depth failed', err);
         ui.toast(`AI depth unavailable (${err.message}) — using heuristic`, 'err', 5000);
-        depth = await estimateDepth(currentImage, 'auto', DEFAULT_ONNX_MODEL);
+        depth = await estimateDepth(currentImage, 'auto');
       }
+      if (activeDepthAbort === controller) activeDepthAbort = null;
       // share the grid so wallpaper windows never need the AI runtime
       if (depth && !isWallpaperWindow) {
-        lastDepthGrid = { key: imageKey, data: depth.data, w: depth.w, h: depth.h };
+        lastDepthGrid = { key: imageKey, mode: depthMode, data: depth.data, w: depth.w, h: depth.h };
         bridge.sendDepthGrid(lastDepthGrid);
       }
     }
@@ -233,8 +241,8 @@ if (isWallpaperWindow) {
   // window never loads the AI runtime
   bridge.onDepthGrid((payload) => {
     if (!payload || !payload.data) return;
-    relayedDepth = { key: payload.key, data: new Float32Array(payload.data), w: payload.w, h: payload.h };
-    if (awaitingRelay) {
+    relayedDepth = { key: payload.key, mode: payload.mode, data: new Float32Array(payload.data), w: payload.w, h: payload.h };
+    if (awaitingRelay && payload.mode === get('depthMode') && payload.key === (currentImageUrl || 'procedural')) {
       awaitingRelay = false;
       clearTimeout(countTimer);
       countTimer = setTimeout(() => rebuildCloud(), 120);

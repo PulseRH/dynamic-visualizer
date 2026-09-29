@@ -47,7 +47,12 @@ globalThis.document = {
   },
 };
 
-const { estimateDepth } = await load('../src/js/depth.js');
+const { estimateDepth, depthModelUrl, DEFAULT_ONNX_MODEL, BASE_ONNX_MODEL } = await load('../src/js/depth.js');
+assert.equal(depthModelUrl('onnx'), DEFAULT_ONNX_MODEL);
+assert.equal(depthModelUrl('onnx-base'), BASE_ONNX_MODEL);
+assert.notEqual(BASE_ONNX_MODEL, DEFAULT_ONNX_MODEL);
+assert.equal(depthModelUrl('auto'), null);
+assert.equal(depthModelUrl('flat'), null);
 const first = { width: 1920, height: 1080, axis: 'x' };
 const second = { width: 1920, height: 1080, axis: 'y' };
 const depthA = await estimateDepth(first, 'auto');
@@ -56,4 +61,4 @@ assert.notEqual(depthA, depthB, 'different images at the same resolution need di
 assert.notDeepEqual(depthA.data, depthB.data);
 assert.equal(await estimateDepth(first, 'auto'), depthA, 'rebuilding the same image should reuse its depth map');
 
-console.log('Wallpaper relay handles changing band counts; depth cache follows image identity.');
+console.log('Wallpaper relay handles changing band counts; depth cache follows image identity; AI modes select separate models.');
