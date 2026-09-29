@@ -11,7 +11,9 @@ export const DEFAULT_ONNX_MODEL =
   'https://huggingface.co/onnx-community/depth-anything-v2-small/resolve/main/onnx/model_fp16.onnx';
 const MODEL_CACHE = 'dv-model-cache-v1';
 
-const resultCache = new Map(); // cacheKey -> {data,w,h}
+// Cache per image object: different wallpapers often share the same resolution.
+// Weak keys let old images and their depth grids be reclaimed after a switch.
+const resultCache = new WeakMap(); // bitmap -> Map<mode:modelUrl, {data,w,h}>
 
 // ------------------------------------------------------------------ heuristic
 
@@ -128,14 +130,19 @@ export async function onnxDepth(bitmap, modelUrl = DEFAULT_ONNX_MODEL, onStatus 
 /** cache-aware entry point */
 export async function estimateDepth(bitmap, mode, modelUrl, onStatus = () => {}) {
   if (mode === 'flat') return null;
-  const key = `${bitmap.width}x${bitmap.height}:${mode}:${modelUrl || ''}`;
-  if (resultCache.has(key)) return resultCache.get(key);
+  const key = `${mode}:${modelUrl || ''}`;
+  let imageCache = resultCache.get(bitmap);
+  if (imageCache?.has(key)) return imageCache.get(key);
   let result;
   if (mode === 'onnx') {
     result = await onnxDepth(bitmap, modelUrl || DEFAULT_ONNX_MODEL, onStatus);
   } else {
     result = heuristicDepth(bitmap);
   }
-  resultCache.set(key, result);
+  if (!imageCache) {
+    imageCache = new Map();
+    resultCache.set(bitmap, imageCache);
+  }
+  imageCache.set(key, result);
   return result;
 }

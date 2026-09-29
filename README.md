@@ -4,10 +4,10 @@ An audio-reactive **point-cloud music visualizer** for **Linux and Windows**.
 It takes your current desktop wallpaper (or any image you drop in), rebuilds it
 as a GPU point cloud with estimated depth, and moves the depth layers in waves
 that follow the music — bass swells the background, highs shimmer the
-foreground, kicks push the whole cloud toward you.
+foreground, and bass hits move the regions mapped to bass.
 
 Built with **Electron + Three.js (WebGL2)**. All animation runs in vertex
-shaders: per frame the CPU only uploads 64 band values, so the app idles at
+shaders: per frame the CPU only uploads the selected 8–128 band values, so the app idles at
 a few percent CPU and holds a steady frame rate without spinning fans.
 
 ## Highlights
@@ -92,7 +92,7 @@ npx electron-builder --win     # NSIS installer + portable exe
 
 | Technique | Effect |
 | --- | --- |
-| All wave math in the vertex shader | CPU per frame ≈ 64 uniform floats + one 64×1 texture update |
+| All wave math in the vertex shader | CPU per frame uploads one small, configurable band texture (8–128×1) |
 | Single `THREE.Points` draw call | no geometry churn, no post-processing passes |
 | FPS cap (default 30) | half the GPU energy vs 60 for slow-moving content |
 | Adaptive resolution | holds the frame budget on weak GPUs, restores quality when free |

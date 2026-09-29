@@ -9,6 +9,7 @@ import { AudioEngine } from './audio.js';
 import { AudioActivity } from './audio-activity.js';
 import { sampleImageToCloud, makeProceduralImage } from './sampler.js';
 import { estimateDepth, DEFAULT_ONNX_MODEL } from './depth.js';
+import { copySpectrumBands } from './spectrum-relay.js';
 import { UI } from './ui.js';
 import { bridge, platform } from './bridge.js';
 import { get, set, getAll, onChange } from './settings.js';
@@ -209,7 +210,7 @@ const isPrimaryWallpaper = isWallpaperWindow && wallParams.get('primary') === '1
 // render from the spectrum it broadcasts (secondary loopback captures come
 // back silent on Windows, so per-window capture is not viable).
 const remoteAnalyzer = {
-  bands: new Float32Array(64),
+  bands: new Float32Array(get('bands')),
   energy: 0,
   level: 0,
   loud: 0,
@@ -222,8 +223,7 @@ if (isWallpaperWindow) {
   // cursor so the wallpaper still parallaxes with the mouse
   bridge.onCursor(({ nx, ny }) => scene.setExternalPointer(nx, ny));
   bridge.onSpectrum((bands, energy, loud) => {
-    const n = Math.min(bands.length, remoteAnalyzer.bands.length);
-    for (let i = 0; i < n; i++) remoteAnalyzer.bands[i] = bands[i];
+    copySpectrumBands(remoteAnalyzer, bands);
     remoteAnalyzer.energy = energy;
     remoteAnalyzer.level = energy;
     remoteAnalyzer.loud = loud;
