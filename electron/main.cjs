@@ -230,8 +230,9 @@ function stopPulseCapture() {
 // ---------------------------------------------------------------------------
 let mainWindow = null;
 
-function createWindow() {
+function createWindow({ show = true } = {}) {
   mainWindow = new BrowserWindow({
+    show,
     width: 1280,
     height: 800,
     minWidth: 720,
@@ -270,6 +271,7 @@ if (!gotLock) {
   app.on('second-instance', () => {
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
       mainWindow.focus();
     }
   });
@@ -300,9 +302,12 @@ if (!gotLock) {
     // auto game mode defaults on: any fullscreen app hides the wallpaper
     if (cfg.autoGameMode === undefined) { cfg.autoGameMode = true; writeConfig(cfg); }
     if (cfg.autoGameMode) startAutoGameWatcher();
-    if (cfg.wallpaperMode) await enableWallpaperMode();
     // login launches pass --hidden: start in the tray regardless of startInTray
-    if (!cfg.startInTray && !process.argv.includes('--hidden')) createWindow();
+    // The preview owns audio capture and depth analysis even when its UI is
+    // hidden. Create it before restoring wallpaper mode so tray/login startup
+    // has a spectrum producer without requiring the user to open the window.
+    createWindow({ show: !cfg.startInTray && !process.argv.includes('--hidden') });
+    if (cfg.wallpaperMode) await enableWallpaperMode();
   });
 
   // With wallpaper mode active, closing the preview only hides it — the

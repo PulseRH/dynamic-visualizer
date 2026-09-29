@@ -3,6 +3,7 @@
 // one for the backdrop. Per-frame CPU cost = a handful of uniform writes.
 
 import * as THREE from '../vendor/three.module.js';
+import { movementResponse } from './response.js';
 
 const VERT = /* glsl */ `
   uniform float uEnergy;
@@ -415,7 +416,8 @@ export class VisualScene {
     this.speedVol = s.speedVol;
     this.motionSpeed = s.motionSpeed;
     this.musicParallax = s.musicParallax || 0;
-    this.dynamics = s.dynamics;
+    this.quietMovement = s.quietMovement;
+    this.energyResponse = s.energyResponse;
     this.kickStrength = s.kickStrength;
     this.uniforms.uCentered.value = s.centeredMotion ? 1 : 0;
     this.setBandCount(s.bands);
@@ -450,17 +452,22 @@ export class VisualScene {
     // (lowest vs highest quarter of bands)
     let lowSum = 0, highSum = 0, lowN = 0, highN = 0;
     const q = Math.max(1, count >> 2);
+    let textureChanged = false;
     for (let i = 0; i < count; i++) {
       const b = bands[i];
       const v = Math.min(255, b * 255) | 0;
-      this.bandData[i * 4] = v;
-      this.bandData[i * 4 + 1] = v;
-      this.bandData[i * 4 + 2] = v;
-      this.bandData[i * 4 + 3] = 255;
+      const offset = i * 4;
+      if (this.bandData[offset] !== v || this.bandData[offset + 3] !== 255) {
+        this.bandData[offset] = v;
+        this.bandData[offset + 1] = v;
+        this.bandData[offset + 2] = v;
+        this.bandData[offset + 3] = 255;
+        textureChanged = true;
+      }
       if (i < q) { lowSum += b; lowN++; }
       else if (i >= count - q) { highSum += b; highN++; }
     }
-    this.bandTex.needsUpdate = true;
+    if (textureChanged) this.bandTex.needsUpdate = true;
 
     // volume-ramped motion clocks: the louder the music, the faster the
     // shimmer and waves travel (speedVol = 0 keeps them constant). Motion
@@ -495,22 +502,11 @@ export class VisualScene {
     // offset) so it centers, then scale the deviation to the full -1..1 range
     // against a decaying peak — the camera moves both ways, and moves more.
     const mp = (this.musicParallax || 0) * 0.075;
-    // Dynamics slider: how much loud passages move more than quiet ones.
-    // RMS-style EMA of energy ("how loud now") against a slowly-decaying
-    // peak (track-level calibration); 0 = constant, 1 = fully proportional
-    // Dynamics slider: how much loud passages move more than quiet ones.
-    // Uses `loud` — raw-signal loudness normalized against a slowly-decaying
-    // peak — because `energy` is auto-normalized by the analyzer's peak
-    // follower and barely dips in bridges; `loud` genuinely drops.
-    let mamp = 1;
-    if ((this.dynamics ?? 0) > 0) {
-      const loud = Number.isFinite(analyzer.loud) ? analyzer.loud : 0;
-      if (!Number.isFinite(this.loudEma)) this.loudEma = loud;
-      this.loudEma += (loud - this.loudEma) * Math.min(1, dt * 0.5);
-      const dyn = Math.max(0, Math.min(1, this.loudEma));
-      mamp = 1 - (this.dynamics ?? 0) * (1 - dyn);
-    }
-    // Dynamics drives ALL motion, not just the parallax camera
+    // Smooth the fixed-reference loudness; the same curve is shown in the UI.
+    const loud = Number.isFinite(analyzer.loud) ? analyzer.loud : 0;
+    if (!Number.isFinite(this.loudEma)) this.loudEma = loud;
+    this.loudEma += (loud - this.loudEma) * Math.min(1, dt * 0.5);
+    const mamp = movementResponse(this.loudEma, this.quietMovement, this.energyResponse);
     this.uniforms.uDyn.value = mamp;
     if (mp > 0) {
       let raw = (lowN && highN) ? (lowSum / lowN - highSum / highN) : 0;
@@ -561,7 +557,7 @@ export class VisualScene {
       -this.pointer.y * halfH * 2,
       this.cursorStrength * rippleOn,
     );
-    this.camera.position.z = this.camBaseZ + analyzer.beat * (this.kickStrength ?? 1) * 0.02;
+    this.camera.position.z = this.camBaseZ + analyzer.beat * (this.kickStrength ?? 1) * 0.02 * mamp;
     this.camera.lookAt(0, 0, 0.1);
 
     this.renderer.render(this.scene, this.camera);

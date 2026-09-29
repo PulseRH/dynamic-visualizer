@@ -6,6 +6,7 @@
 
 import { VisualScene } from './scene.js';
 import { AudioEngine } from './audio.js';
+import { AudioActivity } from './audio-activity.js';
 import { sampleImageToCloud, makeProceduralImage } from './sampler.js';
 import { estimateDepth, DEFAULT_ONNX_MODEL } from './depth.js';
 import { UI } from './ui.js';
@@ -30,6 +31,29 @@ let qualityTimer = 0;
 let statTimer = 0;
 let frameEMA = 16;
 let quietSince = 0;
+const audioActivity = new AudioActivity();
+let calibration = null;
+
+function finishCalibration(cancelled = false) {
+  if (!calibration) return;
+  clearTimeout(calibration.timer);
+  const peak = calibration.peak;
+  calibration = null;
+  document.getElementById('calibrateEnergy').disabled = false;
+  if (!cancelled && peak > 0.005) set({ loudReference: peak });
+  document.getElementById('calibrationStatus').textContent = cancelled
+    ? 'Calibration cancelled because the audio settings changed. Try again when ready.'
+    : peak > 0.005
+      ? 'Full energy reference saved. Recalibrate after changing source, volume, or audio tuning.'
+      : 'No usable audio detected. Play an energetic section and try again; your reference is unchanged.';
+}
+
+function calibrateEnergy() {
+  if (calibration || isWallpaperWindow) return;
+  document.getElementById('calibrateEnergy').disabled = true;
+  document.getElementById('calibrationStatus').textContent = 'Listening for 10 seconds — keep the energetic section playing…';
+  calibration = { peak: 0, timer: setTimeout(() => finishCalibration(), 10000) };
+}
 
 const ui = new UI({
   onImagePicked: (source) => handleImagePick(source),
@@ -40,6 +64,7 @@ const ui = new UI({
     const picked = await bridge.chooseAudioFile();
     return picked;
   },
+  onCalibrateEnergy: calibrateEnergy,
 });
 
 ui.setAbout(`Dynamic Visualizer · ${platform} · Electron/WebGL2`);
@@ -252,6 +277,7 @@ bridge.onWallpaperState((on) => {
 // ------------------------------------------------------------- audio flow
 
 async function switchAudio(mode, opts = {}) {
+  finishCalibration(true);
   try {
     await audio.setMode(mode, opts);
     ui.setAudioStatus(audio.status, mode === 'none' ? '' : 'live');
@@ -284,6 +310,7 @@ function applyAudioResponse() {
   a.floor = get('sensFloor');
   a.curve = get('sensCurve');
   a.eq = get('eqCurve');
+  a.loudReference = get('loudReference');
   a.tiltEQ = get('tiltEQ');
   a.tiltPivot = get('tiltPivot');
   a.stickyIn = get('stickyIn');
@@ -291,6 +318,7 @@ function applyAudioResponse() {
 }
 
 onChange((all, patch) => {
+  if (calibration && ['audioSource', 'audioFileUrl', 'eqCurve', 'tiltEQ', 'tiltPivot', 'bands'].some((key) => key in patch)) finishCalibration(true);
   scene.applySettings(all);
   applyAudioResponse();
   if (get('bands') !== lastBands) {
@@ -329,7 +357,8 @@ let lastRender = 0;
 // covered states never stall the spectrum feed or the idle envelope for the
 // wallpaper windows.
 function advanceIdle(a, dtMs, now) {
-  const silent = audio.mode !== 'demo' && get('idleSleep') && a.energy < 0.01;
+  const active = audioActivity.update(a.loud, a.energy, dtMs);
+  const silent = get('audioSource') !== 'demo' && get('idleSleep') && !active;
   let target = 1;
   if (silent) {
     if (!quietSince) quietSince = now;
@@ -356,6 +385,7 @@ if (!isWallpaperWindow) {
     const dt = Math.min(50, now - lastA);
     lastA = now;
     const a = audio.frame(dt, now);
+    if (calibration && audio.mode !== 'none' && Number.isFinite(a.rms)) calibration.peak = Math.max(calibration.peak, a.rms);
     advanceIdle(a, dt, now);
     if (wallpaperAudioActive) bridge.sendSpectrum(a.bands, a.energy, a.beat, a.loud);
   }, 33);

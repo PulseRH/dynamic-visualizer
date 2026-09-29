@@ -21,7 +21,8 @@ export class BandAnalyzer {
     this.peak = 0.001;                                // running normalization peak
     this.bassAvg = 0.001;                             // long-term bass average
     this.loud = 0;                                    // raw loudness vs slow peak
-    this.loudPeak = 0.001;                            // slow reference for `loud`
+    this.loudReference = 0.25;
+    this.rms = 0;
     this.lastBeatAt = 0;
     this._edges = null;
     this._edgeSr = 0;
@@ -30,6 +31,9 @@ export class BandAnalyzer {
     this._eqSr = 0;
     this._eqBins = 0;
     this._wraw = new Float32Array(count);       // tilt+EQ weighted spectrum
+    this._tiltFactors = new Float64Array(count);
+    this._hearingFactors = new Float64Array(count);
+    this._responseCache = null;
     this.tiltEQ = 0;            // spectral tilt: -1 bass-reactive, +1 highs-reactive
     this.tiltPivot = 0.5;       // where the tilt crosses zero (0 = bass end, 1 = highs)
     this.stickyIn = 0.5;        // attack: how fast bands jump up (0 fast, 1 reluctant)
@@ -58,6 +62,7 @@ export class BandAnalyzer {
     // bytes are 0..255 with dB scaling already applied; map to 0..1 magnitude-ish
     const bins = bytes.length;
     const { lo, hi } = this.edges(bins, sampleRate);
+    this._updateEqWeights(bins, sampleRate, lo, hi);
     for (let b = 0; b < this.count; b++) {
       let sum = 0;
       for (let i = lo[b]; i < hi[b]; i++) sum += bytes[i] / 255;
@@ -104,6 +109,22 @@ export class BandAnalyzer {
     this._eqW = w;
   }
 
+  _updateResponseFactors(tilt, pivot) {
+    const cached = this._responseCache;
+    if (cached && cached.tilt === tilt && cached.pivot === pivot &&
+        cached.eq === this.eq && cached.weights === this._eqW) return;
+    const eqOn = this.eq > 0 && this._eqW;
+    for (let b = 0; b < this.count; b++) {
+      const t = this.count > 1 ? b / (this.count - 1) : 0;
+      this._tiltFactors[b] = Math.pow(10, (tilt * 6 * (t - pivot) * 2) / 20);
+      const w = eqOn ? this._eqW[b] : 1;
+      this._hearingFactors[b] = eqOn
+        ? (this.eq <= 1 ? 1 + this.eq * (w - 1) : Math.pow(Math.max(w, 0.005), this.eq))
+        : 1;
+    }
+    this._responseCache = { tilt, pivot, eq: this.eq, weights: this._eqW };
+  }
+
   _finish() {
     const { bands, raw } = this;
     // tilt EQ + perceptual weighting -> the working spectrum. The tilt runs
@@ -113,18 +134,13 @@ export class BandAnalyzer {
     // energetic.
     const tilt = Math.max(-1, Math.min(1, this.tiltEQ ?? 0));
     const pivot = Math.max(0, Math.min(1, this.tiltPivot ?? 0.5));
-    const eqOn = this.eq > 0 && this._eqW;
+    this._updateResponseFactors(tilt, pivot);
     let mx = 0.001, bass = 0;
     for (let b = 0; b < this.count; b++) {
-      const t = this.count > 1 ? b / (this.count - 1) : 0;
-      let v = raw[b] * Math.pow(10, (tilt * 6 * (t - pivot) * 2) / 20);
-      if (eqOn) {
-        // eq 0..1 blends flat -> full equal-loudness weight; above 1 the
-        // weight becomes an exponent, so low-hearing bands mute fast and
-        // only the ear's peak region keeps moving
-        const w = this._eqW[b];
-        v *= this.eq <= 1 ? 1 + this.eq * (w - 1) : Math.pow(Math.max(w, 0.005), this.eq);
-      }
+      // Keep the original multiplication order and double precision so
+      // caching the settings-dependent factors does not change the signal.
+      let v = raw[b] * this._tiltFactors[b];
+      v *= this._hearingFactors[b];
       this._wraw[b] = v;
       if (v > mx) mx = v;
       if (b < 10) bass += raw[b];   // beat detection: physical bass, untilted
@@ -132,15 +148,14 @@ export class BandAnalyzer {
     this.peak = Math.max(mx, this.peak * 0.996);
     const norm = 1 / this.peak;
 
-    // loudness of the working spectrum (what actually drives the visuals):
-    // unlike `energy` this isn't re-inflated by a fast peak follower, so it
-    // genuinely drops in bridges. Peak decays ~2-3 min for track calibration.
+    // Overall loudness uses the saved calibration, independently of band
+    // normalization. Quiet tracks never raise their own loudness reference.
     let sq = 0;
     for (let b = 0; b < this.count; b++) sq += this._wraw[b] * this._wraw[b];
     let rms = Math.sqrt(sq / this.count);
     if (!Number.isFinite(rms)) rms = 0;
-    this.loudPeak = Math.max(rms, this.loudPeak * 0.9998);
-    this.loud = clamp01(rms / Math.max(this.loudPeak, 0.001));
+    this.rms = rms;
+    this.loud = clamp01(rms / Math.max(this.loudReference, 0.001));
 
     // user response curve: gain -> noise floor -> gamma. Quiet input ends up
     // small; only peaks reach full movement.

@@ -3,6 +3,7 @@
 
 import { get, set, onChange, getAll } from './settings.js';
 import { bridge } from './bridge.js';
+import { movementResponse } from './response.js';
 
 const $ = (sel) => document.getElementById(sel.replace(/^#/, ''));
 
@@ -106,7 +107,9 @@ export class UI {
     slider('bands', 'bands', (v) => String(v));
     slider('depthMove', 'depthMove', (v) => v.toFixed(2));
     slider('xyMove', 'xyMove', (v) => v.toFixed(2));
-    slider('dynamics', 'dynamics', (v) => v.toFixed(2));
+    slider('quietMovement', 'quietMovement', (v) => `${Math.round(v * 100)}%`);
+    slider('energyResponse', 'energyResponse', (v) => v.toFixed(2));
+    $('calibrateEnergy').onclick = () => this.cb.onCalibrateEnergy();
     slider('kickStrength', 'kickStrength', (v) => v.toFixed(2));
 
     $('autoQuality').onchange = (e) => set({ autoQuality: e.target.checked });
@@ -284,7 +287,18 @@ export class UI {
     setSlider('xyMove', get('xyMove'));
     setSlider('parallax', get('parallax'));
     setSlider('musicParallax', get('musicParallax'));
-    setSlider('dynamics', get('dynamics'));
+    setSlider('quietMovement', get('quietMovement'));
+    $('quietMovement').parentElement.querySelector('.val').textContent = `${Math.round(get('quietMovement') * 100)}%`;
+    setSlider('energyResponse', get('energyResponse'));
+    const curveKey = `${get('quietMovement')}:${get('energyResponse')}`;
+    if (this._curveKey !== curveKey) {
+      this._curveKey = curveKey;
+      const points = Array.from({ length: 65 }, (_, i) => {
+        const x = i / 64;
+        return `${i ? 'L' : 'M'}${28 + x * 238},${72 - movementResponse(x, get('quietMovement'), get('energyResponse')) * 64}`;
+      });
+      $('responseLine').setAttribute('d', points.join(' '));
+    }
     setSlider('kickStrength', get('kickStrength'));
     setSlider('overscan', get('overscan'));
 
@@ -331,7 +345,12 @@ export class UI {
 
   setStats(text) { this.stats.textContent = text; }
 
-  setLevel(v) { this.levelBar.style.width = `${Math.round(v * 100)}%`; }
+  setLevel(v) {
+    const width = `${Math.round(v * 100)}%`;
+    if (width === this._levelWidth) return;
+    this._levelWidth = width;
+    this.levelBar.style.width = width;
+  }
 
   toast(msg, kind = '', ms = 3800) {
     const el = document.createElement('div');
