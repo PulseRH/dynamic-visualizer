@@ -4,6 +4,7 @@
 
 import * as THREE from '../vendor/three.module.js';
 import { movementResponse } from './response.js';
+import { buildHueLookup } from './hue.js';
 
 const VERT = /* glsl */ `
   uniform float uEnergy;
@@ -19,7 +20,6 @@ const VERT = /* glsl */ `
   uniform float uBandCount;
   uniform float uInvert;
   uniform float uBoost;
-  uniform mat3 uHue;
   uniform float uHueEnabled;
   uniform float uSizeComp;
   uniform float uZMove;
@@ -59,7 +59,8 @@ const VERT = /* glsl */ `
     if (uInvert > 0.5) bt = 1.0 - bt;   // swap bass <-> highs direction
     float band = clamp(floor(bt * uBandCount), 0.0, uBandCount - 1.0);
     // already shaped by the analyzer (gain -> floor -> curve)
-    float amp = texture2D(uBands, vec2((band + 0.5) / uBandCount, 0.5)).r;
+    vec4 bandSample = texture2D(uBands, vec2((band + 0.5) / uBandCount, 0.5));
+    float amp = bandSample.r;
     float lightAmp = amp;                     // no global dimming: quiet
                                               // regions keep their base light
 
@@ -122,7 +123,17 @@ const VERT = /* glsl */ `
     lit *= uSizeComp;
     // points nearer the camera cover more screen: dim them the same way
     lit /= sqrt(max(uCamZ / -mv.z, 0.5));
-    vColor = uHueEnabled > 0.5 ? max(uHue * lit, vec3(0.0)) : lit;
+    if (uHueEnabled > 0.5 && amp > 0.0) {
+      float c = bandSample.g * 2.0 - 1.0;
+      float h = bandSample.b * 2.0 - 1.0;
+      vColor = max(vec3(
+        dot(vec3(0.213 + 0.787*c - 0.213*h, 0.715 - 0.715*c - 0.715*h, 0.072 - 0.072*c + 0.928*h), lit),
+        dot(vec3(0.213 - 0.213*c + 0.143*h, 0.715 + 0.285*c + 0.140*h, 0.072 - 0.072*c - 0.283*h), lit),
+        dot(vec3(0.213 - 0.213*c - 0.787*h, 0.715 - 0.715*c + 0.715*h, 0.072 + 0.928*c + 0.072*h), lit)
+      ), vec3(0.0));
+    } else {
+      vColor = lit;
+    }
   }
 `;
 
@@ -153,12 +164,9 @@ const BACKDROP_FRAG = /* glsl */ `
   uniform sampler2D uTex;
   uniform float uDim;
   uniform float uAspect;
-  uniform mat3 uHue;
-  uniform float uHueEnabled;
   varying vec2 vUv;
   void main() {
     vec3 col = texture2D(uTex, vUv).rgb;
-    if (uHueEnabled > 0.5) col = max(uHue * col, vec3(0.0));
     gl_FragColor = vec4(col * uDim, 1.0);
   }
 `;
@@ -192,6 +200,8 @@ export class VisualScene {
     // spectrum texture (RGBA8, width = band count, user-configurable)
     this.bandCount = 64;
     this.bandData = new Uint8Array(this.bandCount * 4);
+    this.hueReaction = 0;
+    this.hueLookup = buildHueLookup(0);
     this.bandTex = new THREE.DataTexture(this.bandData, this.bandCount, 1, THREE.RGBAFormat);
     this.bandTex.magFilter = THREE.NearestFilter;
     this.bandTex.minFilter = THREE.NearestFilter;
@@ -212,7 +222,6 @@ export class VisualScene {
       uBandCount: { value: 64 },
       uInvert: { value: 0 },
       uBoost: { value: 1 },
-      uHue: { value: new THREE.Matrix3() },
       uHueEnabled: { value: 0 },
       uSizeComp: { value: 1 },
       uZMove: { value: 1 },
@@ -384,7 +393,6 @@ export class VisualScene {
     const mat = new THREE.ShaderMaterial({
       uniforms: {
         uTex: { value: tex }, uDim: { value: mode === 'dim' ? 0.17 : 0 }, uAspect: { value: 1 },
-        uHue: this.uniforms.uHue, uHueEnabled: this.uniforms.uHueEnabled,
       },
       vertexShader: BACKDROP_VERT,
       fragmentShader: BACKDROP_FRAG,
@@ -416,20 +424,13 @@ export class VisualScene {
     this.uniforms.uBandCount.value = n;
   }
 
-  _setHue(degrees) {
-    const angle = degrees * Math.PI / 180;
-    const c = Math.cos(angle), h = Math.sin(angle);
-    // Hue-rotate matrix around the neutral axis: grayscale stays neutral.
-    this.uniforms.uHue.value.set(
-      0.213 + 0.787 * c - 0.213 * h, 0.715 - 0.715 * c - 0.715 * h, 0.072 - 0.072 * c + 0.928 * h,
-      0.213 - 0.213 * c + 0.143 * h, 0.715 + 0.285 * c + 0.140 * h, 0.072 - 0.072 * c - 0.283 * h,
-      0.213 - 0.213 * c - 0.787 * h, 0.715 - 0.715 * c + 0.715 * h, 0.072 + 0.928 * c + 0.072 * h,
-    );
-  }
-
   applySettings(s) {
-    this.hueReaction = s.hueReaction || 0;
-    this.uniforms.uHueEnabled.value = this.hueReaction > 0 ? 1 : 0;
+    const hueReaction = Math.max(-180, Math.min(180, s.hueReaction || 0));
+    if (hueReaction !== this.hueReaction) {
+      this.hueReaction = hueReaction;
+      this.hueLookup = buildHueLookup(hueReaction);
+    }
+    this.uniforms.uHueEnabled.value = hueReaction !== 0 ? 1 : 0;
     this.uniforms.uIntensity.value = s.intensity;
     this.uniforms.uDepthScale.value = s.depthScale;
     this.uniforms.uMode.value = MODES[s.waveMode] ?? 1;
@@ -477,12 +478,6 @@ export class VisualScene {
     dt = Math.min(dt, 0.05);
     this.time += dt;
 
-    if (this.hueReaction > 0) {
-      const energy = Number.isFinite(analyzer.energy) ? analyzer.energy : 0;
-      const beat = Number.isFinite(analyzer.beat) ? analyzer.beat : 0;
-      this._setHue(this.hueReaction * Math.min(1, Math.max(0, energy * 1.5 + beat * 0.25)));
-    }
-
     const bands = analyzer.bands;
     const count = Math.min(this.bandCount, bands.length);
     // bass + treble levels for music parallax, folded into the texture loop
@@ -494,10 +489,14 @@ export class VisualScene {
       const b = bands[i];
       const v = Math.min(255, b * 255) | 0;
       const offset = i * 4;
-      if (this.bandData[offset] !== v || this.bandData[offset + 3] !== 255) {
+      const hueOffset = v * 2;
+      const hueCos = this.hueLookup[hueOffset];
+      const hueSin = this.hueLookup[hueOffset + 1];
+      if (this.bandData[offset] !== v || this.bandData[offset + 1] !== hueCos ||
+          this.bandData[offset + 2] !== hueSin || this.bandData[offset + 3] !== 255) {
         this.bandData[offset] = v;
-        this.bandData[offset + 1] = v;
-        this.bandData[offset + 2] = v;
+        this.bandData[offset + 1] = hueCos;
+        this.bandData[offset + 2] = hueSin;
         this.bandData[offset + 3] = 255;
         textureChanged = true;
       }

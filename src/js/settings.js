@@ -7,7 +7,7 @@ const DEFAULTS = {
   pointSize: 1.0,
   glow: 1.1,
   boost: 1.0,
-  hueReaction: 0,          // maximum music-driven colour rotation in degrees
+  hueReaction: 0,          // signed maximum per-band colour rotation in degrees
   waveMode: 'ripple',      // style blended with direct audio motion
   motionMix: 0,           // 0 = direct audio, 1 = selected style
   bandMap: 'radial',       // which region reacts to which bands: 'depth' | 'radial' | 'vertical' | 'horizontal'
