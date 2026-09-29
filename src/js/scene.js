@@ -8,7 +8,6 @@ import { buildHueLookup } from './hue.js';
 
 const VERT = /* glsl */ `
   uniform float uEnergy;
-  uniform float uBeat;
   uniform float uIntensity;
   uniform float uDepthScale;
   uniform float uAspect;
@@ -89,14 +88,11 @@ const VERT = /* glsl */ `
     }
 
     float depthRange = mix(0.35 + 0.65 * near, 1.0, uEqualDepthMovement);
-    float kickRange = mix(0.15 + near, 1.15, uEqualDepthMovement);
     float disp = w * amp * uIntensity * uZMove * 0.11 * depthRange * uDyn;
-    disp += uBeat * 0.035 * uZMove * kickRange * uDyn;   // kicks push the cloud forward
 
     vec3 pos = vec3(position.xy, near * uDepthScale + disp);
     pos.xy += vec2(sin(uXYTime * 3.1 + aRand * 40.0), cos(uXYTime * 2.6 + aRand * 30.0))
             * amp * 0.006 * uIntensity * uXYMove * uDyn;
-    pos.xy *= 1.0 + uBeat * 0.012 * uXYMove * uDyn;
     // idle exit: 'fly-by' rush points toward the camera as they fade;
     // the default clean fade just dissolves in place
     pos.z += (1.0 - uVis) * uExitPush;
@@ -110,7 +106,7 @@ const VERT = /* glsl */ `
     vec4 mv = modelViewMatrix * vec4(pos, 1.0);
     gl_Position = projectionMatrix * mv;
 
-    float ps = uSize * (1.0 + amp * 0.9 + uBeat * 0.4 * uDyn) * (uCamZ / -mv.z);
+    float ps = uSize * (1.0 + amp * 0.9 * min(uBoost, 1.0)) * (uCamZ / -mv.z);
     gl_PointSize = clamp(ps, 0.75, 24.0);
 
     vAmp = lightAmp;
@@ -118,7 +114,7 @@ const VERT = /* glsl */ `
     // brighten on top, and dark particles catch a cool shimmer
     float lum = max(aColor.r, max(aColor.g, aColor.b));
     vec3 lit = aColor * (0.78 + uBoost * lightAmp)
-             + vec3(0.07, 0.09, 0.13) * lightAmp * (1.0 - lum) * 0.7;
+             + vec3(0.07, 0.09, 0.13) * lightAmp * (1.0 - lum) * 0.7 * uBoost;
     // normalize for point size: bigger points overlap more, so dim per point
     lit *= uSizeComp;
     // points nearer the camera cover more screen: dim them the same way
@@ -210,7 +206,6 @@ export class VisualScene {
     this.uniforms = {
       uTime: { value: 0 },
       uEnergy: { value: 0 },
-      uBeat: { value: 0 },
       uIntensity: { value: 1 },
       uDepthScale: { value: 0.35 },
       uAspect: { value: 1 },
@@ -450,7 +445,6 @@ export class VisualScene {
     this.musicParallax = s.musicParallax || 0;
     this.quietMovement = s.quietMovement;
     this.energyResponse = s.energyResponse;
-    this.kickStrength = s.kickStrength;
     this.uniforms.uCentered.value = s.centeredMotion ? 1 : 0;
     this.uniforms.uEqualDepthMovement.value = s.equalDepthMovement ? 1 : 0;
     this.setBandCount(s.bands);
@@ -470,7 +464,7 @@ export class VisualScene {
     this.renderer.setPixelRatio(this.basePixelRatio * this.quality);
   }
 
-  /** one frame; audio analyzer supplies bands/energy/beat. dt is clamped. */
+  /** one frame; audio analyzer supplies bands/energy. dt is clamped. */
   render(analyzer, parallaxStrength) {
     const now = performance.now();
     let dt = (now - this.lastNow) / 1000;
@@ -515,7 +509,6 @@ export class VisualScene {
     this.uniforms.uXYTime.value = this.xyTime;
     this.uniforms.uWaveTime.value = this.waveTime;
     this.uniforms.uEnergy.value = analyzer.energy;
-    this.uniforms.uBeat.value = analyzer.beat * (this.kickStrength ?? 1);
 
     // point size in pixels when the cloud is at rest distance:
     //   pointSize=1.0 means a point's diameter equals the point spacing
@@ -593,7 +586,7 @@ export class VisualScene {
       -this.pointer.y * halfH * 2,
       this.cursorStrength * rippleOn,
     );
-    this.camera.position.z = this.camBaseZ + analyzer.beat * (this.kickStrength ?? 1) * 0.02 * mamp;
+    this.camera.position.z = this.camBaseZ;
     this.camera.lookAt(0, 0, 0.1);
 
     this.renderer.render(this.scene, this.camera);

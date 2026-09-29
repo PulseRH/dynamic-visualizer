@@ -112,7 +112,6 @@ export class UI {
     slider('quietMovement', 'quietMovement', (v) => `${Math.round(v * 100)}%`);
     slider('energyResponse', 'energyResponse', (v) => v.toFixed(2));
     $('calibrateEnergy').onclick = () => this.cb.onCalibrateEnergy();
-    slider('kickStrength', 'kickStrength', (v) => v.toFixed(2));
 
     $('autoQuality').onchange = (e) => set({ autoQuality: e.target.checked });
     $('previewPaused').onchange = (e) => set({ previewPaused: e.target.checked });
@@ -126,8 +125,8 @@ export class UI {
     if (cmw) cmw.onchange = (e) => set({ centeredMotion: e.target.checked });
     $('equalDepthMovement').onchange = (e) => set({ equalDepthMovement: e.target.checked });
 
-    // Parallax auto-raises Overscan (so the edges stay hidden) until the user
-    // takes manual control of Overscan.
+    // Parallax auto-raises zoom/crop (so the edges stay hidden) until the user
+    // takes manual control of it.
     const parallaxEl = $('parallax');
     parallaxEl.oninput = () => {
       const v = Number(parallaxEl.value);
@@ -306,7 +305,6 @@ export class UI {
       });
       $('responseLine').setAttribute('d', points.join(' '));
     }
-    setSlider('kickStrength', get('kickStrength'));
     setSlider('overscan', get('overscan'));
 
     $('autoQuality').checked = get('autoQuality');

@@ -92,8 +92,8 @@ export const bridge = {
     return () => {};
   },
 
-  sendSpectrum(bands, energy, beat, loud) {
-    if (ev) ev.sendSpectrum(bands, energy, beat, loud);
+  sendSpectrum(bands, energy, loud) {
+    if (ev) ev.sendSpectrum(bands, energy, loud);
   },
 
   onSpectrum(cb) {

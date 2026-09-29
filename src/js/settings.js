@@ -6,7 +6,7 @@ const DEFAULTS = {
   pointCount: 160000,
   pointSize: 1.0,
   glow: 1.1,
-  boost: 1.0,
+  boost: 1.0,              // extra per-band light and point-size pulse (0 = neither)
   hueReaction: 0,          // signed maximum per-band colour rotation in degrees
   waveMode: 'ripple',      // style blended with direct audio motion
   motionMix: 0,           // 0 = direct audio, 1 = selected style
@@ -38,7 +38,6 @@ const DEFAULTS = {
   loudReference: 0.25,      // fixed RMS reference; explicit calibration replaces it
   centeredMotion: false,   // audio mode: quiet bands pull back, loud push forward
   equalDepthMovement: false, // remove the near-layer bias from audio depth displacement
-  kickStrength: 1.0,       // beat kick multiplier (0 = kicks off)
   previewPaused: false,    // freeze the preview window (wallpaper keeps running)
   previewFullQuality: false, // don't throttle the preview while wallpaper mode is on
   audioSource: 'demo',     // 'system' | 'mic' | 'file' | 'demo'

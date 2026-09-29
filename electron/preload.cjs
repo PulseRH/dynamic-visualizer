@@ -23,9 +23,9 @@ contextBridge.exposeInMainWorld('dv', {
     ipcRenderer.on('cursor', handler);
     return () => ipcRenderer.removeListener('cursor', handler);
   },
-  sendSpectrum: (bands, energy, beat, loud) => ipcRenderer.send('spectrum', bands, energy, beat, loud),
+  sendSpectrum: (bands, energy, loud) => ipcRenderer.send('spectrum', bands, energy, loud),
   onSpectrum: (cb) => {
-    const handler = (_e, bands, energy, beat, loud) => cb(bands, energy, beat, loud);
+    const handler = (_e, bands, energy, loud) => cb(bands, energy, loud);
     ipcRenderer.on('spectrum', handler);
     return () => ipcRenderer.removeListener('spectrum', handler);
   },

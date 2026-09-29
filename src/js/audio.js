@@ -4,7 +4,7 @@
 //   file   : audio file playback through an <audio> element (audible)
 //   pulse  : Linux system audio, raw PCM from parec (PulseAudio/PipeWire)
 //   demo   : built-in generative track (silent)
-// Frame() returns the shared BandAnalyzer (bands[], energy, beat, level).
+// Frame() returns the shared BandAnalyzer (bands[], energy, level).
 
 import { FFT } from './fft.js';
 import { BandAnalyzer } from './bands.js';
@@ -197,9 +197,9 @@ export class AudioEngine {
   // -------------------------------------------------------------------- frame
 
   /** call once per rendered frame; advances analysis. returns analyzer */
-  frame(dtMs, nowMs) {
+  frame() {
     const a = this.analyzer;
-    if (this.mode === 'none') { a.energy *= 0.95; a.tickBeat(nowMs); return a; }
+    if (this.mode === 'none') { a.energy *= 0.95; return a; }
 
     if (this._analyser) {
       this._analyser.getByteFrequencyData(this._byteBuf);
@@ -227,8 +227,6 @@ export class AudioEngine {
         }
       }
     }
-    a.maybeBeat(nowMs);
-    a.tickBeat(nowMs);
     return a;
   }
 }

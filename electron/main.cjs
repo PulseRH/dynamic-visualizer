@@ -931,11 +931,11 @@ ipcMain.handle('config:set', (_e, patch) => {
 // The preview window is the single audio capture source; its analysis is
 // relayed to every wallpaper window (secondary loopback captures come back
 // silent on Windows, so per-window capture is not viable).
-ipcMain.on('spectrum', (event, bands, energy, beat, loud) => {
+ipcMain.on('spectrum', (event, bands, energy, loud) => {
   if (!wallpaperWins.length) return;
   for (const win of wallpaperWins) {
     if (!win.isDestroyed() && win.webContents !== event.sender) {
-      win.webContents.send('spectrum', bands, energy, beat, loud);
+      win.webContents.send('spectrum', bands, energy, loud);
     }
   }
 });

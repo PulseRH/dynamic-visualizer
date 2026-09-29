@@ -1,4 +1,4 @@
-// Turns raw spectra into smoothed, normalized, log-spaced bands + energy/beat.
+// Turns raw spectra into smoothed, normalized, log-spaced bands + energy.
 // Feed it either a byte array (WebAudio AnalyserNode) or a float magnitude
 // array (our own FFT). Output drives the GPU uniforms.
 
@@ -16,14 +16,11 @@ export class BandAnalyzer {
     this.raw = new Float32Array(count);         // pre-smoothing 0..1
     this.energy = 0;                                  // overall loudness 0..1
     this.bassEnergy = 0;
-    this.beat = 0;                                    // 1 on kick, decays
     this.level = 0;                                   // for the UI meter
     this.peak = 0.001;                                // running normalization peak
-    this.bassAvg = 0.001;                             // long-term bass average
     this.loud = 0;                                    // raw loudness vs slow peak
     this.loudReference = 0.25;
     this.rms = 0;
-    this.lastBeatAt = 0;
     this._edges = null;
     this._edgeSr = 0;
     this.eq = 0;                // equal-loudness blend: 0 = flat, 1 = full A-weight
@@ -143,7 +140,7 @@ export class BandAnalyzer {
       v *= this._hearingFactors[b];
       this._wraw[b] = v;
       if (v > mx) mx = v;
-      if (b < 10) bass += raw[b];   // beat detection: physical bass, untilted
+      if (b < 10) bass += raw[b];   // physical bass for the level meter
     }
     this.peak = Math.max(mx, this.peak * 0.996);
     const norm = 1 / this.peak;
@@ -176,7 +173,6 @@ export class BandAnalyzer {
 
     bass = shape(clamp01(bass / 10));
     this.bassEnergy = bass;
-    this.bassAvg = this.bassAvg * 0.995 + this.bassEnergy * 0.005;
 
     let energy = 0;
     for (let b = 0; b < this.count; b++) {
@@ -188,24 +184,5 @@ export class BandAnalyzer {
     }
     this.energy = clamp01((energy / this.count) * 2.2);
     this.level = clamp01(this.energy * 1.4 + this.bassEnergy * 0.6);
-  }
-
-  /** call once per rendered frame: drives beat decay */
-  tickBeat(nowMs) {
-    // beat trigger is evaluated by the sources via `maybeBeat()`
-    this.beat *= 0.92;
-    if (this.beat < 0.001) this.beat = 0;
-  }
-
-  /** crude energy-flux kick detector; returns true on a fresh beat.
-   *  The kick's strength follows the hit: a quiet sub-bass swell barely
-   *  nudges `beat`, a heavy slam gets the full value. */
-  maybeBeat(nowMs) {
-    if (this.bassEnergy > 0.28 && this.bassEnergy > this.bassAvg * 1.45 && nowMs - this.lastBeatAt > 180) {
-      this.lastBeatAt = nowMs;
-      this.beat = clamp01((this.bassEnergy - 0.28) / 0.35);
-      return this.beat > 0;
-    }
-    return false;
   }
 }

@@ -211,7 +211,6 @@ const isPrimaryWallpaper = isWallpaperWindow && wallParams.get('primary') === '1
 const remoteAnalyzer = {
   bands: new Float32Array(64),
   energy: 0,
-  beat: 0,
   level: 0,
   loud: 0,
   lastUpdate: 0,
@@ -222,11 +221,10 @@ if (isWallpaperWindow) {
   // wallpaper windows are click-through: the main process feeds us the global
   // cursor so the wallpaper still parallaxes with the mouse
   bridge.onCursor(({ nx, ny }) => scene.setExternalPointer(nx, ny));
-  bridge.onSpectrum((bands, energy, beat, loud) => {
+  bridge.onSpectrum((bands, energy, loud) => {
     const n = Math.min(bands.length, remoteAnalyzer.bands.length);
     for (let i = 0; i < n; i++) remoteAnalyzer.bands[i] = bands[i];
     remoteAnalyzer.energy = energy;
-    remoteAnalyzer.beat = beat;
     remoteAnalyzer.level = energy;
     remoteAnalyzer.loud = loud;
     remoteAnalyzer.lastUpdate = performance.now();
@@ -384,10 +382,10 @@ if (!isWallpaperWindow) {
     if (document.hidden && !wallpaperAudioActive) { lastA = now; return; }
     const dt = Math.min(50, now - lastA);
     lastA = now;
-    const a = audio.frame(dt, now);
+    const a = audio.frame();
     if (calibration && audio.mode !== 'none' && Number.isFinite(a.rms)) calibration.peak = Math.max(calibration.peak, a.rms);
     advanceIdle(a, dt, now);
-    if (wallpaperAudioActive) bridge.sendSpectrum(a.bands, a.energy, a.beat, a.loud);
+    if (wallpaperAudioActive) bridge.sendSpectrum(a.bands, a.energy, a.loud);
   }, 33);
 }
 

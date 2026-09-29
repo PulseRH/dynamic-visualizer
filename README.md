@@ -110,7 +110,7 @@ src/js/sampler.js      image → positions/colors/nearness arrays
 src/js/depth.js        heuristic depth + Depth-Anything ONNX path
 src/js/audio.js        source switching, ring buffer, per-frame analysis
 src/js/fft.js          radix-2 FFT (PulseAudio + demo paths)
-src/js/bands.js        log bands, normalization, smoothing, beat detection
+src/js/bands.js        log bands, normalization, smoothing
 src/js/demo.js         built-in demo track synthesizer
 src/js/app.js          boot, render loop, adaptive quality, idle sleep
 src/js/ui.js           settings panel wiring, toasts, drag & drop / paste

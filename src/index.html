@@ -67,7 +67,7 @@
         <input type="range" id="glow" min="0.2" max="2.5" step="0.05" />
         <span class="val"></span>
       </label>
-      <label class="slider-row"><span class="lbl">Audio boost<span class="q" data-tip="Extra brightness only on the loud, moving points."></span></span>
+      <label class="slider-row"><span class="lbl">Audio boost<span class="q" data-tip="Extra light and point-size pulse on active bands. At 0, neither adds brightness; band movement and hue shift still work."></span></span>
         <input type="range" id="boost" min="0" max="3" step="0.05" />
         <span class="val"></span>
       </label>
@@ -135,10 +135,6 @@
       </svg>
       <button id="calibrateEnergy" class="btn full" type="button">Calibrate full energy · 10 seconds</button>
       <p id="calibrationStatus" style="font-size:12px;opacity:0.7" aria-live="polite">Play an energetic section, then calibrate. The reference stays saved. Recalibrate after changing source, volume, or audio tuning.</p>
-      <label class="slider-row"><span class="lbl">Beat kick<span class="q" data-tip="Strength of the push on detected bass hits. Kicks scale with how hard the hit is; 0 = off."></span></span>
-        <input type="range" id="kickStrength" min="0" max="1" step="0.05" />
-        <span class="val"></span>
-      </label>
       <label class="check-row"><input type="checkbox" id="centeredMotion" /> Centered motion<span class="q" data-tip="Quiet bands pull points back while loud bands push them forward, instead of only pushing forward."></span></label>
       <label class="check-row"><input type="checkbox" id="equalDepthMovement" /> Equal depth movement<span class="q" data-tip="Give distant and near depth layers the same audio displacement range. Frequency bands still decide which parts move."></span></label>
       <label class="slider-row"><span class="lbl">Speed ↔ volume<span class="q" data-tip="How much louder music speeds up the wave and shimmer motion."></span></span>
@@ -176,11 +172,11 @@
           <input type="range" id="tiltPivot" min="0" max="1" step="0.05" />
           <span class="val"></span>
         </label>
-        <label class="slider-row"><span class="lbl">Stickiness in<span class="q" data-tip="How fast bands jump up when sound rises. 0 = instant, 1 = reluctant."></span></span>
+        <label class="slider-row"><span class="lbl">Ease in<span class="q" data-tip="Attack stickiness: how slowly bands rise with sound. 0 = instant, 1 = slow."></span></span>
           <input type="range" id="stickyIn" min="0" max="1" step="0.05" />
           <span class="val"></span>
         </label>
-        <label class="slider-row"><span class="lbl">Stickiness out<span class="q" data-tip="How long bands hold after sound drops. 0 = drop instantly, 1 = long hold."></span></span>
+        <label class="slider-row"><span class="lbl">Ease out<span class="q" data-tip="Release stickiness: how slowly bands fall after sound drops. 0 = instant, 1 = long hold."></span></span>
           <input type="range" id="stickyOut" min="0" max="1" step="0.05" />
           <span class="val"></span>
         </label>
@@ -189,7 +185,7 @@
         <input type="range" id="bands" min="8" max="128" step="4" />
         <span class="val"></span>
       </label>
-      <label class="slider-row"><span class="lbl">Overscan<span class="q" data-tip="Extra zoom so parallax never reveals an edge. Follows Parallax automatically unless you move it yourself."></span></span>
+      <label class="slider-row"><span class="lbl">Zoom / crop<span class="q" data-tip="Zooms into the image and crops its edges. Increases automatically with Parallax to keep edges covered; moving this slider sets it manually."></span></span>
         <input type="range" id="overscan" min="1" max="1.6" step="0.05" />
         <span class="val"></span>
       </label>
