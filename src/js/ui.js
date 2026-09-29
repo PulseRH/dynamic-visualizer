@@ -103,6 +103,7 @@ export class UI {
     slider('sensCurve', 'sensCurve', (v) => v.toFixed(2));
     slider('eqCurve', 'eqCurve', (v) => v.toFixed(2));
     slider('tiltEQ', 'tiltEQ', (v) => v.toFixed(2));
+    slider('highBoost', 'highBoost', (v) => v.toFixed(2));
     slider('tiltPivot', 'tiltPivot', (v) => v.toFixed(2));
     slider('stickyIn', 'stickyIn', (v) => v.toFixed(2));
     slider('stickyOut', 'stickyOut', (v) => v.toFixed(2));
@@ -285,6 +286,7 @@ export class UI {
     setSlider('sensCurve', get('sensCurve'));
     setSlider('eqCurve', get('eqCurve'));
     setSlider('tiltEQ', get('tiltEQ'));
+    setSlider('highBoost', get('highBoost'));
     setSlider('tiltPivot', get('tiltPivot'));
     setSlider('stickyIn', get('stickyIn'));
     setSlider('stickyOut', get('stickyOut'));
@@ -296,12 +298,23 @@ export class UI {
     setSlider('quietMovement', get('quietMovement'));
     $('quietMovement').parentElement.querySelector('.val').textContent = `${Math.round(get('quietMovement') * 100)}%`;
     setSlider('energyResponse', get('energyResponse'));
-    const curveKey = `${get('quietMovement')}:${get('energyResponse')}`;
+    const curveKey = `${get('quietMovement')}:${get('energyResponse')}:${get('sensGain')}:${get('sensFloor')}:${get('sensCurve')}`;
     if (this._curveKey !== curveKey) {
       this._curveKey = curveKey;
+      const gain = get('sensGain');
+      const floor = get('sensFloor');
+      const curve = get('sensCurve');
+      const threshold = Math.min(1, floor / gain);
+      const cutoffX = 28 + threshold * 238;
+      $('noiseFloorShade').setAttribute('width', String(threshold * 238));
+      $('noiseFloorLine').setAttribute('d', `M${cutoffX} 8V72`);
       const points = Array.from({ length: 65 }, (_, i) => {
         const x = i / 64;
-        return `${i ? 'L' : 'M'}${28 + x * 238},${72 - movementResponse(x, get('quietMovement'), get('energyResponse')) * 64}`;
+        const amplified = Math.min(1, x * gain);
+        const aboveFloor = amplified <= floor ? 0 : (amplified - floor) / (1 - floor);
+        const band = Math.pow(aboveFloor, curve);
+        const motion = band * movementResponse(x, get('quietMovement'), get('energyResponse'));
+        return `${i ? 'L' : 'M'}${28 + x * 238},${72 - motion * 64}`;
       });
       $('responseLine').setAttribute('d', points.join(' '));
     }

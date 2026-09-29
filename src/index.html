@@ -128,11 +128,26 @@
         <input type="range" id="energyResponse" min="0.25" max="4" step="0.05" />
         <span class="val"></span>
       </label>
-      <svg id="responseGraph" viewBox="0 0 280 94" role="img" aria-label="Loudness to movement response" style="width:100%;height:94px;color:#9fcfff">
+      <label class="slider-row"><span class="lbl">Input gain<span class="q" data-tip="Amplifies the captured audio before analysis."></span></span>
+        <input type="range" id="sensGain" min="0.2" max="3" step="0.05" />
+        <span class="val"></span>
+      </label>
+      <label class="slider-row"><span class="lbl">Noise floor<span class="q" data-tip="Normalized band levels below this cutoff stay still. The shaded part of the graph shows the cutoff after Input gain."></span></span>
+        <input type="range" id="sensFloor" min="0" max="0.5" step="0.01" />
+        <span class="val"></span>
+      </label>
+      <label class="slider-row"><span class="lbl">Curve<span class="q" data-tip="Response gamma. Higher = quiet sounds move less and only peaks move."></span></span>
+        <input type="range" id="sensCurve" min="0.5" max="4" step="0.05" />
+        <span class="val"></span>
+      </label>
+      <svg id="responseGraph" viewBox="0 0 280 94" role="img" aria-label="Approximate band movement response with noise floor cutoff" style="width:100%;height:94px;color:#9fcfff">
+        <rect id="noiseFloorShade" x="28" y="8" width="0" height="64" fill="#9fcfff" opacity="0.12" />
         <path d="M28 8V72H266" fill="none" stroke="currentColor" opacity="0.3" />
+        <path id="noiseFloorLine" d="M28 8V72" fill="none" stroke="currentColor" opacity="0.55" stroke-dasharray="3 3" />
         <path id="responseLine" fill="none" stroke="currentColor" stroke-width="2" />
-        <g fill="currentColor" font-size="10"><text x="2" y="14">100%</text><text x="5" y="73">0%</text><text x="28" y="89">Quiet</text><text x="205" y="89">Full energy</text></g>
+        <g fill="currentColor" font-size="10"><text x="2" y="14">100%</text><text x="5" y="73">0%</text><text x="28" y="89">Quiet input</text><text x="205" y="89">Full input</text></g>
       </svg>
+      <p class="hint">Approximate band movement as input rises. Shaded area stays below the noise floor; smoothing and the rest of the music also affect the result.</p>
       <button id="calibrateEnergy" class="btn full" type="button">Calibrate full energy · 10 seconds</button>
       <p id="calibrationStatus" style="font-size:12px;opacity:0.7" aria-live="polite">Play an energetic section, then calibrate. The reference stays saved. Recalibrate after changing source, volume, or audio tuning.</p>
       <label class="check-row"><input type="checkbox" id="centeredMotion" /> Centered motion<span class="q" data-tip="Quiet bands pull points back while loud bands push them forward, instead of only pushing forward."></span></label>
@@ -146,18 +161,6 @@
         <span class="val"></span>
       </label>
       <label class="check-row"><input type="checkbox" id="cursorRipple" /> Cursor ripple<span class="q" data-tip="Points swell softly around the cursor position."></span></label>
-      <label class="slider-row"><span class="lbl">Input gain<span class="q" data-tip="Amplifies the captured audio before analysis."></span></span>
-        <input type="range" id="sensGain" min="0.2" max="3" step="0.05" />
-        <span class="val"></span>
-      </label>
-      <label class="slider-row"><span class="lbl">Noise floor<span class="q" data-tip="Sounds below this level produce no motion — hides room noise and hum."></span></span>
-        <input type="range" id="sensFloor" min="0" max="0.5" step="0.01" />
-        <span class="val"></span>
-      </label>
-      <label class="slider-row"><span class="lbl">Curve<span class="q" data-tip="Response gamma. Higher = quiet sounds move less and only peaks move."></span></span>
-        <input type="range" id="sensCurve" min="0.5" max="4" step="0.05" />
-        <span class="val"></span>
-      </label>
       <details class="fold">
         <summary>Advanced response</summary>
         <label class="slider-row"><span class="lbl">Hearing curve<span class="q" data-tip="Blends toward equal-loudness weighting: mids and highs that you hear clearly move more, sub-bass less. Above 1 only the ear's peak region keeps moving — set high to test."></span></span>
@@ -166,6 +169,10 @@
         </label>
         <label class="slider-row"><span class="lbl">Tilt EQ<span class="q" data-tip="Spectral tilt applied before normalization. Positive = highs move more (on Depth: the front), negative = bass moves more."></span></span>
           <input type="range" id="tiltEQ" min="-1" max="1" step="0.05" />
+          <span class="val"></span>
+        </label>
+        <label class="slider-row"><span class="lbl">High boost<span class="q" data-tip="Raises upper-frequency movement after normalization, strongest at the top. Bass and mids keep their level; 0 is off. Use Tilt EQ to trade bass against highs."></span></span>
+          <input type="range" id="highBoost" min="0" max="3" step="0.05" />
           <span class="val"></span>
         </label>
         <label class="slider-row"><span class="lbl">Tilt point<span class="q" data-tip="Where the tilt pivots between cut and boost. Lower pivots toward bass, higher toward highs."></span></span>

@@ -30,8 +30,10 @@ export class BandAnalyzer {
     this._wraw = new Float32Array(count);       // tilt+EQ weighted spectrum
     this._tiltFactors = new Float64Array(count);
     this._hearingFactors = new Float64Array(count);
+    this._highBoostFactors = new Float64Array(count);
     this._responseCache = null;
     this.tiltEQ = 0;            // spectral tilt: -1 bass-reactive, +1 highs-reactive
+    this.highBoost = 0;         // raises highs after peak normalization, without lowering lows
     this.tiltPivot = 0.5;       // where the tilt crosses zero (0 = bass end, 1 = highs)
     this.stickyIn = 0.5;        // attack: how fast bands jump up (0 fast, 1 reluctant)
     this.stickyOut = 0.5;       // release: how long bands hold after a drop
@@ -108,8 +110,9 @@ export class BandAnalyzer {
 
   _updateResponseFactors(tilt, pivot) {
     const cached = this._responseCache;
+    const highBoost = Math.max(0, Math.min(3, this.highBoost ?? 0));
     if (cached && cached.tilt === tilt && cached.pivot === pivot &&
-        cached.eq === this.eq && cached.weights === this._eqW) return;
+        cached.eq === this.eq && cached.highBoost === highBoost && cached.weights === this._eqW) return;
     const eqOn = this.eq > 0 && this._eqW;
     for (let b = 0; b < this.count; b++) {
       const t = this.count > 1 ? b / (this.count - 1) : 0;
@@ -118,8 +121,11 @@ export class BandAnalyzer {
       this._hearingFactors[b] = eqOn
         ? (this.eq <= 1 ? 1 + this.eq * (w - 1) : Math.pow(Math.max(w, 0.005), this.eq))
         : 1;
+      const highT = Math.max(0, Math.min(1, (t - 0.65) / 0.25));
+      const highRamp = highT * highT * (3 - 2 * highT);
+      this._highBoostFactors[b] = 1 + highBoost * highRamp;
     }
-    this._responseCache = { tilt, pivot, eq: this.eq, weights: this._eqW };
+    this._responseCache = { tilt, pivot, eq: this.eq, highBoost, weights: this._eqW };
   }
 
   _finish() {
@@ -176,7 +182,10 @@ export class BandAnalyzer {
 
     let energy = 0;
     for (let b = 0; b < this.count; b++) {
-      let v = shape(this._wraw[b]);
+      // Boost only the upper bands after the shared peak has been calculated.
+      // That keeps bass/mids at their original level instead of renormalizing
+      // them downward as a positive spectral tilt can do.
+      let v = shape(this._wraw[b] * this._highBoostFactors[b]);
       if (!Number.isFinite(v)) v = 0;
       const prev = bands[b];
       bands[b] = prev + (v - prev) * (v > prev ? up : down);

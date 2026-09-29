@@ -310,6 +310,7 @@ function applyAudioResponse() {
   a.eq = get('eqCurve');
   a.loudReference = get('loudReference');
   a.tiltEQ = get('tiltEQ');
+  a.highBoost = get('highBoost');
   a.tiltPivot = get('tiltPivot');
   a.stickyIn = get('stickyIn');
   a.stickyOut = get('stickyOut');

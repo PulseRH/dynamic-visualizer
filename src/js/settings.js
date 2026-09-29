@@ -26,6 +26,7 @@ const DEFAULTS = {
   sensCurve: 1.5,          // response gamma: higher = quiet sounds move less
   eqCurve: 0,              // equal-loudness weighting: motion follows hearing (0 = off, 4 = max)
   tiltEQ: 0,               // spectral tilt: -1 bass-reactive, +1 highs-reactive
+  highBoost: 0,            // extra high-frequency response after normalization; lows stay put
   tiltPivot: 0.5,          // where the tilt crosses zero (0 bass end, 1 highs end)
   stickyIn: 0.5,           // band attack: 0 = jump instantly, 1 = reluctant
   stickyOut: 0.5,          // band release: 0 = drop instantly, 1 = long hold
