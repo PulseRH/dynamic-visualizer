@@ -25,6 +25,7 @@ const VERT = /* glsl */ `
   uniform float uXYTime;   // xy-motion clock, runs faster with volume
   uniform float uWaveTime; // wave-phase clock, also volume-ramped
   uniform float uCentered; // 1: audio mode displaces around rest (both ways)
+  uniform float uEqualDepthMovement; // 1: audio depth range is independent of layer depth
   uniform float uDyn;      // Dynamics slider: loud passages move more
   uniform float uVis;
   uniform float uExitPush;
@@ -84,8 +85,10 @@ const VERT = /* glsl */ `
     w = mix(direct, style, uMotionMix);
     }
 
-    float disp = w * amp * uIntensity * uZMove * 0.11 * (0.35 + 0.65 * near) * uDyn;
-    disp += uBeat * 0.035 * uZMove * (0.15 + near) * uDyn;   // kicks push the cloud forward
+    float depthRange = mix(0.35 + 0.65 * near, 1.0, uEqualDepthMovement);
+    float kickRange = mix(0.15 + near, 1.15, uEqualDepthMovement);
+    float disp = w * amp * uIntensity * uZMove * 0.11 * depthRange * uDyn;
+    disp += uBeat * 0.035 * uZMove * kickRange * uDyn;   // kicks push the cloud forward
 
     vec3 pos = vec3(position.xy, near * uDepthScale + disp);
     pos.xy += vec2(sin(uXYTime * 3.1 + aRand * 40.0), cos(uXYTime * 2.6 + aRand * 30.0))
@@ -211,6 +214,7 @@ export class VisualScene {
       uXYTime: { value: 0 },
       uWaveTime: { value: 0 },
       uCentered: { value: 0 },
+      uEqualDepthMovement: { value: 0 },
       uDyn: { value: 1 },
       uExitPush: { value: 0 },
       uCursor: { value: new THREE.Vector3(0, 0, 0) },
@@ -424,6 +428,7 @@ export class VisualScene {
     this.energyResponse = s.energyResponse;
     this.kickStrength = s.kickStrength;
     this.uniforms.uCentered.value = s.centeredMotion ? 1 : 0;
+    this.uniforms.uEqualDepthMovement.value = s.equalDepthMovement ? 1 : 0;
     this.setBandCount(s.bands);
     // size compensation: additive brightness ∝ point area (diameter²),
     // normalized so size ≈ 1 (diameter = spacing) is the reference look

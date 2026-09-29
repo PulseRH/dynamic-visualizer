@@ -123,6 +123,7 @@ export class UI {
     $('cursorRipple').onchange = (e) => set({ cursorRipple: e.target.checked });
     const cmw = $('centeredMotion');
     if (cmw) cmw.onchange = (e) => set({ centeredMotion: e.target.checked });
+    $('equalDepthMovement').onchange = (e) => set({ equalDepthMovement: e.target.checked });
 
     // Parallax auto-raises Overscan (so the edges stay hidden) until the user
     // takes manual control of Overscan.
@@ -315,6 +316,7 @@ export class UI {
     $('cursorRipple').checked = !!get('cursorRipple');
     const cm = $('centeredMotion');
     if (cm) cm.checked = !!get('centeredMotion');
+    $('equalDepthMovement').checked = !!get('equalDepthMovement');
 
     const src = get('audioSource');
     const hints = {

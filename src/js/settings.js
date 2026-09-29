@@ -36,6 +36,7 @@ const DEFAULTS = {
   energyResponse: 1,       // loudness response exponent: gentle < 1, dramatic > 1
   loudReference: 0.25,      // fixed RMS reference; explicit calibration replaces it
   centeredMotion: false,   // audio mode: quiet bands pull back, loud push forward
+  equalDepthMovement: false, // remove the near-layer bias from audio depth displacement
   kickStrength: 1.0,       // beat kick multiplier (0 = kicks off)
   previewPaused: false,    // freeze the preview window (wallpaper keeps running)
   previewFullQuality: false, // don't throttle the preview while wallpaper mode is on
