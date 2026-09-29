@@ -7,7 +7,8 @@ const DEFAULTS = {
   pointSize: 1.0,
   glow: 1.1,
   boost: 1.0,
-  waveMode: 'ripple',      // 'wave' | 'ripple' | 'bands' | 'drift'
+  waveMode: 'ripple',      // style blended with direct audio motion
+  motionMix: 0,           // 0 = direct audio, 1 = selected style
   bandMap: 'radial',       // which region reacts to which bands: 'depth' | 'radial' | 'vertical' | 'horizontal'
   intensity: 1.0,
   depthMove: 1.0,          // Z motion multiplier (toward/away from viewer)
@@ -50,7 +51,15 @@ const KEY = 'dv.settings.v1';
 function load() {
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch {}
-  return { ...DEFAULTS, ...saved };
+  return { ...DEFAULTS, ...migrateMotion(saved) };
+}
+
+function migrateMotion(saved) {
+  // Preserve the look of settings saved before Audio and styles could mix.
+  if (saved.motionMix !== undefined) return saved;
+  if (saved.waveMode === 'audio') return { ...saved, waveMode: 'ripple', motionMix: 0 };
+  if (saved.waveMode) return { ...saved, motionMix: 1 };
+  return saved;
 }
 
 const settings = load();
@@ -76,7 +85,7 @@ export function onChange(fn) { listeners.add(fn); return () => listeners.delete(
 // preview window (storage event, plus a poll as a safety net).
 function resync() {
   let saved = {};
-  try { saved = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch {}
+  try { saved = migrateMotion(JSON.parse(localStorage.getItem(KEY) || '{}')); } catch {}
   const patch = {};
   for (const [k, v] of Object.entries(saved)) {
     if (settings[k] !== v) { settings[k] = v; patch[k] = v; }

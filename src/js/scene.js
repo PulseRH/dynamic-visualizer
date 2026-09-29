@@ -14,6 +14,7 @@ const VERT = /* glsl */ `
   uniform float uSize;
   uniform float uCamZ;
   uniform float uMode;
+  uniform float uMotionMix;
   uniform float uBandMap;
   uniform float uBandCount;
   uniform float uInvert;
@@ -59,27 +60,28 @@ const VERT = /* glsl */ `
     float lightAmp = amp;                     // no global dimming: quiet
                                               // regions keep their base light
 
-    float w;
+    float direct = mix(1.0, amp * 2.0 - 0.8, uCentered);
+    float w = direct;
+    // Skip the style's trigonometry entirely at Audio only.
+    if (uMotionMix > 0.0) {
+    float style;
     if (uMode < 0.5) {
       // traveling wave across the image
-      w = sin(uWaveTime * 1.7 + uvw.x * 7.0 + near * 5.0 + aRand * 0.7);
+      style = sin(uWaveTime * 1.7 + uvw.x * 7.0 + near * 5.0 + aRand * 0.7);
     } else if (uMode < 1.5) {
       // radial ripple from the center
       float d = distance(uvw, vec2(0.5));
-      w = sin(d * 16.0 - uWaveTime * 3.1 + near * 3.0) * (1.0 - d * 0.55);
+      style = sin(d * 16.0 - uWaveTime * 3.1 + near * 3.0) * (1.0 - d * 0.55);
     } else if (uMode < 2.5) {
       // horizontal slices pulsing like bars
       float row = floor(uvw.y * 28.0);
-      w = sin(uWaveTime * 2.2 + row * 0.9) * 0.75 + sin(uWaveTime * 5.3 + row * 2.1) * 0.25;
+      style = sin(uWaveTime * 2.2 + row * 0.9) * 0.75 + sin(uWaveTime * 5.3 + row * 2.1) * 0.25;
     } else if (uMode < 3.5) {
       // slow ambient drift (nice at idle / low energy)
-      w = sin(uvw.x * 9.0 + uWaveTime * 0.5) * sin(uvw.y * 7.0 - uWaveTime * 0.42) * 1.3
+      style = sin(uvw.x * 9.0 + uWaveTime * 0.5) * sin(uvw.y * 7.0 - uWaveTime * 0.42) * 1.3
         + sin(uWaveTime * 0.8 + aRand * 6.2831) * 0.45;
-    } else {
-      // pure audio: no self-motion, the spectrum alone displaces. Centered
-      // mode re-centers the response around rest: quiet bands pull back,
-      // loud bands push forward, ~0.4 sits at rest
-      w = mix(1.0, amp * 2.0 - 0.8, uCentered);
+    }
+    w = mix(direct, style, uMotionMix);
     }
 
     float disp = w * amp * uIntensity * uZMove * 0.11 * (0.35 + 0.65 * near) * uDyn;
@@ -153,7 +155,7 @@ const BACKDROP_FRAG = /* glsl */ `
   }
 `;
 
-const MODES = { wave: 0, ripple: 1, bands: 2, drift: 3, audio: 4 };
+const MODES = { wave: 0, ripple: 1, bands: 2, drift: 3 };
 const BAND_MAPS = { depth: 0, radial: 1, vertical: 2, horizontal: 3 };
 
 export class VisualScene {
@@ -197,6 +199,7 @@ export class VisualScene {
       uSize: { value: 2 },
       uCamZ: { value: 1.4 },
       uMode: { value: 1 },
+      uMotionMix: { value: 0 },
       uBandMap: { value: 1 },
       uBandCount: { value: 64 },
       uInvert: { value: 0 },
@@ -403,6 +406,7 @@ export class VisualScene {
     this.uniforms.uIntensity.value = s.intensity;
     this.uniforms.uDepthScale.value = s.depthScale;
     this.uniforms.uMode.value = MODES[s.waveMode] ?? 1;
+    this.uniforms.uMotionMix.value = s.motionMix;
     this.uniforms.uBandMap.value = BAND_MAPS[s.bandMap] ?? 0;
     this.uniforms.uInvert.value = s.invertBands ? 1 : 0;
     this.uniforms.uGlow.value = s.glow;
@@ -426,8 +430,7 @@ export class VisualScene {
     this.uniforms.uSizeComp.value =
       1 / THREE.MathUtils.clamp(s.pointSize * s.pointSize, 0.35, 6);
     this.pointSizeSetting = s.pointSize;
-    // 'audio' mode = zero autonomous motion: no camera drift, spectrum only
-    this.autoMotion = s.waveMode !== 'audio';
+    this.motionMix = s.motionMix;
     this._fitCamera();
     this._layoutBackdrop();
   }
@@ -493,7 +496,7 @@ export class VisualScene {
     // pointer parallax is always available (it's user-driven); the autonomous
     // drift is suppressed in 'audio' mode
     const p = parallaxStrength * 0.06;
-    const drift = this.autoMotion ? 1 : 0;
+    const drift = this.motionMix ?? 0;
     this.pointer.x += (this.pointer.tx - this.pointer.x) * Math.min(1, dt * 3);
     this.pointer.y += (this.pointer.ty - this.pointer.y) * Math.min(1, dt * 3);
     // music parallax: bass-vs-treble tilt drives x, bass level drives y —

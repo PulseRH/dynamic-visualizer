@@ -76,13 +76,17 @@
 
     <section>
       <h3>Motion</h3>
+      <p class="hint">Choose a shape to blend with direct audio movement:</p>
       <div class="seg" id="waveSeg">
-        <button data-v="audio">Audio</button>
         <button data-v="wave">Wave</button>
         <button data-v="ripple">Ripple</button>
         <button data-v="bands">Bands</button>
         <button data-v="drift">Drift</button>
       </div>
+      <label class="slider-row"><span class="lbl">Motion mix<span class="q" data-tip="0% keeps direct audio movement. Raise it to blend in the selected motion style; 100% matches the old style mode."></span></span>
+        <input type="range" id="motionMix" min="0" max="1" step="0.05" />
+        <span class="val"></span>
+      </label>
       <p class="hint">Bands affect the image where you map them:</p>
       <div class="seg" id="bandMapSeg">
         <button data-v="radial">Radial</button>
