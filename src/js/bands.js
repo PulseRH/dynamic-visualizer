@@ -123,7 +123,12 @@ export class BandAnalyzer {
         : 1;
       const highT = Math.max(0, Math.min(1, (t - 0.65) / 0.25));
       const highRamp = highT * highT * (3 - 2 * highT);
-      this._highBoostFactors[b] = 1 + highBoost * highRamp;
+      // Keep the familiar upper-mid lift, then add a second rise across the
+      // last octave. The old ramp was already flat by ~9 kHz, where music
+      // usually has much less energy than in the high mids.
+      const topT = Math.max(0, Math.min(1, (t - 0.88) / 0.11));
+      const topRamp = topT * topT * (3 - 2 * topT);
+      this._highBoostFactors[b] = 1 + highBoost * (highRamp + 2 * topRamp);
     }
     this._responseCache = { tilt, pivot, eq: this.eq, highBoost, weights: this._eqW };
   }
