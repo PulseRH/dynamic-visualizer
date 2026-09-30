@@ -128,7 +128,11 @@ const VERT = /* glsl */ `
       float phase = band * 2.399963;
       vec2 shake = vec2(sin(uXYTime * 4.3 + phase),
                         sin(uXYTime * 5.7 + phase * 1.37 + 1.1));
-      pos.xy += shake * uExtraLayers.w * layerDrive * 0.045;
+      // Square band level to reserve the bigger shakes for loud peaks.
+      // A curved amount also gives the lower half of the slider finer control.
+      float shakeDrive = amp * layerDrive;
+      float shakeAmount = uExtraLayers.w * uExtraLayers.w;
+      pos.xy += shake * shakeAmount * shakeDrive * 0.045;
     }
     // idle exit: 'fly-by' rush points toward the camera as they fade;
     // the default clean fade just dissolves in place

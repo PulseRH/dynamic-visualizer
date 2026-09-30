@@ -91,6 +91,18 @@ try {
   if (Math.hypot(otherBand[2][0] - end[2][0], otherBand[2][1] - end[2][1]) < 1) {
     throw new Error('Different bands did not receive different motion phases');
   }
+  function travel(amount, level) {
+    const rest = centres(frame({}, level))[0];
+    const moved = centres(frame({ motionBandShake: amount }, level))[0];
+    return Math.hypot(moved[0] - rest[0], moved[1] - rest[1]);
+  }
+  const peak = travel(1, 1);
+  const mediumRatio = travel(1, 0.5) / peak;
+  const amountRatio = travel(0.5, 1) / peak;
+  if (Math.abs(mediumRatio - 0.25) > 0.05) throw new Error(`Band shake loudness curve: ${mediumRatio}`);
+  if (Math.abs(amountRatio - 0.25) > 0.05) throw new Error(`Band shake slider curve: ${amountRatio}`);
+  checks.mediumShakeRelativeToPeak = mediumRatio;
+  checks.halfSliderRelativeToFull = amountRatio;
   out.textContent = 'PASS: layers work with XY move 0, combine, stay still in silence; Band shake translates every point in a band together.\n'
     + JSON.stringify(checks, null, 2);
 } catch (error) {
