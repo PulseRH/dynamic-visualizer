@@ -4,6 +4,7 @@
 import { get, set, onChange, getAll } from './settings.js';
 import { bridge } from './bridge.js';
 import { movementResponse } from './response.js';
+import { BAND_CHOICES, bandChoiceIndex } from './band-choices.js';
 
 const $ = (sel) => document.getElementById(sel.replace(/^#/, ''));
 
@@ -79,11 +80,11 @@ export class UI {
   }
 
   _wireSliders() {
-    const slider = (id, key, fmt) => {
+    const slider = (id, key, fmt, decode = (v) => v) => {
       const el = $(id);
       const val = el.parentElement.querySelector('.val');
       el.oninput = () => {
-        const v = Number(el.value);
+        const v = decode(Number(el.value));
         val.textContent = fmt ? fmt(v) : String(v);
         set({ [key]: v });
       };
@@ -103,11 +104,12 @@ export class UI {
     slider('sensCurve', 'sensCurve', (v) => v.toFixed(2));
     slider('eqCurve', 'eqCurve', (v) => v.toFixed(2));
     slider('tiltEQ', 'tiltEQ', (v) => v.toFixed(2));
-    slider('highBoost', 'highBoost', (v) => v.toFixed(2));
     slider('tiltPivot', 'tiltPivot', (v) => v.toFixed(2));
+    slider('highBoost', 'highBoost', (v) => v.toFixed(2));
     slider('stickyIn', 'stickyIn', (v) => v.toFixed(2));
     slider('stickyOut', 'stickyOut', (v) => v.toFixed(2));
-    slider('bands', 'bands', (v) => String(v));
+    $('bands').max = String(BAND_CHOICES.length - 1);
+    slider('bands', 'bands', (v) => String(v), (i) => BAND_CHOICES[i]);
     slider('depthMove', 'depthMove', (v) => v.toFixed(2));
     slider('xyMove', 'xyMove', (v) => v.toFixed(2));
     slider('quietMovement', 'quietMovement', (v) => `${Math.round(v * 100)}%`);
@@ -266,6 +268,7 @@ export class UI {
         val.textContent =
           id === 'pointCount' ? `${Math.round(v / 1000)}k` :
           id === 'pointSize' ? Number(v).toFixed(1) :
+          id === 'bands' ? String(get('bands')) :
           Number(v).toFixed(2);
       }
     };
@@ -286,11 +289,11 @@ export class UI {
     setSlider('sensCurve', get('sensCurve'));
     setSlider('eqCurve', get('eqCurve'));
     setSlider('tiltEQ', get('tiltEQ'));
-    setSlider('highBoost', get('highBoost'));
     setSlider('tiltPivot', get('tiltPivot'));
+    setSlider('highBoost', get('highBoost'));
     setSlider('stickyIn', get('stickyIn'));
     setSlider('stickyOut', get('stickyOut'));
-    setSlider('bands', get('bands'));
+    setSlider('bands', bandChoiceIndex(get('bands')));
     setSlider('depthMove', get('depthMove'));
     setSlider('xyMove', get('xyMove'));
     setSlider('parallax', get('parallax'));
