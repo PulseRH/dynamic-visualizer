@@ -7,6 +7,7 @@ const DEFAULTS = {
   pointSize: 1.0,
   glow: 1.1,
   boost: 1.0,              // extra per-band light and point-size pulse (0 = neither)
+  preserveBoostColor: true, // alpha blend reactive points to avoid additive white clipping
   hueReaction: 0,          // signed maximum per-band colour rotation in degrees
   waveMode: 'ripple',      // style blended with direct audio motion
   motionMix: 0,           // 0 = direct audio, 1 = selected style

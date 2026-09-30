@@ -20,6 +20,8 @@ const VERT = /* glsl */ `
   uniform float uBandCount;
   uniform float uInvert;
   uniform float uBoost;
+  uniform float uGlow;
+  uniform float uPreserveBoostColor;
   uniform float uHueEnabled;
   uniform float uSizeComp;
   uniform float uZMove;
@@ -131,12 +133,23 @@ const VERT = /* glsl */ `
     } else {
       vColor = lit;
     }
+    if (uPreserveBoostColor > 0.5) {
+      // Compress bright points once per vertex while preserving RGB proportions.
+      vec3 color = vColor * uGlow;
+      float peak = max(max(color.r, color.g), color.b);
+      if (peak > 0.75) {
+        float mappedPeak = 1.0 - 0.25 / (1.0 + (peak - 0.75) / 0.25);
+        color *= mappedPeak / peak;
+      }
+      vColor = color;
+    }
   }
 `;
 
 const FRAG = /* glsl */ `
   uniform float uGlow;
   uniform float uVis;
+  uniform float uPreserveBoostColor;
   varying vec3 vColor;
   varying float vAmp;
 
@@ -145,7 +158,11 @@ const FRAG = /* glsl */ `
     float d2 = dot(c, c);
     if (d2 > 0.25) discard;
     float a = smoothstep(0.25, 0.06, d2);
-    gl_FragColor = vec4(vColor * uGlow * uVis * a, a);   // premultiplied for additive
+    if (uPreserveBoostColor > 0.5) {
+      gl_FragColor = vec4(vColor, uVis * a);
+    } else {
+      gl_FragColor = vec4(vColor * uGlow * uVis * a, a); // original additive glow
+    }
   }
 `;
 
@@ -231,6 +248,7 @@ export class VisualScene {
       uExitPush: { value: 0 },
       uCursor: { value: new THREE.Vector3(0, 0, 0) },
       uGlow: { value: 1.1 },
+      uPreserveBoostColor: { value: 1 },
       uBands: { value: this.bandTex },
     };
 
@@ -238,7 +256,7 @@ export class VisualScene {
       uniforms: this.uniforms,
       vertexShader: VERT,
       fragmentShader: FRAG,
-      blending: THREE.AdditiveBlending,
+      blending: THREE.NormalBlending,
       depthTest: false,
       depthWrite: false,
       transparent: true,
@@ -456,6 +474,10 @@ export class VisualScene {
     this.uniforms.uInvert.value = s.invertBands ? 1 : 0;
     this.uniforms.uGlow.value = s.glow;
     this.uniforms.uBoost.value = s.boost;
+    const preserveBoostColor = !!s.preserveBoostColor;
+    this.uniforms.uPreserveBoostColor.value = preserveBoostColor ? 1 : 0;
+    const blending = preserveBoostColor ? THREE.NormalBlending : THREE.AdditiveBlending;
+    if (this.material.blending !== blending) this.material.blending = blending;
     this.uniforms.uZMove.value = s.depthMove;
     this.uniforms.uXYMove.value = s.xyMove;
     this.overscan = s.overscan;

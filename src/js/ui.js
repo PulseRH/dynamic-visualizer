@@ -121,6 +121,7 @@ export class UI {
     $('previewFullQuality').onchange = (e) => set({ previewFullQuality: e.target.checked });
     $('idleSleep').onchange = (e) => set({ idleSleep: e.target.checked });
     $('invertBands').onchange = (e) => set({ invertBands: e.target.checked });
+    $('preserveBoostColor').onchange = (e) => set({ preserveBoostColor: e.target.checked });
     $('hideBackdrop').onchange = (e) => set({ hideBackdrop: e.target.checked });
     $('flybyExit').onchange = (e) => set({ flybyExit: e.target.checked });
     $('cursorRipple').onchange = (e) => set({ cursorRipple: e.target.checked });
@@ -328,6 +329,7 @@ export class UI {
     $('previewFullQuality').checked = !!get('previewFullQuality');
     $('idleSleep').checked = get('idleSleep');
     $('invertBands').checked = !!get('invertBands');
+    $('preserveBoostColor').checked = !!get('preserveBoostColor');
     $('hideBackdrop').checked = !!get('hideBackdrop');
     $('flybyExit').checked = !!get('flybyExit');
     $('cursorRipple').checked = !!get('cursorRipple');
