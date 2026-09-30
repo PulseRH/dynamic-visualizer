@@ -426,8 +426,14 @@ function loop(now) {
   const spaced = Math.max(0, now - lastRender);
   lastRender = now;
 
-  // once the points are gone AND the wallpaper has finished rising: sleep
-  if (idleTarget === 0 && idleVis === 0 && scene.backdropSettled()) return;
+  // Show the plain wallpaper at full display resolution before sleeping, even
+  // if adaptive quality reduced the canvas while the music was playing.
+  let restoredIdleQuality = false;
+  if (idleTarget === 0 && idleVis === 0 && scene.quality < 1) {
+    scene.setQuality(1);
+    restoredIdleQuality = true;
+  }
+  if (idleTarget === 0 && idleVis === 0 && scene.backdropSettled() && !restoredIdleQuality) return;
 
   scene.render(analyzer, get('parallax'));
   ui.setLevel(analyzer.level);
@@ -435,7 +441,7 @@ function loop(now) {
   // adaptive quality: keep frame time inside the budget by stepping resolution
   frameEMA = frameEMA * 0.92 + spaced * 0.08;
   qualityTimer += spaced;
-  if (get('autoQuality') && qualityTimer > 2500) {
+  if (get('autoQuality') && idleTarget !== 0 && qualityTimer > 2500) {
     qualityTimer = 0;
     const budget = cap > 0 ? 1000 / cap : 16.7;
     if (frameEMA > budget * 1.35 && scene.quality > 0.55) scene.setQuality(scene.quality - 0.15);

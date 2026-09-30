@@ -5,6 +5,7 @@
 import * as THREE from '../vendor/three.module.js';
 import { movementResponse } from './response.js';
 import { buildHueLookup } from './hue.js';
+import { backdropTextureSize } from './backdrop-size.js';
 
 const VERT = /* glsl */ `
   uniform float uEnergy;
@@ -181,7 +182,7 @@ export class VisualScene {
       stencil: false,
     });
     this.renderer.setClearColor(0x000000, 1);
-    this.basePixelRatio = Math.min(window.devicePixelRatio || 1, 1.75);
+    this.basePixelRatio = Math.min(window.devicePixelRatio || 1, 2);
     this.quality = 1; // adaptive multiplier on pixel ratio
 
     this.scene = new THREE.Scene();
@@ -245,6 +246,7 @@ export class VisualScene {
 
     this.points = null;
     this.backdrop = null;
+    this.backdropSource = null;
     this.cloudAspect = 16 / 9;
 
     this._resize();
@@ -263,6 +265,7 @@ export class VisualScene {
     this.camera.updateProjectionMatrix();
     this._fitCamera();
     this._layoutBackdrop();
+    this._ensureBackdropResolution();
   }
 
   _fitCamera() {
@@ -279,10 +282,51 @@ export class VisualScene {
     if (!this.backdrop) return;
     // Pixel-lock the backdrop to the cloud: the cloud's world footprint is
     // (cloudAspect × 1) at distance camBaseZ; the backdrop sits 0.02 farther,
-    // so scaling its footprint by (camBaseZ + 0.02) / camBaseZ × overscan
-    // projects it onto exactly the same screen rect as the particles.
-    const k = ((this.camBaseZ + 0.02) / this.camBaseZ) * (this.overscan || 1);
+    // so scaling its footprint by (camBaseZ + 0.02) / camBaseZ
+    // projects it onto the same screen rect as the unshifted particles.
+    const k = (this.camBaseZ + 0.02) / this.camBaseZ;
     this.backdrop.scale.set(this.cloudAspect * k, k, 1);
+  }
+
+  _backdropSize() {
+    return backdropTextureSize(
+      this.backdropSource.width, this.backdropSource.height,
+      Math.ceil(window.innerWidth * this.basePixelRatio),
+      Math.ceil(window.innerHeight * this.basePixelRatio),
+      this.overscan || 1,
+      this.renderer.capabilities.maxTextureSize,
+    );
+  }
+
+  _createBackdropTexture() {
+    const { width, height } = this._backdropSize();
+    let source = this.backdropSource;
+    // ImageBitmap uploads ignore Texture.flipY, so draw it to a canvas once.
+    // Resize from the original bitmap directly to avoid a second resample.
+    const bitmap = typeof ImageBitmap !== 'undefined' && source instanceof ImageBitmap;
+    if (bitmap || source.width !== width || source.height !== height) {
+      const c = document.createElement('canvas');
+      c.width = width;
+      c.height = height;
+      c.getContext('2d').drawImage(source, 0, 0, width, height);
+      source = c;
+    }
+    const tex = new THREE.CanvasTexture(source);
+    // ShaderMaterials write display-space values directly to the framebuffer.
+    tex.colorSpace = THREE.NoColorSpace;
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    return tex;
+  }
+
+  _ensureBackdropResolution() {
+    if (!this.backdrop || !this.backdropSource) return;
+    const { width, height } = this._backdropSize();
+    const slot = this.backdrop.material.uniforms.uTex;
+    if (slot.value.image.width >= width && slot.value.image.height >= height) return;
+    const old = slot.value;
+    slot.value = this._createBackdropTexture();
+    old.dispose();
   }
 
   /** rebuild geometry from sampled cloud arrays */
@@ -351,40 +395,18 @@ export class VisualScene {
   setBackdrop(bitmapOrCanvas, mode) {
     if (this.backdrop) {
       this.scene.remove(this.backdrop);
+      this.backdrop.material.uniforms.uTex.value.dispose();
       this.backdrop.material.dispose();
+      this.backdrop.geometry.dispose();
       this.backdrop = null;
     }
+    this.backdropSource = null;
     if (mode === 'off' || !bitmapOrCanvas) {
       this.renderer.setClearColor(0x000000, 1);
       return;
     }
-    // Texture.flipY has no effect for ImageBitmap sources (three.js uploads
-    // them as-is), so route them through a canvas to get correct orientation.
-    let source = bitmapOrCanvas;
-    if (typeof ImageBitmap !== 'undefined' && bitmapOrCanvas instanceof ImageBitmap) {
-      const c = document.createElement('canvas');
-      c.width = bitmapOrCanvas.width;
-      c.height = bitmapOrCanvas.height;
-      c.getContext('2d').drawImage(bitmapOrCanvas, 0, 0);
-      source = c;
-    }
-    // never hold a texture larger than the display it fills — a 4K source on
-    // a 1440p screen would waste ~20MB per window for invisible detail
-    const maxW = this.renderer.domElement.width || 1920;
-    const maxH = this.renderer.domElement.height || 1080;
-    if (source.width > maxW || source.height > maxH) {
-      const scale = Math.min(maxW / source.width, maxH / source.height);
-      const c = document.createElement('canvas');
-      c.width = Math.max(1, Math.round(source.width * scale));
-      c.height = Math.max(1, Math.round(source.height * scale));
-      c.getContext('2d').drawImage(source, 0, 0, c.width, c.height);
-      source = c;
-    }
-    const tex = new THREE.CanvasTexture(source);
-    // sample in display space — our shaders write raw values to the framebuffer
-    tex.colorSpace = THREE.NoColorSpace;
-    tex.minFilter = THREE.LinearFilter;
-    tex.magFilter = THREE.LinearFilter;
+    this.backdropSource = bitmapOrCanvas;
+    const tex = this._createBackdropTexture();
     const mat = new THREE.ShaderMaterial({
       uniforms: {
         uTex: { value: tex }, uDim: { value: mode === 'dim' ? 0.17 : 0 }, uAspect: { value: 1 },
@@ -456,6 +478,7 @@ export class VisualScene {
     this.motionMix = s.motionMix;
     this._fitCamera();
     this._layoutBackdrop();
+    this._ensureBackdropResolution();
   }
 
   setQuality(q) {
