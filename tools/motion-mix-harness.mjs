@@ -19,4 +19,4 @@ for (const [saved, style, mix] of [
   assert.equal(module.get('waveMode'), style);
   assert.equal(module.get('motionMix'), mix);
 }
-console.log('Existing Audio and style settings retain their original endpoints; new mixes persist.');
+console.log('Existing Audio and style settings migrate; saved style amounts persist.');

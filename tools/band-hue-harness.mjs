@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { buildHueLookup } from '../src/js/hue.js';
+import { buildHueLookup, HueAccentTracker } from '../src/js/hue.js';
 
 const positive = buildHueLookup(90);
 const negative = buildHueLookup(-90);
@@ -18,4 +18,17 @@ assert.ok(sample(negative, 255)[1] < 128);
 assert.deepEqual(buildHueLookup(270), buildHueLookup(180));
 assert.deepEqual(buildHueLookup(-270), buildHueLookup(-180));
 
-console.log('Band hue lookup: per-band levels and both directions passed');
+const tracker = new HueAccentTracker(4);
+tracker.update([0, 0, 0, 0], 4, 1 / 30, 1);
+assert.deepEqual([...tracker.update([0.4, 0.4, 0.4, 0.4], 4, 1 / 30, 1)], [0, 0, 0, 0]);
+const focused = [...tracker.update([0.4, 0.4, 0.9, 0.4], 4, 1 / 30, 1)];
+assert.equal(focused[0], 0);
+assert.ok(focused[2] > 200);
+for (let i = 0; i < 120; i++) tracker.update([0.4, 0.4, 0.9, 0.4], 4, 1 / 30, 1);
+assert.ok(tracker.levels[2] < focused[2] / 4);
+
+const broad = new HueAccentTracker(4);
+broad.update([0, 0, 0, 0], 4, 1 / 30, 0);
+assert.ok([...broad.update([0.4, 0.4, 0.4, 0.4], 4, 1 / 30, 0)].every((v) => v > 0));
+
+console.log('Band hue lookup and focused transient accents passed');

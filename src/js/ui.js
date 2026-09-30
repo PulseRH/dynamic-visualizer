@@ -95,6 +95,7 @@ export class UI {
     slider('glow', 'glow', (v) => v.toFixed(2));
     slider('boost', 'boost', (v) => v.toFixed(2));
     slider('hueReaction', 'hueReaction', (v) => `${Math.round(v)}°`);
+    slider('hueFocus', 'hueFocus', (v) => `${Math.round(v * 100)}%`);
     slider('intensity', 'intensity', (v) => v.toFixed(2));
     slider('motionMix', 'motionMix', (v) => `${Math.round(v * 100)}%`);
     slider('speedVol', 'speedVol', (v) => v.toFixed(2));
@@ -280,6 +281,8 @@ export class UI {
     setSlider('boost', get('boost'));
     setSlider('hueReaction', get('hueReaction'));
     $('hueReaction').parentElement.querySelector('.val').textContent = `${Math.round(get('hueReaction'))}°`;
+    setSlider('hueFocus', get('hueFocus'));
+    $('hueFocus').parentElement.querySelector('.val').textContent = `${Math.round(get('hueFocus') * 100)}%`;
     setSlider('intensity', get('intensity'));
     setSlider('motionMix', get('motionMix'));
     $('motionMix').parentElement.querySelector('.val').textContent = `${Math.round(get('motionMix') * 100)}%`;

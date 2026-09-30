@@ -9,8 +9,9 @@ const DEFAULTS = {
   boost: 1.0,              // extra per-band light and point-size pulse (0 = neither)
   preserveBoostColor: true, // alpha blend reactive points to avoid additive white clipping
   hueReaction: 0,          // signed maximum per-band colour rotation in degrees
-  waveMode: 'ripple',      // style blended with direct audio motion
-  motionMix: 0,           // 0 = direct audio, 1 = selected style
+  hueFocus: 1,             // 0 = broad colour accents, 1 = only standout band changes
+  waveMode: 'ripple',      // style layered over direct audio motion
+  motionMix: 0,           // style amount layered over direct audio (saved key retained)
   bandMap: 'radial',       // which region reacts to which bands: 'depth' | 'radial' | 'vertical' | 'horizontal'
   intensity: 1.0,
   depthMove: 1.0,          // Z motion multiplier (toward/away from viewer)

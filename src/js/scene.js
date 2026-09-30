@@ -4,7 +4,7 @@
 
 import * as THREE from '../vendor/three.module.js';
 import { movementResponse } from './response.js';
-import { buildHueLookup } from './hue.js';
+import { buildHueLookup, HueAccentTracker } from './hue.js';
 import { backdropTextureSize } from './backdrop-size.js';
 
 const VERT = /* glsl */ `
@@ -87,7 +87,9 @@ const VERT = /* glsl */ `
       style = sin(uvw.x * 9.0 + uWaveTime * 0.5) * sin(uvw.y * 7.0 - uWaveTime * 0.42) * 1.3
         + sin(uWaveTime * 0.8 + aRand * 6.2831) * 0.45;
     }
-    w = mix(direct, style, uMotionMix);
+    // Layer the style over direct audio; never trade away the band's response.
+    // Bound the style so even its negative phase cannot cancel the audio motion.
+    w = direct + clamp(style, -1.0, 1.0) * uMotionMix * 0.65;
     }
 
     float depthRange = mix(0.35 + 0.65 * near, 1.0, uEqualDepthMovement);
@@ -216,6 +218,7 @@ export class VisualScene {
     this.bandData = new Uint8Array(this.bandCount * 4);
     this.hueReaction = 0;
     this.hueLookup = buildHueLookup(0);
+    this.hueTracker = new HueAccentTracker(this.bandCount);
     this.bandTex = new THREE.DataTexture(this.bandData, this.bandCount, 1, THREE.RGBAFormat);
     this.bandTex.magFilter = THREE.NearestFilter;
     this.bandTex.minFilter = THREE.NearestFilter;
@@ -450,6 +453,7 @@ export class VisualScene {
     if (n === this.bandCount) return;
     this.bandCount = n;
     this.bandData = new Uint8Array(n * 4);
+    this.hueTracker = new HueAccentTracker(n);
     this.bandTex.dispose();
     this.bandTex = new THREE.DataTexture(this.bandData, n, 1, THREE.RGBAFormat);
     this.bandTex.magFilter = THREE.NearestFilter;
@@ -462,9 +466,11 @@ export class VisualScene {
   applySettings(s) {
     const hueReaction = Math.max(-180, Math.min(180, s.hueReaction || 0));
     if (hueReaction !== this.hueReaction) {
+      if (this.hueReaction === 0) this.hueTracker.pendingReset = true;
       this.hueReaction = hueReaction;
       this.hueLookup = buildHueLookup(hueReaction);
     }
+    this.hueFocus = s.hueFocus;
     this.uniforms.uHueEnabled.value = hueReaction !== 0 ? 1 : 0;
     this.uniforms.uIntensity.value = s.intensity;
     this.uniforms.uDepthScale.value = s.depthScale;
@@ -519,6 +525,9 @@ export class VisualScene {
 
     const bands = analyzer.bands;
     const count = Math.min(this.bandCount, bands.length);
+    const hueLevels = this.hueReaction
+      ? this.hueTracker.update(bands, count, dt, this.hueFocus)
+      : null;
     // bass + treble levels for music parallax, folded into the texture loop
     // (lowest vs highest quarter of bands)
     let lowSum = 0, highSum = 0, lowN = 0, highN = 0;
@@ -528,7 +537,7 @@ export class VisualScene {
       const b = bands[i];
       const v = Math.min(255, b * 255) | 0;
       const offset = i * 4;
-      const hueOffset = v * 2;
+      const hueOffset = (hueLevels ? hueLevels[i] : v) * 2;
       const hueCos = this.hueLookup[hueOffset];
       const hueSin = this.hueLookup[hueOffset + 1];
       if (this.bandData[offset] !== v || this.bandData[offset + 1] !== hueCos ||
