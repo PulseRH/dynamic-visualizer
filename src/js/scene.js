@@ -104,17 +104,24 @@ const VERT = /* glsl */ `
     vec3 pos = vec3(position.xy, near * uDepthScale + disp);
     pos.xy += vec2(sin(uXYTime * 3.1 + aRand * 40.0), cos(uXYTime * 2.6 + aRand * 30.0))
             * amp * 0.006 * uIntensity * uXYMove * uDyn;
-    vec2 radial = position.xy;
-    vec2 flow = vec2(0.0);
+    // Explicit layers have their own amounts; XY move controls the original
+    // shimmer only. Apply a true rotation and scale so their shapes remain
+    // clear and adding Breathe cannot dilute Swirl (or vice versa).
+    vec2 layeredXY = position.xy;
+    float layerDrive = amp * min(uIntensity * uDyn, 1.5);
     if (uExtraLayers.x > 0.0) {
-      float turn = sin(uWaveTime * 0.8 + length(radial) * 6.0 + near * 2.0);
-      flow += vec2(-radial.y, radial.x) * turn * uExtraLayers.x;
+      float turn = sin(uWaveTime * 0.8 + length(position.xy) * 4.0 + near * 1.2)
+                 * uExtraLayers.x * layerDrive * 0.4;
+      float c = cos(turn), s = sin(turn);
+      layeredXY = vec2(c * layeredXY.x - s * layeredXY.y,
+                       s * layeredXY.x + c * layeredXY.y);
     }
     if (uExtraLayers.y > 0.0) {
-      flow += radial * sin(uWaveTime * 1.4 + near * 2.0) * uExtraLayers.y;
+      float swell = sin(uWaveTime * 1.4 + near * 1.2)
+                  * uExtraLayers.y * layerDrive * 0.2;
+      layeredXY *= 1.0 + swell;
     }
-    pos.xy += flow / max(1.0, uExtraLayers.x + uExtraLayers.y)
-            * amp * 0.035 * uIntensity * uXYMove * uDyn;
+    pos.xy += layeredXY - position.xy;
     // idle exit: 'fly-by' rush points toward the camera as they fade;
     // the default clean fade just dissolves in place
     pos.z += (1.0 - uVis) * uExitPush;
