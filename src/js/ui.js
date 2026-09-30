@@ -5,6 +5,7 @@ import { get, set, onChange, getAll } from './settings.js';
 import { bridge } from './bridge.js';
 import { movementResponse } from './response.js';
 import { BAND_CHOICES, bandChoiceIndex } from './band-choices.js';
+import { imageAccent, PURPLE_ACCENT } from './ui-accent.js';
 
 const $ = (sel) => document.getElementById(sel.replace(/^#/, ''));
 
@@ -123,6 +124,7 @@ export class UI {
     $('idleSleep').onchange = (e) => set({ idleSleep: e.target.checked });
     $('invertBands').onchange = (e) => set({ invertBands: e.target.checked });
     $('preserveBoostColor').onchange = (e) => set({ preserveBoostColor: e.target.checked });
+    $('matchImageAccent').onchange = (e) => set({ matchImageAccent: e.target.checked });
     $('hideBackdrop').onchange = (e) => set({ hideBackdrop: e.target.checked });
     $('flybyExit').onchange = (e) => set({ flybyExit: e.target.checked });
     $('cursorRipple').onchange = (e) => set({ cursorRipple: e.target.checked });
@@ -266,7 +268,32 @@ export class UI {
     });
   }
 
+  setImageAccent(image) {
+    try {
+      const sample = document.createElement('canvas');
+      sample.width = sample.height = 24;
+      const context = sample.getContext('2d', { willReadFrequently: true });
+      context.drawImage(image, 0, 0, 24, 24);
+      this.imageAccent = imageAccent(context.getImageData(0, 0, 24, 24).data);
+    } catch {
+      this.imageAccent = PURPLE_ACCENT;
+    }
+    this._applyAccent();
+  }
+
+  _applyAccent() {
+    const rgb = get('matchImageAccent') ? this.imageAccent || PURPLE_ACCENT : PURPLE_ACCENT;
+    const key = rgb.join(',');
+    if (key === this._accentKey) return;
+    this._accentKey = key;
+    const style = document.documentElement.style;
+    style.setProperty('--accent-rgb', key);
+    style.setProperty('--accent-2-rgb', rgb.map(value => Math.round(value + (255 - value) * 0.3)).join(','));
+  }
+
   _syncAll() {
+    this._applyAccent();
+    $('matchImageAccent').checked = !!get('matchImageAccent');
     const syncSeg = (id, v) => {
       $(id).querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.v === String(v)));
     };

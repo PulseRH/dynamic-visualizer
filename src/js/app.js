@@ -88,6 +88,7 @@ function setMainImage(imageLike, urlForThumb) {
   currentImage = imageLike;
   currentImageUrl = urlForThumb;
   ui.setThumb(urlForThumb || '');
+  if (!isWallpaperWindow) ui.setImageAccent(imageLike);
   rebuildCloud();
 }
 

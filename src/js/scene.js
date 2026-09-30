@@ -20,7 +20,6 @@ const VERT = /* glsl */ `
   uniform float uBandCount;
   uniform float uInvert;
   uniform float uBoost;
-  uniform float uGlow;
   uniform float uPreserveBoostColor;
   uniform float uHueEnabled;
   uniform float uSizeComp;
@@ -118,8 +117,17 @@ const VERT = /* glsl */ `
     // every particle stays visible at base brightness; the loud/moving ones
     // brighten on top, and dark particles catch a cool shimmer
     float lum = max(aColor.r, max(aColor.g, aColor.b));
-    vec3 lit = aColor * (0.78 + uBoost * lightAmp)
-             + vec3(0.07, 0.09, 0.13) * lightAmp * (1.0 - lum) * 0.7 * uBoost;
+    float extraLight = uBoost * lightAmp;
+    float shimmer = 1.0;
+    if (uPreserveBoostColor > 0.5) {
+      // Soften only the extra audio light, leaving the base glow and its
+      // highlights intact. Bright source pixels have less boost headroom.
+      extraLight *= 1.0 - 0.45 * lum;
+      extraLight /= 1.0 + 0.35 * extraLight;
+      shimmer = 0.25;
+    }
+    vec3 lit = aColor * (0.78 + extraLight)
+             + vec3(0.07, 0.09, 0.13) * extraLight * (1.0 - lum) * 0.7 * shimmer;
     // normalize for point size: bigger points overlap more, so dim per point
     lit *= uSizeComp;
     // points nearer the camera cover more screen: dim them the same way
@@ -135,24 +143,12 @@ const VERT = /* glsl */ `
     } else {
       vColor = lit;
     }
-    if (uPreserveBoostColor > 0.5) {
-      // A gentle shoulder preserves hue before the screen blend. Keep the
-      // shoulder near white so bright particles still have visible highlights.
-      vec3 color = vColor * uGlow;
-      float peak = max(max(color.r, color.g), color.b);
-      if (peak > 0.9) {
-        float mappedPeak = 1.0 - 0.1 / (1.0 + (peak - 0.9) / 0.1);
-        color *= mappedPeak / peak;
-      }
-      vColor = color;
-    }
   }
 `;
 
 const FRAG = /* glsl */ `
   uniform float uGlow;
   uniform float uVis;
-  uniform float uPreserveBoostColor;
   varying vec3 vColor;
   varying float vAmp;
 
@@ -161,11 +157,7 @@ const FRAG = /* glsl */ `
     float d2 = dot(c, c);
     if (d2 > 0.25) discard;
     float a = smoothstep(0.25, 0.06, d2);
-    if (uPreserveBoostColor > 0.5) {
-      gl_FragColor = vec4(vColor * uVis * a, 1.0); // source colour for screen blend
-    } else {
-      gl_FragColor = vec4(vColor * uGlow * uVis * a, a); // original additive glow
-    }
+    gl_FragColor = vec4(vColor * uGlow * uVis * a, a); // original additive glow
   }
 `;
 
@@ -260,12 +252,7 @@ export class VisualScene {
       uniforms: this.uniforms,
       vertexShader: VERT,
       fragmentShader: FRAG,
-      blending: THREE.CustomBlending,
-      blendEquation: THREE.AddEquation,
-      blendSrc: THREE.OneFactor,
-      blendDst: THREE.OneMinusSrcColorFactor,
-      blendSrcAlpha: THREE.ZeroFactor,
-      blendDstAlpha: THREE.OneFactor,
+      blending: THREE.AdditiveBlending,
       depthTest: false,
       depthWrite: false,
       transparent: true,
@@ -488,8 +475,6 @@ export class VisualScene {
     this.uniforms.uBoost.value = s.boost;
     const preserveBoostColor = !!s.preserveBoostColor;
     this.uniforms.uPreserveBoostColor.value = preserveBoostColor ? 1 : 0;
-    const blending = preserveBoostColor ? THREE.CustomBlending : THREE.AdditiveBlending;
-    if (this.material.blending !== blending) this.material.blending = blending;
     this.uniforms.uZMove.value = s.depthMove;
     this.uniforms.uXYMove.value = s.xyMove;
     this.overscan = s.overscan;

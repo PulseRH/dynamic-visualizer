@@ -37,6 +37,7 @@
       </div>
       <div class="thumb-wrap"><img id="imgThumb" alt="" /></div>
       <p class="hint">Tip: drag &amp; drop or paste (Ctrl+V) an image any time.</p>
+      <label class="check-row"><input type="checkbox" id="matchImageAccent" /> Match controls to image<span class="q" data-tip="Uses the image's main colour for sliders and selected controls. Sampled only when the image changes; turn off to use purple."></span></label>
     </section>
 
     <section>
@@ -72,7 +73,7 @@
         <input type="range" id="boost" min="0" max="3" step="0.05" />
         <span class="val"></span>
       </label>
-      <label class="check-row"><input type="checkbox" id="preserveBoostColor" /> Preserve boost colours<span class="q" data-tip="Keeps bright highlights while softening the white washout from overlapping points. Turn off for the original additive glow."></span></label>
+      <label class="check-row"><input type="checkbox" id="preserveBoostColor" /> Preserve boost colours<span class="q" data-tip="Gently reduces extra audio brightness on already-bright points and softens the pale shimmer. Keeps the original glow and highlights; has no effect at Audio boost 0."></span></label>
       <label class="slider-row"><span class="lbl">Colour pulse<span class="q" data-tip="New accents in each frequency band briefly shift their own points, then return to the wallpaper colours. Positive and negative values turn in opposite directions; 0° turns it off."></span></span>
         <input type="range" id="hueReaction" min="-180" max="180" step="5" />
         <span class="val"></span>
@@ -146,8 +147,8 @@
         <input type="range" id="sensCurve" min="0.5" max="4" step="0.05" />
         <span class="val"></span>
       </label>
-      <svg id="responseGraph" viewBox="0 0 280 94" role="img" aria-label="Approximate band movement response with noise floor cutoff" style="width:100%;height:94px;color:#9fcfff">
-        <rect id="noiseFloorShade" x="28" y="8" width="0" height="64" fill="#9fcfff" opacity="0.12" />
+      <svg id="responseGraph" viewBox="0 0 280 94" role="img" aria-label="Approximate band movement response with noise floor cutoff" style="width:100%;height:94px;color:var(--accent)">
+        <rect id="noiseFloorShade" x="28" y="8" width="0" height="64" fill="currentColor" opacity="0.12" />
         <path d="M28 8V72H266" fill="none" stroke="currentColor" opacity="0.3" />
         <path id="noiseFloorLine" d="M28 8V72" fill="none" stroke="currentColor" opacity="0.55" stroke-dasharray="3 3" />
         <path id="responseLine" fill="none" stroke="currentColor" stroke-width="2" />

@@ -4,8 +4,10 @@
   --border: rgba(255, 255, 255, 0.09);
   --text: #e8eaf2;
   --text-dim: #9aa1b5;
-  --accent: #6ea8ff;
-  --accent-2: #8fffd0;
+  --accent-rgb: 181, 140, 255;
+  --accent-2-rgb: 214, 179, 255;
+  --accent: rgb(var(--accent-rgb));
+  --accent-2: rgb(var(--accent-2-rgb));
   --warn: #ffb86e;
   --err: #ff7a90;
   font-size: 15px;
@@ -55,7 +57,7 @@ html, body {
 .dot {
   width: 9px; height: 9px; border-radius: 50%;
   background: #555c6e;
-  box-shadow: 0 0 0 0 rgba(110,168,255,0);
+  box-shadow: 0 0 0 0 rgba(var(--accent-rgb),0);
   transition: background .3s;
 }
 .dot.live { background: var(--accent-2); box-shadow: 0 0 10px var(--accent-2); }
@@ -80,7 +82,7 @@ html, body {
 #panel {
   position: fixed; top: 0; right: 0; bottom: 0;
   width: 360px; max-width: 92vw;
-  background: rgba(7, 8, 12, 0.93);
+  background: rgba(7, 8, 12, 0.68);
   backdrop-filter: blur(22px) saturate(1.2);
   -webkit-backdrop-filter: blur(22px) saturate(1.2);
   border-left: 1px solid var(--border);
@@ -127,8 +129,8 @@ html, body {
 .btn:hover { background: rgba(70, 78, 100, .65); border-color: rgba(255,255,255,.2); }
 .btn.full { width: 100%; margin-top: 2px; }
 .btn.active {
-  background: linear-gradient(135deg, rgba(110,168,255,.35), rgba(143,255,208,.25));
-  border-color: rgba(140,180,255,.5);
+  background: linear-gradient(135deg, rgba(var(--accent-rgb),.35), rgba(var(--accent-2-rgb),.25));
+  border-color: rgba(var(--accent-rgb),.5);
 }
 
 .thumb-wrap {
@@ -161,9 +163,9 @@ html, body {
 }
 .seg button:hover { color: var(--text); }
 .seg button.on {
-  background: linear-gradient(135deg, rgba(110,168,255,.28), rgba(143,255,208,.2));
+  background: linear-gradient(135deg, rgba(var(--accent-rgb),.28), rgba(var(--accent-2-rgb),.2));
   color: var(--text);
-  box-shadow: inset 0 0 0 1px rgba(140,180,255,.35);
+  box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb),.35);
 }
 
 /* sliders */
@@ -241,7 +243,7 @@ details.fold[open] summary { margin-bottom: 2px; }
 }
 #levelBar {
   height: 100%; width: 0%;
-  background: linear-gradient(90deg, #6ea8ff, #8fffd0, #ffd97e);
+  background: linear-gradient(90deg, var(--accent), var(--accent-2), #ffd97e);
   border-radius: 999px;
   transition: width .08s linear;
 }
@@ -276,7 +278,7 @@ details.fold[open] summary { margin-bottom: 2px; }
 /* ---------------------------------------------------------- Drop overlay */
 #dropOverlay {
   position: fixed; inset: 14px;
-  border: 2px dashed rgba(140,180,255,.65);
+  border: 2px dashed rgba(var(--accent-rgb),.65);
   border-radius: 18px;
   background: rgba(20, 30, 60, .35);
   display: none; align-items: center; justify-content: center;
