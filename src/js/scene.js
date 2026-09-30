@@ -15,7 +15,7 @@ const VERT = /* glsl */ `
   uniform float uSize;
   uniform float uCamZ;
   uniform vec4 uLayers; // wave, ripple, bands, drift
-  uniform vec3 uExtraLayers; // swirl, breathe, sweep
+  uniform vec4 uExtraLayers; // swirl, breathe, sweep, band shake
   uniform float uBandMap;
   uniform float uBandCount;
   uniform float uInvert;
@@ -122,6 +122,14 @@ const VERT = /* glsl */ `
       layeredXY *= 1.0 + swell;
     }
     pos.xy += layeredXY - position.xy;
+    if (uExtraLayers.w > 0.0) {
+      // Every point mapped to this band receives exactly the same vector.
+      // Smooth, distinct phases give bands their own motion without flicker.
+      float phase = band * 2.399963;
+      vec2 shake = vec2(sin(uXYTime * 4.3 + phase),
+                        sin(uXYTime * 5.7 + phase * 1.37 + 1.1));
+      pos.xy += shake * uExtraLayers.w * layerDrive * 0.045;
+    }
     // idle exit: 'fly-by' rush points toward the camera as they fade;
     // the default clean fade just dissolves in place
     pos.z += (1.0 - uVis) * uExitPush;
@@ -261,7 +269,7 @@ export class VisualScene {
       uSize: { value: 2 },
       uCamZ: { value: 1.4 },
       uLayers: { value: new THREE.Vector4() },
-      uExtraLayers: { value: new THREE.Vector3() },
+      uExtraLayers: { value: new THREE.Vector4() },
       uBandMap: { value: 1 },
       uBandCount: { value: 64 },
       uInvert: { value: 0 },
@@ -505,7 +513,7 @@ export class VisualScene {
     this.uniforms.uIntensity.value = s.intensity;
     this.uniforms.uDepthScale.value = s.depthScale;
     this.uniforms.uLayers.value.set(s.motionWave, s.motionRipple, s.motionBands, s.motionDrift);
-    this.uniforms.uExtraLayers.value.set(s.motionSwirl, s.motionBreathe, s.motionSweep);
+    this.uniforms.uExtraLayers.value.set(s.motionSwirl, s.motionBreathe, s.motionSweep, s.motionBandShake);
     this.uniforms.uBandMap.value = BAND_MAPS[s.bandMap] ?? 0;
     this.uniforms.uInvert.value = s.invertBands ? 1 : 0;
     this.uniforms.uGlow.value = s.glow;

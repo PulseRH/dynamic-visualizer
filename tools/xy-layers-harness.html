@@ -1,6 +1,6 @@
 <!doctype html>
 <meta charset="utf-8">
-<title>Swirl and Breathe GPU regression</title>
+<title>Band motion GPU regression</title>
 <canvas id="cloud" style="width:320px;height:320px"></canvas>
 <pre id="result">Running…</pre>
 <script type="module">
@@ -22,7 +22,7 @@ try {
     musicParallax: 0, motionSpeed: 0, intensity: 1, quietMovement: 1, energyResponse: 1,
     overscan: 1, sizePulse: 0, boost: 0, hueReaction: 0, vibrancyPulse: 0,
     motionWave: 0, motionRipple: 0, motionBands: 0, motionDrift: 0,
-    motionSwirl: 0, motionBreathe: 0, motionSweep: 0 };
+    bandMap: 'depth', motionSwirl: 0, motionBreathe: 0, motionSweep: 0, motionBandShake: 0 };
   const gl = scene.renderer.getContext();
   function frame(patch, amp = 0.7) {
     scene.applySettings({ ...base, ...patch });
@@ -51,12 +51,47 @@ try {
     breatheWithXYZero: changed(resting, breathe),
     breatheAddsToSwirl: changed(swirl, both),
     swirlAddsToBreathe: changed(breathe, both),
+    bandShakeWithXYZero: changed(resting, frame({ motionBandShake: 1 })),
+    bandShakeAddsToOtherLayers: changed(both, frame({ motionSwirl: 1, motionBreathe: 1, motionBandShake: 1 })),
   };
   for (const [key, n] of Object.entries(checks)) if (n < 500) throw new Error(`${key}: only ${n} pixels moved`);
-  if (changed(frame({}, 0), frame({ motionSwirl: 1, motionBreathe: 1 }, 0)) !== 0) {
+  if (changed(frame({}, 0), frame({ motionSwirl: 1, motionBreathe: 1, motionBandShake: 1 }, 0)) !== 0) {
     throw new Error('Layers moved without band audio');
   }
-  out.textContent = 'PASS: actual GPU output changes with XY move 0, both layers combine, silence stays still.\n'
+  // Distinct coloured markers let GPU readback verify whole-band translation,
+  // independent of particle position/randomness, rather than just a changed image.
+  scene.setCloud({ positions: new Float32Array([-0.2, -0.2, 0.2, 0.2, -0.2, 0.2, 0, 0.2, 0.2]),
+    colors: new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1]),
+    rands: new Float32Array([0, 0.5, 1]), aspect: 1, count: 3 });
+  function centres(pixels) {
+    const sums = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+    for (let i = 0; i < pixels.length; i += 4) {
+      const x = i / 4 % gl.drawingBufferWidth, y = Math.floor(i / 4 / gl.drawingBufferWidth);
+      for (let channel = 0; channel < 3; channel++) {
+        const weight = pixels[i + channel];
+        sums[channel][0] += x * weight;
+        sums[channel][1] += y * weight;
+        sums[channel][2] += weight;
+      }
+    }
+    return sums.map(([x, y, n]) => { if (!n) throw new Error('Marker missing'); return [x / n, y / n]; });
+  }
+  const start = centres(frame({})), end = centres(frame({ motionBandShake: 1 }));
+  const offsets = end.map((p, i) => p.map((v, axis) => v - start[i][axis]));
+  if (Math.hypot(...offsets[0]) < 2) throw new Error('Whole-band translation too small');
+  for (const offset of offsets.slice(1)) {
+    if (Math.hypot(offset[0] - offsets[0][0], offset[1] - offsets[0][1]) > 0.5) {
+      throw new Error('Particles in the same band moved by different amounts');
+    }
+  }
+  const markers = scene.points.geometry.getAttribute('position');
+  markers.setZ(2, 0.8); // map the blue marker to a different frequency band
+  markers.needsUpdate = true;
+  const otherBand = centres(frame({ motionBandShake: 1 }));
+  if (Math.hypot(otherBand[2][0] - end[2][0], otherBand[2][1] - end[2][1]) < 1) {
+    throw new Error('Different bands did not receive different motion phases');
+  }
+  out.textContent = 'PASS: layers work with XY move 0, combine, stay still in silence; Band shake translates every point in a band together.\n'
     + JSON.stringify(checks, null, 2);
 } catch (error) {
   out.textContent = `FAIL: ${error.stack}`;

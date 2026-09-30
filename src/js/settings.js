@@ -16,6 +16,7 @@ const DEFAULTS = {
   motionSwirl: 0,
   motionBreathe: 0,
   motionSweep: 0,
+  motionBandShake: 0,     // coherent XY translation for each mapped audio band
   preserveBoostColor: true, // soften extra audio light while retaining the original base glow
   matchImageAccent: true,   // UI accent sampled once when the image changes; off = purple
   hueReaction: 0,          // signed maximum per-band colour rotation in degrees
@@ -73,7 +74,7 @@ function migrateSaved(saved) {
   // Carry the old single-style amount into its layer once. Explicit layer
   // settings, including all-zero layers, must never revive the old style.
   const layers = ['motionWave', 'motionRipple', 'motionBands', 'motionDrift',
-    'motionSwirl', 'motionBreathe', 'motionSweep'];
+    'motionSwirl', 'motionBreathe', 'motionSweep', 'motionBandShake'];
   if (!layers.some((key) => migrated[key] !== undefined)) {
     const key = { wave: 'motionWave', ripple: 'motionRipple', bands: 'motionBands', drift: 'motionDrift' }[migrated.waveMode];
     if (key) migrated[key] = Math.max(0, Math.min(1, migrated.motionMix || 0));

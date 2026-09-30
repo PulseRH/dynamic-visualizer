@@ -100,7 +100,7 @@ export class UI {
     slider('hueFocus', 'hueFocus', (v) => `${Math.round(v * 100)}%`);
     slider('intensity', 'intensity', (v) => v.toFixed(2));
     for (const key of ['motionWave', 'motionRipple', 'motionBands', 'motionDrift',
-      'motionSwirl', 'motionBreathe', 'motionSweep']) {
+      'motionSwirl', 'motionBreathe', 'motionSweep', 'motionBandShake']) {
       slider(key, key, (v) => `${Math.round(v * 100)}%`);
     }
     slider('speedVol', 'speedVol', (v) => v.toFixed(2));
@@ -344,7 +344,7 @@ export class UI {
     $('hueFocus').parentElement.querySelector('.val').textContent = `${Math.round(get('hueFocus') * 100)}%`;
     setSlider('intensity', get('intensity'));
     for (const key of ['motionWave', 'motionRipple', 'motionBands', 'motionDrift',
-      'motionSwirl', 'motionBreathe', 'motionSweep']) {
+      'motionSwirl', 'motionBreathe', 'motionSweep', 'motionBandShake']) {
       setSlider(key, get(key));
       $(key).parentElement.querySelector('.val').textContent = `${Math.round(get(key) * 100)}%`;
     }

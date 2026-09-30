@@ -97,7 +97,7 @@
       <h3>Motion</h3>
       <details class="fold" open>
         <summary>Motion layers</summary>
-        <p class="hint">Mix any layers over direct audio movement. 0% turns a layer off; all at 0% gives audio only. Swirl and Breathe have their own amounts; the other layers follow Depth move.</p>
+        <p class="hint">Mix any layers over direct audio movement. 0% turns a layer off; all at 0% gives audio only. Swirl, Breathe and Band shake have their own amounts; the other layers follow Depth move.</p>
         <label class="slider-row"><span class="lbl">Wave<span class="q" data-tip="A travelling depth wave across the image."></span></span>
           <input type="range" id="motionWave" min="0" max="1" step="0.05" /><span class="val"></span>
         </label>
@@ -115,6 +115,9 @@
         </label>
         <label class="slider-row"><span class="lbl">Breathe<span class="q" data-tip="Each band's points visibly expand and contract around the centre with sound. This slider controls the expansion independently of XY move; Intensity and Energy response still affect its strength."></span></span>
           <input type="range" id="motionBreathe" min="0" max="1" step="0.05" /><span class="val"></span>
+        </label>
+        <label class="slider-row"><span class="lbl">Band shake<span class="q" data-tip="Moves all points in each mapped frequency band together sideways and vertically. Bands have different smooth motion phases and react to their own sound. Independent of XY move and Depth move; Intensity, Energy response and Motion speed affect it. Mix with any other layer."></span></span>
+          <input type="range" id="motionBandShake" min="0" max="1" step="0.05" /><span class="val"></span>
         </label>
         <label class="slider-row"><span class="lbl">Sweep<span class="q" data-tip="Diagonal depth waves travel across the image."></span></span>
           <input type="range" id="motionSweep" min="0" max="1" step="0.05" /><span class="val"></span>
@@ -137,7 +140,7 @@
         <input type="range" id="depthMove" min="0" max="3" step="0.05" />
         <span class="val"></span>
       </label>
-      <label class="slider-row"><span class="lbl">XY move<span class="q" data-tip="How much points shimmer sideways with the music. Swirl and Breathe have their own independent amounts."></span></span>
+      <label class="slider-row"><span class="lbl">XY move<span class="q" data-tip="How much individual points shimmer sideways with the music. Swirl, Breathe and Band shake have their own independent amounts."></span></span>
         <input type="range" id="xyMove" min="0" max="3" step="0.05" />
         <span class="val"></span>
       </label>
