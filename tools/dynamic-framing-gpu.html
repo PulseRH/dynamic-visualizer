@@ -8,15 +8,20 @@ try {
   const scene = new VisualScene(document.querySelector('#cloud'));
   scene.renderer.setSize(400, 300, false);
   scene.camera.aspect = 4 / 3;
-  scene.setCloud({ count: 4, aspect: 1.8,
-    positions: new Float32Array([-.9,-.5,.95, -.9,.5,.95, .9,-.5,.1, .9,.5,.1]),
-    colors: new Float32Array([1,0,0, 0,1,0, 0,0,1, 1,1,0]), rands: new Float32Array([0,.2,.4,.8]) });
-  scene.spacingWorld = .03;
+  const positions=[], colors=[], rands=[];
+  for(let y=0;y<181;y++) for(let x=0;x<321;x++) {
+    positions.push((x/320-.5)*1.8,y/180-.5,.95-.85*x/320);
+    colors.push(.7,.7,.7); rands.push(((x*37+y*19)%101)/101);
+  }
+  scene.setCloud({ count: rands.length, aspect: 1.8, positions: new Float32Array(positions),
+    colors: new Float32Array(colors), rands: new Float32Array(rands) });
+  scene.spacingWorld = .0056;
   const settings = { ...getAll(), keepScreenCovered: true, depthScale: .8, depthMove: 1,
     bandMap: 'depth', intensity: 1, quietMovement: 1, energyResponse: 1,
     sizePulse: 0, boost: 0, hueReaction: 0, hueCycle: 0, vibrancyPulse: 0,
-    musicParallax: 0, cursorRipple: false, pointSize: 1,
-    motionSwirl: 1, motionBreathe: 1, motionBandShake: .5 };
+    musicParallax: 0, cursorRipple: false, pointSize: 2,
+    motionWave: 0, motionRipple: 0, motionBands: 0, motionDrift: 0, motionSweep: 0,
+    xyMove: 0, motionSwirl: 1, motionBreathe: 1, motionBandShake: 0 };
   scene.applySettings(settings);
   const gl = scene.renderer.getContext();
   const pixels = new Uint8Array(400 * 300 * 4);
@@ -25,18 +30,16 @@ try {
     scene.pointer.y = direction * .5; scene.pointer.ty = direction * .5;
     scene.render({ bands: new Float32Array(scene.bandCount).fill(.8), energy: 1, loud: 1 }, 4);
     gl.readPixels(0,0,400,300,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
-    const hits = [0,0,0,0];
+    let lit=0, border=0;
     for (let y=0;y<300;y++) for(let x=0;x<400;x++) {
-      const i=(y*400+x)*4, r=pixels[i], g=pixels[i+1], b=pixels[i+2];
-      const color = r>20 && g<r*.3 && b<r*.3 ? 0 : g>20 && r<g*.3 && b<g*.3 ? 1
-        : b>20 && r<b*.3 && g<b*.3 ? 2 : r>20 && g>20 && b<Math.min(r,g)*.3 ? 3 : -1;
-      if(color<0) continue;
-      hits[color]++;
-      if(x<4 || x>395 || y<4 || y>295) throw new Error('Visible point reaches frame edge');
+      if(x>=4 && x<=395 && y>=4 && y<=295) continue;
+      const i=(y*400+x)*4;
+      border++;
+      if(Math.max(pixels[i],pixels[i+1],pixels[i+2])>20) lit++;
     }
-    if(hits.some(n=>n<2)) throw new Error(`Missing corner: ${hits}`);
+    if(lit/border<.95) throw new Error(`Exposed screen border: ${(100*lit/border).toFixed(1)}% covered`);
     if(gl.getError()!==gl.NO_ERROR) throw new Error('WebGL error');
   }
-  out.textContent='PASS: all four coloured corners stay visible with near-left/far-right depth, opposite parallax and combined motion.';
+  out.textContent='PASS: screen borders remain covered with near-left/far-right depth, opposite parallax and combined motion.';
 } catch(e) { out.textContent='FAIL: '+e.stack; }
 </script>

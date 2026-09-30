@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { PerspectiveCamera, Vector3 } from 'three';
 import { DynamicFraming } from '../src/js/dynamic-framing.js';
-import { animatedSample } from './framing-motion-reference.mjs';
+import { animatedSample } from '../src/js/framing-motion.js';
 
 const positions = [], rands = [];
 for (let y = 0; y < 80; y++) for (let x = 0; x < 120; x++) {
@@ -19,7 +19,7 @@ const u = Object.fromEntries(Object.entries({ uAspect: 1.8, uBandCount: 32, uBan
 const data = new Uint8Array(32 * 4);
 const camera = new PerspectiveCamera(45, 16 / 9, .01, 100);
 const p = new Vector3(), xyz = new Float64Array(3);
-let worst = 0;
+let leastCover = Infinity;
 for (let step = 0; step < 120; step++) {
   u.uBandMap.value = Math.floor(step / 30);
   u.uInvert.value = step % 2;
@@ -33,11 +33,27 @@ for (let step = 0; step < 120; step++) {
     animatedSample(...cloud.positions.subarray(i * 3, i * 3 + 3), cloud.rands[i], u, data, xyz, 0);
     p.set(...xyz).project(camera);
     assert.ok(Number.isFinite(p.x) && p.z > -1 && p.z < 1, 'point remains in front of camera');
-    worst = Math.max(worst, Math.abs(p.x), Math.abs(p.y));
+    const col = i % 120, row = Math.floor(i / 120);
+    if (col === 0) leastCover = Math.min(leastCover, -p.x);
+    if (col === 119) leastCover = Math.min(leastCover, p.x);
+    if (row === 0) leastCover = Math.min(leastCover, -p.y);
+    if (row === 79) leastCover = Math.min(leastCover, p.y);
   }
 }
-assert.ok(worst < 1, `all 9,600 points fit through depth, motion and parallax: ${worst}`);
-console.log(`PASS: asymmetric depth, four band mappings, combined layers, 120 frames; worst edge ${worst.toFixed(3)}`);
+assert.ok(leastCover > 1, `every original border stays outside the screen: ${leastCover}`);
+console.log(`PASS: asymmetric depth, four band mappings, combined layers, 120 frames; least edge coverage ${leastCover.toFixed(3)}`);
 const started = performance.now();
 for (let i = 0; i < 2000; i++) framing.update(camera, 1.2, u, data, 1 / 40);
 console.log(`Cached framing cost (32 bands): ${((performance.now() - started) / 2000).toFixed(3)} ms/frame`);
+// A flat image at rest should need only the small edge safety margin.
+const flat = { ...cloud, positions: cloud.positions.slice() };
+for (let i = 2; i < flat.positions.length; i += 3) flat.positions[i] = 0;
+const still = new DynamicFraming(flat);
+data.fill(0); u.uCursor.value.z = 0;
+camera.aspect = cloud.aspect;
+camera.position.set(0, 0, 1.2);
+const baseZ = .5 / Math.tan(camera.fov * Math.PI / 360);
+still.update(camera, baseZ, u, data, 1 / 40);
+assert.ok(Math.abs(camera.zoom - 1.025) < .001, `resting image adds only edge margin: ${camera.zoom}`);
+assert.ok(Math.abs(still.centerX) < .001 && Math.abs(still.centerY) < .001);
+console.log('PASS: flat image keeps centred cover fit with only 2.5% edge margin.');

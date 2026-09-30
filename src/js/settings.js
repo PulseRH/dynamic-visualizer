@@ -34,7 +34,7 @@ const DEFAULTS = {
   invertBands: false,      // flip band direction: bass toward viewer / far side
   overscan: 1.0,           // legacy manual crop, superseded by screen coverage
   overscanAuto: true,      // legacy auto-crop flag
-  keepScreenCovered: true, // saved key: dynamically frame the whole visualiser
+  keepScreenCovered: true, // saved key: dynamically fill the screen
   hideBackdrop: false,     // black background while particles are on screen
   flybyExit: false,        // idle exit: points rush the camera instead of a clean fade
   cursorRipple: true,      // particles swell around the mouse cursor

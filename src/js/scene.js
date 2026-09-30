@@ -1,6 +1,6 @@
 // Three.js scene: the image as a depth-layered point cloud, displaced by
 // audio-driven waves in the vertex shader. One draw call for the cloud,
-// one for the backdrop. Optional framing projects cached per-band bounds.
+// one for the backdrop. Optional framing tracks a cached set of border points.
 
 import * as THREE from '../vendor/three.module.js';
 import { movementResponse } from './response.js';
@@ -354,8 +354,7 @@ export class VisualScene {
   }
 
   _fitCamera() {
-    // Base wallpaper cover fit. Dynamic framing measures the animated cloud
-    // independently so foreground depth does not crop a nearer side.
+    // Base wallpaper cover fit. Dynamic framing tracks uneven animated edges.
     const halfH = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
     const dH = 0.5 / halfH;                                       // height just fills
     const dW = (this.cloudAspect / 2) / (halfH * this.camera.aspect); // width just fills
@@ -558,8 +557,8 @@ export class VisualScene {
     this.uniforms.uPreserveBoostColor.value = preserveBoostColor ? 1 : 0;
     this.uniforms.uZMove.value = s.depthMove;
     this.uniforms.uXYMove.value = s.xyMove;
-    // Saved key retained: this now frames the whole animated foreground,
-    // rather than statically cropping the background and limiting parallax.
+    // Saved key retained: dynamically centre and fill the screen while
+    // preserving full parallax instead of limiting camera travel.
     this.keepScreenCovered = !!s.keepScreenCovered;
     this.overscan = 1;
     if (!this.keepScreenCovered && this.dynamicFraming) this.dynamicFraming.zoom = null;

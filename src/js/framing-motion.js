@@ -1,5 +1,5 @@
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-// A CPU copy of the positional vertex operations, evaluated on <=196 samples
+// A CPU copy of the positional vertex operations, evaluated on <=1024 samples
 // only. It uses the exact uploaded band levels and the shader's phase clocks.
 export function animatedSample(x, y, near, rand, u, data, out, offset) {
   const aspect = u.uAspect.value, bx = x / aspect + 0.5, by = y + 0.5;
