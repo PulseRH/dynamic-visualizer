@@ -119,6 +119,8 @@ export class UI {
     slider('bands', 'bands', (v) => String(v), (i) => BAND_CHOICES[i]);
     slider('depthMove', 'depthMove', (v) => v.toFixed(2));
     slider('xyMove', 'xyMove', (v) => v.toFixed(2));
+    slider('parallax', 'parallax', (v) => v.toFixed(2));
+    slider('musicParallax', 'musicParallax', (v) => v.toFixed(2));
     slider('quietMovement', 'quietMovement', (v) => `${Math.round(v * 100)}%`);
     slider('energyResponse', 'energyResponse', (v) => v.toFixed(2));
     $('calibrateEnergy').onclick = () => this.cb.onCalibrateEnergy();
@@ -137,32 +139,7 @@ export class UI {
     const cmw = $('centeredMotion');
     if (cmw) cmw.onchange = (e) => set({ centeredMotion: e.target.checked });
     $('equalDepthMovement').onchange = (e) => set({ equalDepthMovement: e.target.checked });
-
-    // Parallax auto-raises zoom/crop (so the edges stay hidden) until the user
-    // takes manual control of it.
-    const parallaxEl = $('parallax');
-    parallaxEl.oninput = () => {
-      const v = Number(parallaxEl.value);
-      parallaxEl.parentElement.querySelector('.val').textContent = v.toFixed(2);
-      const patch = { parallax: v };
-      // music parallax shifts the camera too — count it in the auto overscan
-      if (get('overscanAuto')) patch.overscan = Math.round((1 + (v + get('musicParallax')) * 0.15) * 20) / 20;
-      set(patch);
-    };
-    const musicEl = $('musicParallax');
-    musicEl.oninput = () => {
-      const v = Number(musicEl.value);
-      musicEl.parentElement.querySelector('.val').textContent = v.toFixed(2);
-      const patch = { musicParallax: v };
-      if (get('overscanAuto')) patch.overscan = Math.round((1 + (get('parallax') + v) * 0.15) * 20) / 20;
-      set(patch);
-    };
-    const overscanEl = $('overscan');
-    overscanEl.oninput = () => {
-      const v = Number(overscanEl.value);
-      overscanEl.parentElement.querySelector('.val').textContent = v.toFixed(2);
-      set({ overscan: v, overscanAuto: false });
-    };
+    $('keepScreenCovered').onchange = (e) => set({ keepScreenCovered: e.target.checked });
 
     // Adjust only the range under the pointer; keep the panel scrollable
     // everywhere else. Dispatch input so special sliders use their own logic.
@@ -391,7 +368,7 @@ export class UI {
       });
       $('responseLine').setAttribute('d', points.join(' '));
     }
-    setSlider('overscan', get('overscan'));
+    $('keepScreenCovered').checked = !!get('keepScreenCovered');
 
     $('autoQuality').checked = get('autoQuality');
     $('previewPaused').checked = !!get('previewPaused');

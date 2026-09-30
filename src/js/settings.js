@@ -32,8 +32,9 @@ const DEFAULTS = {
   xyMove: 1.0,             // lateral motion multiplier (x/y shimmer + swell)
   bands: 64,               // number of frequency bands = number of regions
   invertBands: false,      // flip band direction: bass toward viewer / far side
-  overscan: 1.0,           // extra zoom so parallax never reveals edges
-  overscanAuto: true,      // overscan follows the parallax setting
+  overscan: 1.0,           // legacy manual crop, superseded by screen coverage
+  overscanAuto: true,      // legacy auto-crop flag
+  keepScreenCovered: true, // automatically fit extra margin for parallax
   hideBackdrop: false,     // black background while particles are on screen
   flybyExit: false,        // idle exit: points rush the camera instead of a clean fade
   cursorRipple: true,      // particles swell around the mouse cursor
@@ -59,7 +60,7 @@ const DEFAULTS = {
   previewFullQuality: false, // don't throttle the preview while wallpaper mode is on
   audioSource: 'demo',     // 'system' | 'mic' | 'file' | 'demo'
   audioFileUrl: null,
-  fpsCap: 30,              // 30 | 24 | 60 | 0 (uncapped)
+  fpsCap: 30,              // 24 | 30 | 40 | 60 | 0 (uncapped)
   autoQuality: true,
   idleSleep: true,
 };

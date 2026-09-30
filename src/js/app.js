@@ -13,6 +13,7 @@ import { copySpectrumBands } from './spectrum-relay.js';
 import { UI } from './ui.js';
 import { bridge, platform } from './bridge.js';
 import { get, set, getAll, onChange } from './settings.js';
+import { advanceFrameClock } from './frame-pacing.js';
 
 const canvas = document.getElementById('gl');
 const scene = new VisualScene(canvas);
@@ -361,6 +362,7 @@ onChange((all, patch) => {
 });
 
 let lastRender = 0;
+let lastFrame = 0;
 // Analysis ticker (preview only): a timer instead of rAF, so minimized or
 // covered states never stall the spectrum feed or the idle envelope for the
 // wallpaper windows.
@@ -423,9 +425,11 @@ function loop(now) {
     effectiveCap = Math.min(effectiveCap, 15);
   }
   const interval = effectiveCap > 0 ? 1000 / effectiveCap : 0;
-  if (now - lastRender < interval - 0.75) return;
-  const spaced = Math.max(0, now - lastRender);
-  lastRender = now;
+  const nextClock = advanceFrameClock(now, lastRender, interval);
+  if (nextClock === null) return;
+  const spaced = Math.max(0, now - lastFrame);
+  lastRender = nextClock;
+  lastFrame = now;
 
   // Show the plain wallpaper at full display resolution before sleeping, even
   // if adaptive quality reduced the canvas while the music was playing.

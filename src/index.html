@@ -37,7 +37,14 @@
       </div>
       <div class="thumb-wrap"><img id="imgThumb" alt="" /></div>
       <p class="hint">Tip: drag &amp; drop or paste (Ctrl+V) an image any time.</p>
-      <label class="check-row"><input type="checkbox" id="matchImageAccent" /> Match controls to image<span class="q" data-tip="Uses the image's main colour for sliders and selected controls. Sampled only when the image changes; turn off to use purple."></span></label>
+    </section>
+
+    <section>
+      <h3>Visualiser</h3>
+      <label class="slider-row"><span class="lbl">Bands<span class="q" data-tip="How many frequency bands divide the image. Fine steps from 6 to 32, then four-band steps to 128."></span></span>
+        <input type="range" id="bands" min="0" max="37" step="1" />
+        <span class="val"></span>
+      </label>
     </section>
 
     <section>
@@ -157,6 +164,7 @@
         <input type="range" id="musicParallax" min="0" max="1" step="0.05" />
         <span class="val"></span>
       </label>
+      <label class="check-row"><input type="checkbox" id="keepScreenCovered" /> Keep screen covered<span class="q" data-tip="Automatically adds crop margin for cursor and music parallax and limits camera travel where needed to keep edges covered. Off uses the normal image fit and full camera travel. Calculated when settings or the viewport change, with no extra render pass."></span></label>
       <label class="slider-row"><span class="lbl">Quiet movement<span class="q" data-tip="Minimum audio motion strength for quiet music, relative to full energy. Bands still shape movement; silence still fades out."></span></span>
         <input type="range" id="quietMovement" min="0" max="1" step="0.05" />
         <span class="val"></span>
@@ -225,14 +233,6 @@
           <span class="val"></span>
         </label>
       </details>
-      <label class="slider-row"><span class="lbl">Bands<span class="q" data-tip="How many frequency bands divide the image. Fine steps from 6 to 32, then four-band steps to 128."></span></span>
-        <input type="range" id="bands" min="0" max="37" step="1" />
-        <span class="val"></span>
-      </label>
-      <label class="slider-row"><span class="lbl">Zoom / crop<span class="q" data-tip="Zooms into the image and crops its edges. Increases automatically with Parallax to keep edges covered; moving this slider sets it manually."></span></span>
-        <input type="range" id="overscan" min="1" max="1.6" step="0.05" />
-        <span class="val"></span>
-      </label>
     </section>
 
     <section>
@@ -265,8 +265,9 @@
     <section>
       <h3>Performance</h3>
       <div class="seg" id="fpsSeg">
-        <button data-v="30">30 fps</button>
         <button data-v="24">24 fps</button>
+        <button data-v="30">30 fps</button>
+        <button data-v="40">40 fps</button>
         <button data-v="60">60 fps</button>
         <button data-v="0">Max</button>
       </div>
@@ -275,6 +276,11 @@
       <label class="check-row"><input type="checkbox" id="previewFullQuality" /> Full quality preview<span class="q" data-tip="While wallpaper mode is on, the preview normally mirrors at 15 fps to save GPU. This removes the throttle."></span></label>
       <label class="check-row"><input type="checkbox" id="idleSleep" /> Sleep when music stops<span class="q" data-tip="Points fade out and rendering stops entirely while the music is silent."></span></label>
       <label class="check-row"><input type="checkbox" id="flybyExit" /> Fly-by idle exit<span class="q" data-tip="On idle exit, points rush toward the camera instead of fading in place."></span></label>
+    </section>
+
+    <section>
+      <h3>Appearance</h3>
+      <label class="check-row"><input type="checkbox" id="matchImageAccent" /> Match controls to image<span class="q" data-tip="Uses the image's main colour for sliders and selected controls. Sampled only when the image changes; turn off to use purple."></span></label>
     </section>
 
     <footer>

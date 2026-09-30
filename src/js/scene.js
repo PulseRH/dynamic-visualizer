@@ -6,6 +6,7 @@ import * as THREE from '../vendor/three.module.js';
 import { movementResponse } from './response.js';
 import { buildHueLookup, buildHueAngleLookup, HueAccentTracker, HueCycleTracker } from './hue.js';
 import { backdropTextureSize } from './backdrop-size.js';
+import { parallaxCoverageScale } from './screen-cover.js';
 
 const VERT = /* glsl */ `
   uniform float uEnergy;
@@ -360,6 +361,13 @@ export class VisualScene {
     const dH = 0.5 / halfH;                                       // height just fills
     const dW = (this.cloudAspect / 2) / (halfH * this.camera.aspect); // width just fills
     this.camBaseZ = Math.min(dH, dW) / (this.overscan || 1);
+    const p = (this.parallaxSetting || 0) * 0.06;
+    const mp = (this.musicParallax || 0) * 0.075;
+    const drift = this.motionMix || 0;
+    this.coverageScale = this.keepScreenCovered
+      ? parallaxCoverageScale(this.camera, this.camBaseZ, this.cloudAspect,
+          p * (1 + 0.6 * drift) + mp, p * (1 + 0.4 * drift) + mp * 1.4)
+      : 1;
   }
 
   _layoutBackdrop() {
@@ -557,7 +565,13 @@ export class VisualScene {
     this.uniforms.uPreserveBoostColor.value = preserveBoostColor ? 1 : 0;
     this.uniforms.uZMove.value = s.depthMove;
     this.uniforms.uXYMove.value = s.xyMove;
-    this.overscan = s.overscan;
+    // Fit on setting/image/viewport changes, never per frame. Keep the
+    // original cover framing when off; both camera parallax sources count.
+    this.keepScreenCovered = !!s.keepScreenCovered;
+    this.parallaxSetting = s.parallax;
+    this.overscan = s.keepScreenCovered
+      ? 1 + (Math.max(0, s.parallax) + Math.max(0, s.musicParallax || 0)) * 0.15
+      : 1;
     this.hideBackdrop = !!s.hideBackdrop;
     this.cursorRipple = !!s.cursorRipple;
     this.uniforms.uExitPush.value = s.flybyExit ? 0.4 : 0;
@@ -705,6 +719,8 @@ export class VisualScene {
     const t = this.time;
     this.camera.position.x = Math.sin(t * 0.13) * p * 0.6 * drift + this.pointer.x * p + (this.musicPx ?? 0) * mp * mamp;
     this.camera.position.y = Math.cos(t * 0.11) * p * 0.4 * drift - this.pointer.y * p * 0.6 - (this.musicPy ?? 0) * mp * 1.4 * mamp;
+    this.camera.position.x *= this.coverageScale ?? 1;
+    this.camera.position.y *= this.coverageScale ?? 1;
 
     // cursor ripple: strength rises with cursor speed, decays when it stops
     const spd = Math.hypot(this.pointer.tx - (this._prevNx ?? 0), this.pointer.ty - (this._prevNy ?? 0)) / Math.max(dt, 0.001);
