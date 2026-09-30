@@ -95,6 +95,7 @@ export class UI {
     slider('pointSize', 'pointSize', (v) => v.toFixed(1));
     slider('glow', 'glow', (v) => v.toFixed(2));
     slider('boost', 'boost', (v) => v.toFixed(2));
+    slider('sizePulse', 'sizePulse', (v) => `${Math.round(v * 100)}%`);
     slider('hueReaction', 'hueReaction', (v) => `${Math.round(v)}°`);
     slider('hueFocus', 'hueFocus', (v) => `${Math.round(v * 100)}%`);
     slider('intensity', 'intensity', (v) => v.toFixed(2));
@@ -288,7 +289,7 @@ export class UI {
     this._accentKey = key;
     const style = document.documentElement.style;
     style.setProperty('--accent-rgb', key);
-    style.setProperty('--accent-2-rgb', rgb.map(value => Math.round(value + (255 - value) * 0.3)).join(','));
+    style.setProperty('--accent-2-rgb', rgb.map(value => Math.round(value + (255 - value) * 0.12)).join(','));
   }
 
   _syncAll() {
@@ -315,6 +316,8 @@ export class UI {
     const setSlider = (id, v) => {
       const el = $(id);
       el.value = v;
+      const fill = (el.valueAsNumber - Number(el.min)) / (Number(el.max) - Number(el.min)) * 100;
+      el.style.setProperty('--range-fill', `${fill}%`);
       const val = el.parentElement.querySelector('.val');
       if (val) {
         val.textContent =
@@ -329,6 +332,8 @@ export class UI {
     setSlider('pointSize', get('pointSize'));
     setSlider('glow', get('glow'));
     setSlider('boost', get('boost'));
+    setSlider('sizePulse', get('sizePulse'));
+    $('sizePulse').parentElement.querySelector('.val').textContent = `${Math.round(get('sizePulse') * 100)}%`;
     setSlider('hueReaction', get('hueReaction'));
     $('hueReaction').parentElement.querySelector('.val').textContent = `${Math.round(get('hueReaction'))}°`;
     setSlider('hueFocus', get('hueFocus'));

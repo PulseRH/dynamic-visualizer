@@ -6,7 +6,8 @@ const DEFAULTS = {
   pointCount: 160000,
   pointSize: 1.0,
   glow: 1.1,
-  boost: 1.0,              // extra per-band light and point-size pulse (0 = neither)
+  boost: 1.0,              // Light pulse: extra per-band brightness (saved key retained)
+  sizePulse: 1.0,          // independent per-band point growth; 1 = up to 90% larger
   preserveBoostColor: true, // soften extra audio light while retaining the original base glow
   matchImageAccent: true,   // UI accent sampled once when the image changes; off = purple
   hueReaction: 0,          // signed maximum per-band colour rotation in degrees
@@ -56,7 +57,15 @@ const KEY = 'dv.settings.v1';
 function load() {
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch {}
-  return { ...DEFAULTS, ...migrateMotion(saved) };
+  return { ...DEFAULTS, ...migrateSaved(saved) };
+}
+
+function migrateSaved(saved) {
+  const migrated = migrateMotion(saved);
+  if (migrated.sizePulse !== undefined || !Number.isFinite(migrated.boost)) return migrated;
+  // The original boost also grew points, capped at boost=1. Carry that
+  // amount over once; later Light pulse edits leave Size pulse independent.
+  return { ...migrated, sizePulse: Math.max(0, Math.min(1, migrated.boost)) };
 }
 
 function migrateMotion(saved) {
@@ -90,7 +99,7 @@ export function onChange(fn) { listeners.add(fn); return () => listeners.delete(
 // preview window (storage event, plus a poll as a safety net).
 function resync() {
   let saved = {};
-  try { saved = migrateMotion(JSON.parse(localStorage.getItem(KEY) || '{}')); } catch {}
+  try { saved = migrateSaved(JSON.parse(localStorage.getItem(KEY) || '{}')); } catch {}
   const patch = {};
   for (const [k, v] of Object.entries(saved)) {
     if (settings[k] !== v) { settings[k] = v; patch[k] = v; }

@@ -69,11 +69,15 @@
         <input type="range" id="glow" min="0.2" max="2.5" step="0.05" />
         <span class="val"></span>
       </label>
-      <label class="slider-row"><span class="lbl">Audio boost<span class="q" data-tip="Extra light and point-size pulse on active bands. At 0, neither adds brightness; band movement and hue shift still work."></span></span>
+      <label class="slider-row"><span class="lbl">Light pulse<span class="q" data-tip="Extra particle brightness as each frequency band gets louder. 0 turns off the brightness reaction; Glow sets the base light level."></span></span>
         <input type="range" id="boost" min="0" max="3" step="0.05" />
         <span class="val"></span>
       </label>
-      <label class="check-row"><input type="checkbox" id="preserveBoostColor" /> Preserve boost colours<span class="q" data-tip="Gently reduces extra audio brightness on already-bright points and softens the pale shimmer. Keeps the original glow and highlights; has no effect at Audio boost 0."></span></label>
+      <label class="check-row"><input type="checkbox" id="preserveBoostColor" /> Preserve pulse colours<span class="q" data-tip="Gently reduces extra brightness on already-bright points and softens the pale shimmer. Keeps the original glow and highlights; has no effect at Light pulse 0."></span></label>
+      <label class="slider-row"><span class="lbl">Size pulse<span class="q" data-tip="How much each band's points grow with sound. At 100%, fully active points grow up to 90% larger. 0% turns off growth; Size sets their resting size."></span></span>
+        <input type="range" id="sizePulse" min="0" max="1" step="0.05" />
+        <span class="val"></span>
+      </label>
       <label class="slider-row"><span class="lbl">Colour pulse<span class="q" data-tip="New accents in each frequency band briefly shift their own points, then return to the wallpaper colours. Positive and negative values turn in opposite directions; 0° turns it off."></span></span>
         <input type="range" id="hueReaction" min="-180" max="180" step="5" />
         <span class="val"></span>

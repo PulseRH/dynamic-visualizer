@@ -19,7 +19,8 @@ const VERT = /* glsl */ `
   uniform float uBandMap;
   uniform float uBandCount;
   uniform float uInvert;
-  uniform float uBoost;
+  uniform float uLightPulse;
+  uniform float uSizePulse;
   uniform float uPreserveBoostColor;
   uniform float uHueEnabled;
   uniform float uSizeComp;
@@ -110,14 +111,14 @@ const VERT = /* glsl */ `
     vec4 mv = modelViewMatrix * vec4(pos, 1.0);
     gl_Position = projectionMatrix * mv;
 
-    float ps = uSize * (1.0 + amp * 0.9 * min(uBoost, 1.0)) * (uCamZ / -mv.z);
+    float ps = uSize * (1.0 + amp * 0.9 * uSizePulse) * (uCamZ / -mv.z);
     gl_PointSize = clamp(ps, 0.75, 24.0);
 
     vAmp = lightAmp;
     // every particle stays visible at base brightness; the loud/moving ones
     // brighten on top, and dark particles catch a cool shimmer
     float lum = max(aColor.r, max(aColor.g, aColor.b));
-    float extraLight = uBoost * lightAmp;
+    float extraLight = uLightPulse * lightAmp;
     float shimmer = 1.0;
     if (uPreserveBoostColor > 0.5) {
       // Soften only the extra audio light, leaving the base glow and its
@@ -230,7 +231,8 @@ export class VisualScene {
       uBandMap: { value: 1 },
       uBandCount: { value: 64 },
       uInvert: { value: 0 },
-      uBoost: { value: 1 },
+      uLightPulse: { value: 1 },
+      uSizePulse: { value: 1 },
       uHueEnabled: { value: 0 },
       uSizeComp: { value: 1 },
       uZMove: { value: 1 },
@@ -472,7 +474,8 @@ export class VisualScene {
     this.uniforms.uBandMap.value = BAND_MAPS[s.bandMap] ?? 0;
     this.uniforms.uInvert.value = s.invertBands ? 1 : 0;
     this.uniforms.uGlow.value = s.glow;
-    this.uniforms.uBoost.value = s.boost;
+    this.uniforms.uLightPulse.value = s.boost;
+    this.uniforms.uSizePulse.value = s.sizePulse;
     const preserveBoostColor = !!s.preserveBoostColor;
     this.uniforms.uPreserveBoostColor.value = preserveBoostColor ? 1 : 0;
     this.uniforms.uZMove.value = s.depthMove;

@@ -9,7 +9,7 @@ const pixels = new Uint8Array([
 ]);
 const blue = imageAccent(pixels);
 assert.ok(blue[2] > blue[0] && blue[2] > blue[1]);
-assert.ok(Math.min(...blue) >= 130 && Math.max(...blue) <= 255);
+assert.ok(Math.min(...blue) >= 80 && Math.max(...blue) <= 205);
 const red = imageAccent(new Uint8Array([170, 30, 30, 255]));
 assert.ok(red[0] > red[1] && red[0] > red[2]);
-console.log('Image accents ignore neutrals and transparency, follow the dominant hue, and stay readable.');
+console.log('Image accents ignore neutrals and transparency, follow the dominant hue, and use darker shades.');

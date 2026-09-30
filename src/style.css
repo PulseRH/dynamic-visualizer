@@ -1,11 +1,12 @@
 :root {
+  color-scheme: dark;
   --bg-glass: rgba(16, 18, 24, 0.72);
   --bg-glass-2: rgba(28, 30, 40, 0.6);
   --border: rgba(255, 255, 255, 0.09);
   --text: #e8eaf2;
   --text-dim: #9aa1b5;
-  --accent-rgb: 181, 140, 255;
-  --accent-2-rgb: 214, 179, 255;
+  --accent-rgb: 151, 101, 214;
+  --accent-2-rgb: 163, 119, 219;
   --accent: rgb(var(--accent-rgb));
   --accent-2: rgb(var(--accent-2-rgb));
   --warn: #ffb86e;
@@ -177,7 +178,18 @@ html, body {
   font-size: .84rem; color: var(--text-dim);
 }
 .slider-row .lbl { white-space: nowrap; }
-.slider-row input[type="range"] { width: 100%; min-width: 0; accent-color: var(--accent); height: 22px; }
+.slider-row input[type="range"] {
+  width: 100%; min-width: 0; height: 22px;
+  appearance: none; background: transparent; cursor: pointer;
+}
+.slider-row input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px; border-radius: 999px;
+  background: linear-gradient(to right, var(--accent) 0 var(--range-fill, 0%), rgba(255,255,255,.18) var(--range-fill, 0%) 100%);
+}
+.slider-row input[type="range"]::-webkit-slider-thumb {
+  appearance: none; width: 14px; height: 14px; margin-top: -4px;
+  border: 0; border-radius: 50%; background: var(--accent);
+}
 .slider-row .val { text-align: right; font-variant-numeric: tabular-nums; color: var(--text); font-size: .8rem; }
 
 .check-row {
