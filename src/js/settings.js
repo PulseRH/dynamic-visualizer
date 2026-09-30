@@ -8,12 +8,20 @@ const DEFAULTS = {
   glow: 1.1,
   boost: 1.0,              // Light pulse: extra per-band brightness (saved key retained)
   sizePulse: 1.0,          // independent per-band point growth; 1 = up to 90% larger
+  vibrancyPulse: 0,        // per-band saturation lift, preserving source luminance
+  motionWave: 0,
+  motionRipple: 0,
+  motionBands: 0,
+  motionDrift: 0,
+  motionSwirl: 0,
+  motionBreathe: 0,
+  motionSweep: 0,
   preserveBoostColor: true, // soften extra audio light while retaining the original base glow
   matchImageAccent: true,   // UI accent sampled once when the image changes; off = purple
   hueReaction: 0,          // signed maximum per-band colour rotation in degrees
   hueFocus: 1,             // 0 = broad colour accents, 1 = only standout band changes
-  waveMode: 'ripple',      // style layered over direct audio motion
-  motionMix: 0,           // style amount layered over direct audio (saved key retained)
+  waveMode: 'ripple',      // legacy single-style setting, retained for migration
+  motionMix: 0,           // legacy single-style amount, retained for migration
   bandMap: 'radial',       // which region reacts to which bands: 'depth' | 'radial' | 'vertical' | 'horizontal'
   intensity: 1.0,
   depthMove: 1.0,          // Z motion multiplier (toward/away from viewer)
@@ -61,7 +69,15 @@ function load() {
 }
 
 function migrateSaved(saved) {
-  const migrated = migrateMotion(saved);
+  const migrated = { ...migrateMotion(saved) };
+  // Carry the old single-style amount into its layer once. Explicit layer
+  // settings, including all-zero layers, must never revive the old style.
+  const layers = ['motionWave', 'motionRipple', 'motionBands', 'motionDrift',
+    'motionSwirl', 'motionBreathe', 'motionSweep'];
+  if (!layers.some((key) => migrated[key] !== undefined)) {
+    const key = { wave: 'motionWave', ripple: 'motionRipple', bands: 'motionBands', drift: 'motionDrift' }[migrated.waveMode];
+    if (key) migrated[key] = Math.max(0, Math.min(1, migrated.motionMix || 0));
+  }
   if (migrated.sizePulse !== undefined || !Number.isFinite(migrated.boost)) return migrated;
   // The original boost also grew points, capped at boost=1. Carry that
   // amount over once; later Light pulse edits leave Size pulse independent.

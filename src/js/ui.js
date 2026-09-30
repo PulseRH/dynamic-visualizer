@@ -65,7 +65,6 @@ export class UI {
       });
     };
     seg('depthSeg', 'depthMode');
-    seg('waveSeg', 'waveMode');
     seg('bandMapSeg', 'bandMap');
     seg('fpsSeg', 'fpsCap', (v) => set({ fpsCap: Number(v) }));
     seg('audioSeg', 'audioSource', async (v) => {
@@ -96,10 +95,14 @@ export class UI {
     slider('glow', 'glow', (v) => v.toFixed(2));
     slider('boost', 'boost', (v) => v.toFixed(2));
     slider('sizePulse', 'sizePulse', (v) => `${Math.round(v * 100)}%`);
+    slider('vibrancyPulse', 'vibrancyPulse', (v) => `${Math.round(v * 100)}%`);
     slider('hueReaction', 'hueReaction', (v) => `${Math.round(v)}°`);
     slider('hueFocus', 'hueFocus', (v) => `${Math.round(v * 100)}%`);
     slider('intensity', 'intensity', (v) => v.toFixed(2));
-    slider('motionMix', 'motionMix', (v) => `${Math.round(v * 100)}%`);
+    for (const key of ['motionWave', 'motionRipple', 'motionBands', 'motionDrift',
+      'motionSwirl', 'motionBreathe', 'motionSweep']) {
+      slider(key, key, (v) => `${Math.round(v * 100)}%`);
+    }
     slider('speedVol', 'speedVol', (v) => v.toFixed(2));
     slider('motionSpeed', 'motionSpeed', (v) => v.toFixed(2));
     slider('sensGain', 'sensGain', (v) => v.toFixed(2));
@@ -299,7 +302,6 @@ export class UI {
       $(id).querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.v === String(v)));
     };
     syncSeg('depthSeg', get('depthMode'));
-    syncSeg('waveSeg', get('waveMode'));
     syncSeg('bandMapSeg', get('bandMap'));
     syncSeg('audioSeg', get('audioSource'));
     syncSeg('fpsSeg', get('fpsCap'));
@@ -334,13 +336,18 @@ export class UI {
     setSlider('boost', get('boost'));
     setSlider('sizePulse', get('sizePulse'));
     $('sizePulse').parentElement.querySelector('.val').textContent = `${Math.round(get('sizePulse') * 100)}%`;
+    setSlider('vibrancyPulse', get('vibrancyPulse'));
+    $('vibrancyPulse').parentElement.querySelector('.val').textContent = `${Math.round(get('vibrancyPulse') * 100)}%`;
     setSlider('hueReaction', get('hueReaction'));
     $('hueReaction').parentElement.querySelector('.val').textContent = `${Math.round(get('hueReaction'))}°`;
     setSlider('hueFocus', get('hueFocus'));
     $('hueFocus').parentElement.querySelector('.val').textContent = `${Math.round(get('hueFocus') * 100)}%`;
     setSlider('intensity', get('intensity'));
-    setSlider('motionMix', get('motionMix'));
-    $('motionMix').parentElement.querySelector('.val').textContent = `${Math.round(get('motionMix') * 100)}%`;
+    for (const key of ['motionWave', 'motionRipple', 'motionBands', 'motionDrift',
+      'motionSwirl', 'motionBreathe', 'motionSweep']) {
+      setSlider(key, get(key));
+      $(key).parentElement.querySelector('.val').textContent = `${Math.round(get(key) * 100)}%`;
+    }
     setSlider('speedVol', get('speedVol'));
     setSlider('motionSpeed', get('motionSpeed'));
     setSlider('sensGain', get('sensGain'));

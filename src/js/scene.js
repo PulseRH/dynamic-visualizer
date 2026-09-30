@@ -14,13 +14,14 @@ const VERT = /* glsl */ `
   uniform float uAspect;
   uniform float uSize;
   uniform float uCamZ;
-  uniform float uMode;
-  uniform float uMotionMix;
+  uniform vec4 uLayers; // wave, ripple, bands, drift
+  uniform vec3 uExtraLayers; // swirl, breathe, sweep
   uniform float uBandMap;
   uniform float uBandCount;
   uniform float uInvert;
   uniform float uLightPulse;
   uniform float uSizePulse;
+  uniform float uVibrancyPulse;
   uniform float uPreserveBoostColor;
   uniform float uHueEnabled;
   uniform float uSizeComp;
@@ -68,29 +69,34 @@ const VERT = /* glsl */ `
 
     float direct = mix(1.0, amp * 2.0 - 0.8, uCentered);
     float w = direct;
-    // Skip the style's trigonometry entirely at Audio only.
-    if (uMotionMix > 0.0) {
-    float style;
-    if (uMode < 0.5) {
+    // Uniform branches skip every disabled layer. Normalize the combined
+    // depth overlay so stacking styles leaves the direct response intact.
+    float style = 0.0;
+    float layerTotal = dot(uLayers, vec4(1.0)) + uExtraLayers.z;
+    if (uLayers.x > 0.0) {
       // traveling wave across the image
-      style = sin(uWaveTime * 1.7 + uvw.x * 7.0 + near * 5.0 + aRand * 0.7);
-    } else if (uMode < 1.5) {
+      style += uLayers.x * sin(uWaveTime * 1.7 + uvw.x * 7.0 + near * 5.0 + aRand * 0.7);
+    }
+    if (uLayers.y > 0.0) {
       // radial ripple from the center
       float d = distance(uvw, vec2(0.5));
-      style = sin(d * 16.0 - uWaveTime * 3.1 + near * 3.0) * (1.0 - d * 0.55);
-    } else if (uMode < 2.5) {
+      style += uLayers.y * sin(d * 16.0 - uWaveTime * 3.1 + near * 3.0) * (1.0 - d * 0.55);
+    }
+    if (uLayers.z > 0.0) {
       // horizontal slices pulsing like bars
       float row = floor(uvw.y * 28.0);
-      style = sin(uWaveTime * 2.2 + row * 0.9) * 0.75 + sin(uWaveTime * 5.3 + row * 2.1) * 0.25;
-    } else if (uMode < 3.5) {
+      style += uLayers.z * (sin(uWaveTime * 2.2 + row * 0.9) * 0.75 + sin(uWaveTime * 5.3 + row * 2.1) * 0.25);
+    }
+    if (uLayers.w > 0.0) {
       // slow ambient drift (nice at idle / low energy)
-      style = sin(uvw.x * 9.0 + uWaveTime * 0.5) * sin(uvw.y * 7.0 - uWaveTime * 0.42) * 1.3
+      float drift = sin(uvw.x * 9.0 + uWaveTime * 0.5) * sin(uvw.y * 7.0 - uWaveTime * 0.42) * 1.3
         + sin(uWaveTime * 0.8 + aRand * 6.2831) * 0.45;
+      style += uLayers.w * clamp(drift, -1.0, 1.0);
     }
-    // Layer the style over direct audio; never trade away the band's response.
-    // Bound the style so even its negative phase cannot cancel the audio motion.
-    w = direct + clamp(style, -1.0, 1.0) * uMotionMix * 0.65;
+    if (uExtraLayers.z > 0.0) {
+      style += uExtraLayers.z * sin((uvw.x + uvw.y) * 11.0 - uWaveTime * 2.0 + near * 2.0);
     }
+    w = direct + style / max(1.0, layerTotal) * 0.65;
 
     float depthRange = mix(0.35 + 0.65 * near, 1.0, uEqualDepthMovement);
     float disp = w * amp * uIntensity * uZMove * 0.11 * depthRange * uDyn;
@@ -98,6 +104,17 @@ const VERT = /* glsl */ `
     vec3 pos = vec3(position.xy, near * uDepthScale + disp);
     pos.xy += vec2(sin(uXYTime * 3.1 + aRand * 40.0), cos(uXYTime * 2.6 + aRand * 30.0))
             * amp * 0.006 * uIntensity * uXYMove * uDyn;
+    vec2 radial = position.xy;
+    vec2 flow = vec2(0.0);
+    if (uExtraLayers.x > 0.0) {
+      float turn = sin(uWaveTime * 0.8 + length(radial) * 6.0 + near * 2.0);
+      flow += vec2(-radial.y, radial.x) * turn * uExtraLayers.x;
+    }
+    if (uExtraLayers.y > 0.0) {
+      flow += radial * sin(uWaveTime * 1.4 + near * 2.0) * uExtraLayers.y;
+    }
+    pos.xy += flow / max(1.0, uExtraLayers.x + uExtraLayers.y)
+            * amp * 0.035 * uIntensity * uXYMove * uDyn;
     // idle exit: 'fly-by' rush points toward the camera as they fade;
     // the default clean fade just dissolves in place
     pos.z += (1.0 - uVis) * uExitPush;
@@ -127,7 +144,18 @@ const VERT = /* glsl */ `
       extraLight /= 1.0 + 0.35 * extraLight;
       shimmer = 0.25;
     }
-    vec3 lit = aColor * (0.78 + extraLight)
+    vec3 colour = aColor;
+    if (uVibrancyPulse > 0.0 && amp > 0.0) {
+      float low = min(colour.r, min(colour.g, colour.b));
+      float luma = dot(colour, vec3(0.2126, 0.7152, 0.0722));
+      float saturation = (lum - low) / max(lum, 0.0001);
+      float lift = 1.0 + uVibrancyPulse * amp * 1.5 * (1.0 - saturation);
+      // Expand chroma within the source gamut instead of clipping channels.
+      float room = min((1.0 - luma) / max(lum - luma, 0.0001),
+                       luma / max(luma - low, 0.0001));
+      colour = vec3(luma) + (colour - vec3(luma)) * max(1.0, min(lift, room));
+    }
+    vec3 lit = colour * (0.78 + extraLight)
              + vec3(0.07, 0.09, 0.13) * extraLight * (1.0 - lum) * 0.7 * shimmer;
     // normalize for point size: bigger points overlap more, so dim per point
     lit *= uSizeComp;
@@ -181,7 +209,6 @@ const BACKDROP_FRAG = /* glsl */ `
   }
 `;
 
-const MODES = { wave: 0, ripple: 1, bands: 2, drift: 3 };
 const BAND_MAPS = { depth: 0, radial: 1, vertical: 2, horizontal: 3 };
 
 export class VisualScene {
@@ -226,13 +253,14 @@ export class VisualScene {
       uAspect: { value: 1 },
       uSize: { value: 2 },
       uCamZ: { value: 1.4 },
-      uMode: { value: 1 },
-      uMotionMix: { value: 0 },
+      uLayers: { value: new THREE.Vector4() },
+      uExtraLayers: { value: new THREE.Vector3() },
       uBandMap: { value: 1 },
       uBandCount: { value: 64 },
       uInvert: { value: 0 },
       uLightPulse: { value: 1 },
       uSizePulse: { value: 1 },
+      uVibrancyPulse: { value: 0 },
       uHueEnabled: { value: 0 },
       uSizeComp: { value: 1 },
       uZMove: { value: 1 },
@@ -469,13 +497,14 @@ export class VisualScene {
     this.uniforms.uHueEnabled.value = hueReaction !== 0 ? 1 : 0;
     this.uniforms.uIntensity.value = s.intensity;
     this.uniforms.uDepthScale.value = s.depthScale;
-    this.uniforms.uMode.value = MODES[s.waveMode] ?? 1;
-    this.uniforms.uMotionMix.value = s.motionMix;
+    this.uniforms.uLayers.value.set(s.motionWave, s.motionRipple, s.motionBands, s.motionDrift);
+    this.uniforms.uExtraLayers.value.set(s.motionSwirl, s.motionBreathe, s.motionSweep);
     this.uniforms.uBandMap.value = BAND_MAPS[s.bandMap] ?? 0;
     this.uniforms.uInvert.value = s.invertBands ? 1 : 0;
     this.uniforms.uGlow.value = s.glow;
     this.uniforms.uLightPulse.value = s.boost;
     this.uniforms.uSizePulse.value = s.sizePulse;
+    this.uniforms.uVibrancyPulse.value = s.vibrancyPulse;
     const preserveBoostColor = !!s.preserveBoostColor;
     this.uniforms.uPreserveBoostColor.value = preserveBoostColor ? 1 : 0;
     this.uniforms.uZMove.value = s.depthMove;
@@ -497,7 +526,8 @@ export class VisualScene {
     this.uniforms.uSizeComp.value =
       1 / THREE.MathUtils.clamp(s.pointSize * s.pointSize, 0.35, 6);
     this.pointSizeSetting = s.pointSize;
-    this.motionMix = s.motionMix;
+    this.motionMix = Math.min(1, s.motionWave + s.motionRipple + s.motionBands + s.motionDrift
+      + s.motionSwirl + s.motionBreathe + s.motionSweep);
     this._fitCamera();
     this._layoutBackdrop();
     this._ensureBackdropResolution();

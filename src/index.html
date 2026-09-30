@@ -78,6 +78,10 @@
         <input type="range" id="sizePulse" min="0" max="1" step="0.05" />
         <span class="val"></span>
       </label>
+      <label class="slider-row"><span class="lbl">Vibrancy pulse<span class="q" data-tip="Each band's colours become richer as its sound rises, then return to the image colours. Favours muted colours, preserves their luminance and avoids clipping the source colours. Works independently of Light pulse and Colour pulse; 0% turns it off."></span></span>
+        <input type="range" id="vibrancyPulse" min="0" max="1" step="0.05" />
+        <span class="val"></span>
+      </label>
       <label class="slider-row"><span class="lbl">Colour pulse<span class="q" data-tip="New accents in each frequency band briefly shift their own points, then return to the wallpaper colours. Positive and negative values turn in opposite directions; 0° turns it off."></span></span>
         <input type="range" id="hueReaction" min="-180" max="180" step="5" />
         <span class="val"></span>
@@ -91,17 +95,31 @@
 
     <section>
       <h3>Motion</h3>
-      <p class="hint">Choose a shape to layer over direct audio movement:</p>
-      <div class="seg" id="waveSeg">
-        <button data-v="wave">Wave</button>
-        <button data-v="ripple">Ripple</button>
-        <button data-v="bands">Bands</button>
-        <button data-v="drift">Drift</button>
-      </div>
-      <label class="slider-row"><span class="lbl">Style amount<span class="q" data-tip="Adds the selected motion style on top of the full direct audio response. 0% is audio only; higher values add more shape without weakening the band's reaction."></span></span>
-        <input type="range" id="motionMix" min="0" max="1" step="0.05" />
-        <span class="val"></span>
-      </label>
+      <details class="fold" open>
+        <summary>Motion layers</summary>
+        <p class="hint">Mix any layers over direct audio movement. 0% turns a layer off; all at 0% gives audio only. Swirl and Breathe follow XY move; the others follow Depth move.</p>
+        <label class="slider-row"><span class="lbl">Wave<span class="q" data-tip="A travelling depth wave across the image."></span></span>
+          <input type="range" id="motionWave" min="0" max="1" step="0.05" /><span class="val"></span>
+        </label>
+        <label class="slider-row"><span class="lbl">Ripple<span class="q" data-tip="Depth rings flowing out from the centre."></span></span>
+          <input type="range" id="motionRipple" min="0" max="1" step="0.05" /><span class="val"></span>
+        </label>
+        <label class="slider-row"><span class="lbl">Bands<span class="q" data-tip="Horizontal depth slices pulsing at different phases."></span></span>
+          <input type="range" id="motionBands" min="0" max="1" step="0.05" /><span class="val"></span>
+        </label>
+        <label class="slider-row"><span class="lbl">Drift<span class="q" data-tip="Slow, flowing depth movement across the image."></span></span>
+          <input type="range" id="motionDrift" min="0" max="1" step="0.05" /><span class="val"></span>
+        </label>
+        <label class="slider-row"><span class="lbl">Swirl<span class="q" data-tip="Points gently twist around the centre and return. Uses XY move; does not rotate the whole wallpaper."></span></span>
+          <input type="range" id="motionSwirl" min="0" max="1" step="0.05" /><span class="val"></span>
+        </label>
+        <label class="slider-row"><span class="lbl">Breathe<span class="q" data-tip="Points expand and contract softly around the centre. Uses XY move; each region still follows its own audio band."></span></span>
+          <input type="range" id="motionBreathe" min="0" max="1" step="0.05" /><span class="val"></span>
+        </label>
+        <label class="slider-row"><span class="lbl">Sweep<span class="q" data-tip="Diagonal depth waves travel across the image."></span></span>
+          <input type="range" id="motionSweep" min="0" max="1" step="0.05" /><span class="val"></span>
+        </label>
+      </details>
       <p class="hint">Bands affect the image where you map them:</p>
       <div class="seg" id="bandMapSeg">
         <button data-v="radial">Radial</button>
