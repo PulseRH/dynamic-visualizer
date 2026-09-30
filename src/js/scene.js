@@ -136,11 +136,12 @@ const VERT = /* glsl */ `
       vColor = lit;
     }
     if (uPreserveBoostColor > 0.5) {
-      // Compress bright points once per vertex while preserving RGB proportions.
+      // A gentle shoulder preserves hue before the screen blend. Keep the
+      // shoulder near white so bright particles still have visible highlights.
       vec3 color = vColor * uGlow;
       float peak = max(max(color.r, color.g), color.b);
-      if (peak > 0.75) {
-        float mappedPeak = 1.0 - 0.25 / (1.0 + (peak - 0.75) / 0.25);
+      if (peak > 0.9) {
+        float mappedPeak = 1.0 - 0.1 / (1.0 + (peak - 0.9) / 0.1);
         color *= mappedPeak / peak;
       }
       vColor = color;
@@ -161,7 +162,7 @@ const FRAG = /* glsl */ `
     if (d2 > 0.25) discard;
     float a = smoothstep(0.25, 0.06, d2);
     if (uPreserveBoostColor > 0.5) {
-      gl_FragColor = vec4(vColor, uVis * a);
+      gl_FragColor = vec4(vColor * uVis * a, 1.0); // source colour for screen blend
     } else {
       gl_FragColor = vec4(vColor * uGlow * uVis * a, a); // original additive glow
     }
@@ -259,7 +260,12 @@ export class VisualScene {
       uniforms: this.uniforms,
       vertexShader: VERT,
       fragmentShader: FRAG,
-      blending: THREE.NormalBlending,
+      blending: THREE.CustomBlending,
+      blendEquation: THREE.AddEquation,
+      blendSrc: THREE.OneFactor,
+      blendDst: THREE.OneMinusSrcColorFactor,
+      blendSrcAlpha: THREE.ZeroFactor,
+      blendDstAlpha: THREE.OneFactor,
       depthTest: false,
       depthWrite: false,
       transparent: true,
@@ -482,7 +488,7 @@ export class VisualScene {
     this.uniforms.uBoost.value = s.boost;
     const preserveBoostColor = !!s.preserveBoostColor;
     this.uniforms.uPreserveBoostColor.value = preserveBoostColor ? 1 : 0;
-    const blending = preserveBoostColor ? THREE.NormalBlending : THREE.AdditiveBlending;
+    const blending = preserveBoostColor ? THREE.CustomBlending : THREE.AdditiveBlending;
     if (this.material.blending !== blending) this.material.blending = blending;
     this.uniforms.uZMove.value = s.depthMove;
     this.uniforms.uXYMove.value = s.xyMove;

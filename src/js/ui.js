@@ -155,6 +155,29 @@ export class UI {
       overscanEl.parentElement.querySelector('.val').textContent = v.toFixed(2);
       set({ overscan: v, overscanAuto: false });
     };
+
+    // Adjust only the range under the pointer; keep the panel scrollable
+    // everywhere else. Dispatch input so special sliders use their own logic.
+    for (const el of document.querySelectorAll('#panel input[type="range"]')) {
+      let wheelCarry = 0;
+      el.addEventListener('wheel', (event) => {
+        event.preventDefault();
+        const delta = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 100 : 1);
+        if (Math.sign(delta) !== Math.sign(wheelCarry)) wheelCarry = 0;
+        wheelCarry += delta;
+        if (Math.abs(wheelCarry) < 80) return;
+        // Some devices report an entire page in one event; still move just
+        // one notch so precision does not depend on mouse or trackpad speed.
+        wheelCarry = 0;
+        const step = Number(el.step) || 1;
+        const min = Number(el.min) || 0;
+        const max = Number(el.max);
+        const next = Math.max(min, Math.min(max, el.valueAsNumber - Math.sign(delta) * step));
+        if (next === el.valueAsNumber) return;
+        el.value = String(next);
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      }, { passive: false });
+    }
   }
 
   async _wireStartup() {
