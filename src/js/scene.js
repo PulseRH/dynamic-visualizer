@@ -1,12 +1,12 @@
 // Three.js scene: the image as a depth-layered point cloud, displaced by
 // audio-driven waves in the vertex shader. One draw call for the cloud,
-// one for the backdrop. Per-frame CPU cost = a handful of uniform writes.
+// one for the backdrop. Optional framing projects cached per-band bounds.
 
 import * as THREE from '../vendor/three.module.js';
 import { movementResponse } from './response.js';
 import { buildHueLookup, buildHueAngleLookup, HueAccentTracker, HueCycleTracker } from './hue.js';
 import { backdropTextureSize } from './backdrop-size.js';
-import { parallaxCoverageScale } from './screen-cover.js';
+import { DynamicFraming } from './dynamic-framing.js';
 
 const VERT = /* glsl */ `
   uniform float uEnergy;
@@ -354,20 +354,12 @@ export class VisualScene {
   }
 
   _fitCamera() {
-    // COVER fit: keep the image's square pixels and zoom until it fills the
-    // screen, cropping overflow — like background-size: cover. Overscan adds
-    // extra zoom so parallax offsets never reveal an edge.
+    // Base wallpaper cover fit. Dynamic framing measures the animated cloud
+    // independently so foreground depth does not crop a nearer side.
     const halfH = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
     const dH = 0.5 / halfH;                                       // height just fills
     const dW = (this.cloudAspect / 2) / (halfH * this.camera.aspect); // width just fills
-    this.camBaseZ = Math.min(dH, dW) / (this.overscan || 1);
-    const p = (this.parallaxSetting || 0) * 0.06;
-    const mp = (this.musicParallax || 0) * 0.075;
-    const drift = this.motionMix || 0;
-    this.coverageScale = this.keepScreenCovered
-      ? parallaxCoverageScale(this.camera, this.camBaseZ, this.cloudAspect,
-          p * (1 + 0.6 * drift) + mp, p * (1 + 0.4 * drift) + mp * 1.4)
-      : 1;
+    this.camBaseZ = Math.min(dH, dW);
   }
 
   _layoutBackdrop() {
@@ -429,6 +421,7 @@ export class VisualScene {
       this.points = null;
     }
     this.cloudAspect = cloud.aspect;
+    this.dynamicFraming = new DynamicFraming(cloud);
     this.uniforms.uAspect.value = cloud.aspect;
 
     const geo = new THREE.BufferGeometry();
@@ -565,13 +558,11 @@ export class VisualScene {
     this.uniforms.uPreserveBoostColor.value = preserveBoostColor ? 1 : 0;
     this.uniforms.uZMove.value = s.depthMove;
     this.uniforms.uXYMove.value = s.xyMove;
-    // Fit on setting/image/viewport changes, never per frame. Keep the
-    // original cover framing when off; both camera parallax sources count.
+    // Saved key retained: this now frames the whole animated foreground,
+    // rather than statically cropping the background and limiting parallax.
     this.keepScreenCovered = !!s.keepScreenCovered;
-    this.parallaxSetting = s.parallax;
-    this.overscan = s.keepScreenCovered
-      ? 1 + (Math.max(0, s.parallax) + Math.max(0, s.musicParallax || 0)) * 0.15
-      : 1;
+    this.overscan = 1;
+    if (!this.keepScreenCovered && this.dynamicFraming) this.dynamicFraming.zoom = null;
     this.hideBackdrop = !!s.hideBackdrop;
     this.cursorRipple = !!s.cursorRipple;
     this.uniforms.uExitPush.value = s.flybyExit ? 0.4 : 0;
@@ -719,8 +710,6 @@ export class VisualScene {
     const t = this.time;
     this.camera.position.x = Math.sin(t * 0.13) * p * 0.6 * drift + this.pointer.x * p + (this.musicPx ?? 0) * mp * mamp;
     this.camera.position.y = Math.cos(t * 0.11) * p * 0.4 * drift - this.pointer.y * p * 0.6 - (this.musicPy ?? 0) * mp * 1.4 * mamp;
-    this.camera.position.x *= this.coverageScale ?? 1;
-    this.camera.position.y *= this.coverageScale ?? 1;
 
     // cursor ripple: strength rises with cursor speed, decays when it stops
     const spd = Math.hypot(this.pointer.tx - (this._prevNx ?? 0), this.pointer.ty - (this._prevNy ?? 0)) / Math.max(dt, 0.001);
@@ -736,6 +725,15 @@ export class VisualScene {
     );
     this.camera.position.z = this.camBaseZ;
     this.camera.lookAt(0, 0, 0.1);
+    if (this.keepScreenCovered && this.dynamicFraming && this.uniforms.uVis.value > 0) {
+      this.dynamicFraming.update(this.camera, this.camBaseZ, this.uniforms, this.bandData, dt);
+      this.uniforms.uCamZ.value = this.camera.position.z;
+      this.uniforms.uSize.value = (this.pointSizeSetting || 1) * hPx * (this.spacingWorld || 1 / 300)
+        * this.camera.zoom / (2 * tanHalf * this.camera.position.z);
+    } else if (this.camera.zoom !== 1 || this.camera.projectionMatrix.elements[8] !== 0 || this.camera.projectionMatrix.elements[9] !== 0) {
+      this.camera.zoom = 1;
+      this.camera.updateProjectionMatrix();
+    }
 
     this.renderer.render(this.scene, this.camera);
     return dt;

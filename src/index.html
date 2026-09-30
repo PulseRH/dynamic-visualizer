@@ -164,7 +164,7 @@
         <input type="range" id="musicParallax" min="0" max="1" step="0.05" />
         <span class="val"></span>
       </label>
-      <label class="check-row"><input type="checkbox" id="keepScreenCovered" /> Keep screen covered<span class="q" data-tip="Automatically adds crop margin for cursor and music parallax and limits camera travel where needed to keep edges covered. Off uses the normal image fit and full camera travel. Calculated when settings or the viewport change, with no extra render pass."></span></label>
+      <label class="check-row"><input type="checkbox" id="keepScreenCovered" /> Frame whole visualiser<span class="q" data-tip="Dynamically centres and fits the whole animated point cloud, including nearer depth layers, parallax and audio motion. Eases the framing and leaves a small edge margin. The foreground may leave space around its edges. Off uses the normal fixed image fit. Uses cached bounds for each band; work per frame stays small regardless of particle count."></span></label>
       <label class="slider-row"><span class="lbl">Quiet movement<span class="q" data-tip="Minimum audio motion strength for quiet music, relative to full energy. Bands still shape movement; silence still fades out."></span></span>
         <input type="range" id="quietMovement" min="0" max="1" step="0.05" />
         <span class="val"></span>
