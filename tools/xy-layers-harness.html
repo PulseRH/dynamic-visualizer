@@ -20,7 +20,8 @@ try {
     rands: new Float32Array(rands), aspect: 1, count: rands.length });
   const base = { ...getAll(), depthScale: 0, depthMove: 0, xyMove: 0, cursorRipple: false,
     musicParallax: 0, motionSpeed: 0, intensity: 1, quietMovement: 1, energyResponse: 1,
-    overscan: 1, sizePulse: 0, boost: 0, hueReaction: 0, hueCycle: 0, vibrancyPulse: 0,
+    overscan: 1, sizePulse: 0, boost: 0, lightFollowMotion: false,
+    hueReaction: 0, hueCycle: 0, vibrancyPulse: 0,
     motionWave: 0, motionRipple: 0, motionBands: 0, motionDrift: 0,
     bandMap: 'depth', motionSwirl: 0, motionBreathe: 0, motionSweep: 0, motionBandShake: 0 };
   const gl = scene.renderer.getContext();
@@ -33,7 +34,8 @@ try {
     scene.waveTime = 1;
     scene.xyTime = 0;
     scene.loudEma = 1;
-    scene.render({ bands: new Float32Array(scene.bandCount).fill(amp), energy: 1, loud: 1 }, 0);
+    const levels = typeof amp === 'number' ? new Float32Array(scene.bandCount).fill(amp) : amp;
+    scene.render({ bands: levels, energy: 1, loud: 1 }, 0);
     const pixels = new Uint8Array(gl.drawingBufferWidth * gl.drawingBufferHeight * 4);
     gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
     if (gl.getError() !== gl.NO_ERROR) throw new Error('GPU readback failed');
@@ -68,6 +70,18 @@ try {
   }
   if (changed(frame({}, 0), frame({ motionSwirl: 1, motionBreathe: 1, motionBandShake: 1 }, 0)) !== 0) {
     throw new Error('Layers moved without band audio');
+  }
+  const light = { boost: 0.8, glow: 0.5, motionRipple: 1 };
+  checks.patternedLight = changed(frame(light), frame({ ...light, lightFollowMotion: true }));
+  if (checks.patternedLight < 500) throw new Error('Active layer did not shape audio light');
+  if (changed(frame({ motionRipple: 1 }), frame({ motionRipple: 1, lightFollowMotion: true })) !== 0) {
+    throw new Error('Pattern changed base glow with Light pulse off');
+  }
+  if (changed(frame({ boost: 0.8 }), frame({ boost: 0.8, lightFollowMotion: true })) !== 0) {
+    throw new Error('No-layer lighting failed to stay uniform');
+  }
+  if (changed(frame(light, 0), frame({ ...light, lightFollowMotion: true }, 0)) !== 0) {
+    throw new Error('Pattern lit silent audio');
   }
   // Distinct coloured markers let GPU readback verify whole-band translation,
   // independent of particle position/randomness, rather than just a changed image.
@@ -114,6 +128,18 @@ try {
   if (Math.abs(amountRatio - 0.25) > 0.05) throw new Error(`Band shake slider curve: ${amountRatio}`);
   checks.mediumShakeRelativeToPeak = mediumRatio;
   checks.halfSliderRelativeToFull = amountRatio;
+  // The blue marker is mapped to another band. Only the red/green band is
+  // active: patterned brightness must not leak into the silent blue band.
+  const isolated = new Float32Array(scene.bandCount);
+  isolated[Math.floor(0.2 * scene.bandCount)] = 0.7;
+  const unlitMarkers = frame({ glow: light.glow }, isolated);
+  const litMarkers = frame({ ...light, lightFollowMotion: true }, isolated);
+  let inactiveChange = 0, activeChange = 0;
+  for (let i = 0; i < unlitMarkers.length; i += 4) {
+    inactiveChange += Math.abs(litMarkers[i + 2] - unlitMarkers[i + 2]);
+    activeChange += Math.abs(litMarkers[i] - unlitMarkers[i]);
+  }
+  if (inactiveChange !== 0 || activeChange === 0) throw new Error('Patterned lighting failed band isolation');
   out.textContent = 'PASS: layers work with XY move 0, combine, stay still in silence; Band shake translates every point in a band together.\n'
     + JSON.stringify(checks, null, 2);
 } catch (error) {

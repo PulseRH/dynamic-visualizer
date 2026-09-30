@@ -129,6 +129,7 @@ export class UI {
     $('idleSleep').onchange = (e) => set({ idleSleep: e.target.checked });
     $('invertBands').onchange = (e) => set({ invertBands: e.target.checked });
     $('preserveBoostColor').onchange = (e) => set({ preserveBoostColor: e.target.checked });
+    $('lightFollowMotion').onchange = (e) => set({ lightFollowMotion: e.target.checked });
     $('matchImageAccent').onchange = (e) => set({ matchImageAccent: e.target.checked });
     $('hideBackdrop').onchange = (e) => set({ hideBackdrop: e.target.checked });
     $('flybyExit').onchange = (e) => set({ flybyExit: e.target.checked });
@@ -398,6 +399,7 @@ export class UI {
     $('idleSleep').checked = get('idleSleep');
     $('invertBands').checked = !!get('invertBands');
     $('preserveBoostColor').checked = !!get('preserveBoostColor');
+    $('lightFollowMotion').checked = !!get('lightFollowMotion');
     $('hideBackdrop').checked = !!get('hideBackdrop');
     $('flybyExit').checked = !!get('flybyExit');
     $('cursorRipple').checked = !!get('cursorRipple');

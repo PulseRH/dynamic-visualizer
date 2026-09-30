@@ -7,6 +7,7 @@ const DEFAULTS = {
   pointSize: 1.0,
   glow: 1.1,
   boost: 1.0,              // Light pulse: extra per-band brightness (saved key retained)
+  lightFollowMotion: false, // shape extra audio light with active spatial layers
   sizePulse: 1.0,          // independent per-band point growth; 1 = up to 90% larger
   vibrancyPulse: 0,        // per-band saturation lift, preserving source luminance
   motionWave: 0,

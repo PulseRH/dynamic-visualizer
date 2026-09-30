@@ -20,6 +20,7 @@ const VERT = /* glsl */ `
   uniform float uBandCount;
   uniform float uInvert;
   uniform float uLightPulse;
+  uniform float uLightFollowMotion;
   uniform float uSizePulse;
   uniform float uVibrancyPulse;
   uniform float uPreserveBoostColor;
@@ -109,19 +110,36 @@ const VERT = /* glsl */ `
     // clear and adding Breathe cannot dilute Swirl (or vice versa).
     vec2 layeredXY = position.xy;
     float layerDrive = amp * min(uIntensity * uDyn, 1.5);
+    float lightStyle = style;
+    float lightTotal = layerTotal;
     if (uExtraLayers.x > 0.0) {
-      float turn = sin(uWaveTime * 0.8 + length(position.xy) * 4.0 + near * 1.2)
-                 * uExtraLayers.x * layerDrive * 0.112; // new maximum = former 28%
+      float swirlPhase = sin(uWaveTime * 0.8 + length(position.xy) * 4.0 + near * 1.2);
+      float turn = swirlPhase * uExtraLayers.x * layerDrive * 0.112; // new maximum = former 28%
       float c = cos(turn), s = sin(turn);
       layeredXY = vec2(c * layeredXY.x - s * layeredXY.y,
                        s * layeredXY.x + c * layeredXY.y);
+      if (uLightFollowMotion > 0.5) {
+        lightStyle += swirlPhase * uExtraLayers.x;
+        lightTotal += uExtraLayers.x;
+      }
     }
     if (uExtraLayers.y > 0.0) {
-      float swell = sin(uWaveTime * 1.4 + near * 1.2)
-                  * uExtraLayers.y * layerDrive * 0.2;
+      float breathePhase = sin(uWaveTime * 1.4 + near * 1.2);
+      float swell = breathePhase * uExtraLayers.y * layerDrive * 0.2;
       layeredXY *= 1.0 + swell;
+      if (uLightFollowMotion > 0.5) {
+        lightStyle += breathePhase * uExtraLayers.y;
+        lightTotal += uExtraLayers.y;
+      }
     }
     pos.xy += layeredXY - position.xy;
+    if (uLightFollowMotion > 0.5 && uLightPulse > 0.0 && lightTotal > 0.0) {
+      // Shape only the extra light, never the resting image/glow. Keep the
+      // original band's level and peak brightness; stronger layer mixes
+      // reveal more pattern rather than multiplying brightness when stacked.
+      float pattern = 0.6 + 0.4 * clamp(lightStyle / lightTotal, -1.0, 1.0);
+      lightAmp *= mix(1.0, pattern, min(lightTotal, 1.0));
+    }
     if (uExtraLayers.w > 0.0) {
       // Every point mapped to this band receives exactly the same vector.
       // Smooth, distinct phases give bands their own motion without flicker.
@@ -280,6 +298,7 @@ export class VisualScene {
       uBandCount: { value: 64 },
       uInvert: { value: 0 },
       uLightPulse: { value: 1 },
+      uLightFollowMotion: { value: 0 },
       uSizePulse: { value: 1 },
       uVibrancyPulse: { value: 0 },
       uHueEnabled: { value: 0 },
@@ -531,6 +550,7 @@ export class VisualScene {
     this.uniforms.uInvert.value = s.invertBands ? 1 : 0;
     this.uniforms.uGlow.value = s.glow;
     this.uniforms.uLightPulse.value = s.boost;
+    this.uniforms.uLightFollowMotion.value = s.lightFollowMotion ? 1 : 0;
     this.uniforms.uSizePulse.value = s.sizePulse;
     this.uniforms.uVibrancyPulse.value = s.vibrancyPulse;
     const preserveBoostColor = !!s.preserveBoostColor;
