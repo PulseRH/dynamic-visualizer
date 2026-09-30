@@ -4,7 +4,7 @@
 
 import * as THREE from '../vendor/three.module.js';
 import { movementResponse } from './response.js';
-import { buildHueLookup, HueAccentTracker } from './hue.js';
+import { buildHueLookup, buildHueAngleLookup, HueAccentTracker, HueCycleTracker } from './hue.js';
 import { backdropTextureSize } from './backdrop-size.js';
 
 const VERT = /* glsl */ `
@@ -259,6 +259,8 @@ export class VisualScene {
     this.hueReaction = 0;
     this.hueLookup = buildHueLookup(0);
     this.hueTracker = new HueAccentTracker(this.bandCount);
+    this.hueCycle = 0;
+    this.hueCycleTracker = new HueCycleTracker(this.bandCount);
     this.bandTex = new THREE.DataTexture(this.bandData, this.bandCount, 1, THREE.RGBAFormat);
     this.bandTex.magFilter = THREE.NearestFilter;
     this.bandTex.minFilter = THREE.NearestFilter;
@@ -496,6 +498,7 @@ export class VisualScene {
     this.bandCount = n;
     this.bandData = new Uint8Array(n * 4);
     this.hueTracker = new HueAccentTracker(n);
+    this.hueCycleTracker = new HueCycleTracker(n);
     this.bandTex.dispose();
     this.bandTex = new THREE.DataTexture(this.bandData, n, 1, THREE.RGBAFormat);
     this.bandTex.magFilter = THREE.NearestFilter;
@@ -513,7 +516,13 @@ export class VisualScene {
       this.hueLookup = buildHueLookup(hueReaction);
     }
     this.hueFocus = s.hueFocus;
-    this.uniforms.uHueEnabled.value = hueReaction !== 0 ? 1 : 0;
+    const hueCycle = Math.max(0, Math.min(180, s.hueCycle || 0));
+    if (hueCycle > 0 && this.hueCycle === 0) {
+      this.hueCycleTracker = new HueCycleTracker(this.bandCount);
+      this.hueAngleLookup ||= buildHueAngleLookup();
+    }
+    this.hueCycle = hueCycle;
+    this.uniforms.uHueEnabled.value = hueReaction !== 0 || hueCycle > 0 ? 1 : 0;
     this.uniforms.uIntensity.value = s.intensity;
     this.uniforms.uDepthScale.value = s.depthScale;
     this.uniforms.uLayers.value.set(s.motionWave, s.motionRipple, s.motionBands, s.motionDrift);
@@ -571,6 +580,9 @@ export class VisualScene {
     const hueLevels = this.hueReaction
       ? this.hueTracker.update(bands, count, dt, this.hueFocus)
       : null;
+    const cycleAngles = this.hueCycle
+      ? this.hueCycleTracker.update(bands, count, dt, this.hueCycle)
+      : null;
     // bass + treble levels for music parallax, folded into the texture loop
     // (lowest vs highest quarter of bands)
     let lowSum = 0, highSum = 0, lowN = 0, highN = 0;
@@ -581,8 +593,11 @@ export class VisualScene {
       const v = Math.min(255, b * 255) | 0;
       const offset = i * 4;
       const hueOffset = (hueLevels ? hueLevels[i] : v) * 2;
-      const hueCos = this.hueLookup[hueOffset];
-      const hueSin = this.hueLookup[hueOffset + 1];
+      const combinedOffset = cycleAngles
+        ? (Math.round((hueLevels ? hueLevels[i] / 255 * this.hueReaction : 0) + cycleAngles[i]) + 360) * 2
+        : 0;
+      const hueCos = cycleAngles ? this.hueAngleLookup[combinedOffset] : this.hueLookup[hueOffset];
+      const hueSin = cycleAngles ? this.hueAngleLookup[combinedOffset + 1] : this.hueLookup[hueOffset + 1];
       if (this.bandData[offset] !== v || this.bandData[offset + 1] !== hueCos ||
           this.bandData[offset + 2] !== hueSin || this.bandData[offset + 3] !== 255) {
         this.bandData[offset] = v;

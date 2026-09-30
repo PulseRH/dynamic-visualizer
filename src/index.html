@@ -86,7 +86,11 @@
         <input type="range" id="hueReaction" min="-180" max="180" step="5" />
         <span class="val"></span>
       </label>
-      <label class="slider-row"><span class="lbl">Colour focus<span class="q" data-tip="Higher values colour only bands that change more than the rest. Lower values let more of the image react at once."></span></span>
+      <label class="slider-row"><span class="lbl">Hue cycle<span class="q" data-tip="Each band's colours smoothly swing through positive and negative hue shifts. This sets the maximum shift in either direction. Louder bands cycle faster and further; silence fades back to the image colours. Mixes with Colour pulse; 0° turns the cycle off."></span></span>
+        <input type="range" id="hueCycle" min="0" max="180" step="5" />
+        <span class="val"></span>
+      </label>
+      <label class="slider-row"><span class="lbl">Colour focus<span class="q" data-tip="Higher values make Colour pulse affect only bands that change more than the rest. Lower values let more of the image react at once. Hue cycle has its own band response."></span></span>
         <input type="range" id="hueFocus" min="0" max="1" step="0.05" />
         <span class="val"></span>
       </label>

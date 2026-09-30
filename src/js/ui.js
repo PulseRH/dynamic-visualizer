@@ -97,6 +97,7 @@ export class UI {
     slider('sizePulse', 'sizePulse', (v) => `${Math.round(v * 100)}%`);
     slider('vibrancyPulse', 'vibrancyPulse', (v) => `${Math.round(v * 100)}%`);
     slider('hueReaction', 'hueReaction', (v) => `${Math.round(v)}°`);
+    slider('hueCycle', 'hueCycle', (v) => `±${Math.round(v)}°`);
     slider('hueFocus', 'hueFocus', (v) => `${Math.round(v * 100)}%`);
     slider('intensity', 'intensity', (v) => v.toFixed(2));
     for (const key of ['motionWave', 'motionRipple', 'motionBands', 'motionDrift',
@@ -340,6 +341,8 @@ export class UI {
     $('vibrancyPulse').parentElement.querySelector('.val').textContent = `${Math.round(get('vibrancyPulse') * 100)}%`;
     setSlider('hueReaction', get('hueReaction'));
     $('hueReaction').parentElement.querySelector('.val').textContent = `${Math.round(get('hueReaction'))}°`;
+    setSlider('hueCycle', get('hueCycle'));
+    $('hueCycle').parentElement.querySelector('.val').textContent = `±${Math.round(get('hueCycle'))}°`;
     setSlider('hueFocus', get('hueFocus'));
     $('hueFocus').parentElement.querySelector('.val').textContent = `${Math.round(get('hueFocus') * 100)}%`;
     setSlider('intensity', get('intensity'));

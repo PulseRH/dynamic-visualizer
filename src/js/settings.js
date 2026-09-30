@@ -21,6 +21,7 @@ const DEFAULTS = {
   preserveBoostColor: true, // soften extra audio light while retaining the original base glow
   matchImageAccent: true,   // UI accent sampled once when the image changes; off = purple
   hueReaction: 0,          // signed maximum per-band colour rotation in degrees
+  hueCycle: 0,             // audio-driven per-band hue oscillation in both directions
   hueFocus: 1,             // 0 = broad colour accents, 1 = only standout band changes
   waveMode: 'ripple',      // legacy single-style setting, retained for migration
   motionMix: 0,           // legacy single-style amount, retained for migration

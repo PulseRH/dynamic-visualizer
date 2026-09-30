@@ -20,12 +20,16 @@ try {
     rands: new Float32Array(rands), aspect: 1, count: rands.length });
   const base = { ...getAll(), depthScale: 0, depthMove: 0, xyMove: 0, cursorRipple: false,
     musicParallax: 0, motionSpeed: 0, intensity: 1, quietMovement: 1, energyResponse: 1,
-    overscan: 1, sizePulse: 0, boost: 0, hueReaction: 0, vibrancyPulse: 0,
+    overscan: 1, sizePulse: 0, boost: 0, hueReaction: 0, hueCycle: 0, vibrancyPulse: 0,
     motionWave: 0, motionRipple: 0, motionBands: 0, motionDrift: 0,
     bandMap: 'depth', motionSwirl: 0, motionBreathe: 0, motionSweep: 0, motionBandShake: 0 };
   const gl = scene.renderer.getContext();
-  function frame(patch, amp = 0.7) {
+  function frame(patch, amp = 0.7, cyclePhase = null) {
     scene.applySettings({ ...base, ...patch });
+    if (cyclePhase !== null) {
+      scene.hueCycleTracker.phases.fill(cyclePhase);
+      scene.hueCycleTracker.envelopes.fill(1);
+    }
     scene.waveTime = 1;
     scene.xyTime = 0;
     scene.loudEma = 1;
@@ -55,6 +59,13 @@ try {
     bandShakeAddsToOtherLayers: changed(both, frame({ motionSwirl: 1, motionBreathe: 1, motionBandShake: 1 })),
   };
   for (const [key, n] of Object.entries(checks)) if (n < 500) throw new Error(`${key}: only ${n} pixels moved`);
+  const positiveHue = frame({ hueCycle: 60 }, 1, Math.PI / 2);
+  const negativeHue = frame({ hueCycle: 60 }, 1, Math.PI * 1.5);
+  checks.oppositeHueCycleColours = changed(positiveHue, negativeHue);
+  if (checks.oppositeHueCycleColours < 500) throw new Error('Hue cycle directions did not change GPU colours');
+  if (changed(frame({}, 0), frame({ hueCycle: 60 }, 0, Math.PI / 2)) !== 0) {
+    throw new Error('Hue cycle recoloured silent bands');
+  }
   if (changed(frame({}, 0), frame({ motionSwirl: 1, motionBreathe: 1, motionBandShake: 1 }, 0)) !== 0) {
     throw new Error('Layers moved without band audio');
   }

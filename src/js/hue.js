@@ -11,6 +11,41 @@ export function buildHueLookup(degrees) {
   return lookup;
 }
 
+// Combined pulse + cycle can span -360..360 degrees. Build once, then encode
+// the band's final rotation without per-frame sine/cosine conversion pairs.
+export function buildHueAngleLookup() {
+  const lookup = new Uint8Array(721 * 2);
+  for (let degree = -360; degree <= 360; degree++) {
+    const angle = (degree % 360) * Math.PI / 180;
+    const offset = (degree + 360) * 2;
+    lookup[offset] = Math.round((Math.cos(angle) + 1) * 127.5);
+    lookup[offset + 1] = Math.round((Math.sin(angle) + 1) * 127.5);
+  }
+  return lookup;
+}
+
+export class HueCycleTracker {
+  constructor(count) {
+    this.phases = Float64Array.from({ length: count }, (_, i) => i * 2.399963 % (Math.PI * 2));
+    this.envelopes = new Float32Array(count);
+    this.angles = new Float32Array(count);
+  }
+
+  update(bands, count, dt, degrees) {
+    const elapsed = Math.max(0, Math.min(0.1, dt));
+    const amount = Math.max(0, Math.min(180, degrees));
+    for (let i = 0; i < count; i++) {
+      const level = Math.max(0, Math.min(1, bands[i] || 0));
+      const follow = 1 - Math.exp(-elapsed / (level > this.envelopes[i] ? 0.12 : 0.35));
+      this.envelopes[i] += (level - this.envelopes[i]) * follow;
+      // Freeze phase in silence; the envelope returns to the source colour.
+      this.phases[i] = (this.phases[i] + elapsed * level * 2) % (Math.PI * 2);
+      this.angles[i] = Math.sin(this.phases[i]) * this.envelopes[i] * amount;
+    }
+    return this.angles;
+  }
+}
+
 // A slow per-band baseline lets colour react to new accents, then return to
 // the wallpaper's original colours during sustained notes. Subtracting the
 // frame's mean accent keeps a broadband hit from recolouring every point.
