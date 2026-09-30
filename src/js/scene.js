@@ -111,7 +111,7 @@ const VERT = /* glsl */ `
     float layerDrive = amp * min(uIntensity * uDyn, 1.5);
     if (uExtraLayers.x > 0.0) {
       float turn = sin(uWaveTime * 0.8 + length(position.xy) * 4.0 + near * 1.2)
-                 * uExtraLayers.x * layerDrive * 0.4;
+                 * uExtraLayers.x * layerDrive * 0.112; // new maximum = former 28%
       float c = cos(turn), s = sin(turn);
       layeredXY = vec2(c * layeredXY.x - s * layeredXY.y,
                        s * layeredXY.x + c * layeredXY.y);
@@ -546,7 +546,7 @@ export class VisualScene {
       1 / THREE.MathUtils.clamp(s.pointSize * s.pointSize, 0.35, 6);
     this.pointSizeSetting = s.pointSize;
     this.motionMix = Math.min(1, s.motionWave + s.motionRipple + s.motionBands + s.motionDrift
-      + s.motionSwirl + s.motionBreathe + s.motionSweep);
+      + s.motionSwirl * 0.28 + s.motionBreathe + s.motionSweep);
     this._fitCamera();
     this._layoutBackdrop();
     this._ensureBackdropResolution();

@@ -25,7 +25,7 @@ for (const [saved, style, mix] of [
   }
 }
 
-let persisted = { waveMode: 'wave', motionMix: 1, motionWave: 0, motionRipple: 0.4, motionSwirl: 0.7 };
+let persisted = { waveMode: 'wave', motionMix: 1, motionWave: 0, motionRipple: 0.4, motionSwirl: 0.7, swirlRangeVersion: 1 };
 let storageListener;
 globalThis.window = { addEventListener: (event, fn) => { if (event === 'storage') storageListener = fn; } };
 globalThis.localStorage = {
@@ -51,4 +51,19 @@ const reloaded = await import(`data:text/javascript;base64,${Buffer.from(source)
 assert.equal(reloaded.get('motionWave'), 0);
 assert.equal(reloaded.get('motionRipple'), 0);
 assert.equal(reloaded.get('motionBandShake'), 0);
-console.log('Old styles migrate into layers; independent layers and vibrancy persist, sync across windows, and stay off after reload.');
+for (const [saved, expected] of [
+  [{ motionSwirl: 0 }, 0],
+  [{ motionSwirl: 0.14 }, 0.5],
+  [{ motionSwirl: 0.28 }, 1],
+  [{ motionSwirl: 0.7 }, 1],
+  [{ motionSwirl: 0.4, swirlRangeVersion: 1 }, 0.4],
+]) {
+  let stored = saved;
+  globalThis.localStorage = { getItem: () => JSON.stringify(stored), setItem: (_, value) => { stored = JSON.parse(value); } };
+  const migrated = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}#swirl${Math.random()}`);
+  assert.equal(migrated.get('motionSwirl'), expected);
+  migrated.set({ motionBandShake: 0.2 });
+  const reload = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}#swirlReload${Math.random()}`);
+  assert.equal(reload.get('motionSwirl'), expected, 'Swirl range migrates once, never again on reload');
+}
+console.log('Motion layers persist and sync; Swirl migrates once to its gentler range, preserving amounts within the new maximum.');

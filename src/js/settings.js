@@ -14,6 +14,7 @@ const DEFAULTS = {
   motionBands: 0,
   motionDrift: 0,
   motionSwirl: 0,
+  swirlRangeVersion: 1,   // maximum reduced to the original 28% strength
   motionBreathe: 0,
   motionSweep: 0,
   motionBandShake: 0,     // coherent XY translation for each mapped audio band
@@ -71,6 +72,12 @@ function load() {
 
 function migrateSaved(saved) {
   const migrated = { ...migrateMotion(saved) };
+  if (migrated.swirlRangeVersion !== 1) {
+    if (Number.isFinite(migrated.motionSwirl)) {
+      migrated.motionSwirl = Math.max(0, Math.min(1, migrated.motionSwirl / 0.28));
+    }
+    migrated.swirlRangeVersion = 1;
+  }
   // Carry the old single-style amount into its layer once. Explicit layer
   // settings, including all-zero layers, must never revive the old style.
   const layers = ['motionWave', 'motionRipple', 'motionBands', 'motionDrift',
