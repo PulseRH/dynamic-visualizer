@@ -248,7 +248,10 @@ async function rebuildCloud() {
   const cloud = await buildCloud(currentImage, depth, get('pointCount'));
   if (token !== rebuildToken) return;
   const previousImage=displayedImage;
-  if(currentImage!==previousImage) scene.beginCrossfade(get('wallpaperCrossfade'));
+  if(currentImage!==previousImage) {
+    const visible=!gameMode && (isWallpaperWindow || (!document.hidden && !get('previewPaused') && !document.body.classList.contains('settings-only')));
+    scene.beginCrossfade(visible ? get('wallpaperCrossfade') : 0);
+  }
   scene.setCloud(cloud);
   scene.setBackdrop(currentImage, 'dim');
   scene.applySettings(getAll());
