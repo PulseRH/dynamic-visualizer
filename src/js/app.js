@@ -30,6 +30,7 @@ let relayedDepth = null;      // depth grid received from the preview window
 let awaitingRelay = false;
 let lastDepthGrid = null;     // this window's last computed grid (preview: for re-sends)
 let gameMode = false;    // true: a game/app owns the screen — pause rendering
+let previewVisible = false; // native visibility; document.hidden stays false in Electron
 let rebuildToken = 0;
 let activeDepthAbort = null;
 let idleVis = 1;
@@ -249,7 +250,7 @@ async function rebuildCloud() {
   if (token !== rebuildToken) return;
   const previousImage=displayedImage;
   if(currentImage!==previousImage) {
-    const visible=!gameMode && (isWallpaperWindow || (!document.hidden && !get('previewPaused') && !document.body.classList.contains('settings-only')));
+    const visible=!gameMode && (isWallpaperWindow || (previewVisible && !get('previewPaused') && !document.body.classList.contains('settings-only')));
     scene.beginCrossfade(visible ? get('wallpaperCrossfade') : 0);
   }
   scene.setCloud(cloud);
@@ -450,7 +451,7 @@ if (!isWallpaperWindow) {
   setInterval(() => {
     const now = performance.now();
     // minimized with wallpaper mode off: nothing is watching, skip the work
-    if (document.hidden && !wallpaperAudioActive) { lastA = now; return; }
+    if (!previewVisible && !wallpaperAudioActive) { lastA = now; return; }
     const dt = Math.min(50, now - lastA);
     lastA = now;
     const a = audio.frame();
@@ -465,7 +466,7 @@ function loop(now) {
   const analyzer = isWallpaperWindow ? remoteAnalyzer : audio.analyzer;
   if (gameMode) return;
   // preview window paused: hold the last frame (wallpaper windows ignore it)
-  if (!isWallpaperWindow && (get('previewPaused') || document.body.classList.contains('settings-only'))) return;
+  if (!isWallpaperWindow && (!previewVisible || get('previewPaused') || document.body.classList.contains('settings-only'))) return;
 
   if (document.hidden) return;
 
@@ -481,7 +482,7 @@ function loop(now) {
   // hard, unless Full quality preview is on
   let effectiveCap = cap;
   if (!isWallpaperWindow && wallpaperAudioActive && !get('previewFullQuality')) {
-    effectiveCap = Math.min(effectiveCap, 15);
+    effectiveCap = effectiveCap>0 ? Math.min(effectiveCap, 15) : 15;
   }
   const interval = effectiveCap > 0 ? 1000 / effectiveCap : 0;
   const nextClock = advanceFrameClock(now, lastRender, interval);
@@ -529,6 +530,11 @@ window.__dv = { audio, scene, get, set, loadUrl: (u) => loadFromUrl(u), rebuild:
   // game mode (manual hotkey or auto-fullscreen): every window stops rendering
   bridge.onGameMode((on) => { gameMode = on; });
   gameMode = await bridge.isVisualizerPaused();
+  bridge.onWindowVisibility(visible => {
+    previewVisible=visible;
+    if(!visible && !isWallpaperWindow) scene.endCrossfade();
+  });
+  previewVisible=await bridge.isWindowVisible();
   // wallpaper mode may have been restored before this window existed — the
   // broadcast was missed, so pick up the current state directly
   bridge.isWallpaperActive().then((on) => {

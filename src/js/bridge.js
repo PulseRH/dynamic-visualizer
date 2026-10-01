@@ -80,6 +80,13 @@ export const bridge = {
     return !!(await ev.isWallpaperActive());
   },
   isVisualizerPaused: () => ev ? ev.isVisualizerPaused() : Promise.resolve(false),
+  isWindowVisible: () => ev ? ev.isWindowVisible() : Promise.resolve(!document.hidden),
+  onWindowVisibility: cb => {
+    if(ev) return ev.onWindowVisibility(cb);
+    const handler=()=>cb(!document.hidden);
+    document.addEventListener('visibilitychange',handler);
+    return ()=>document.removeEventListener('visibilitychange',handler);
+  },
 
   saveImage(dataUrl) {
     if (ev) return ev.saveImage(dataUrl);

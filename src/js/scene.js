@@ -260,8 +260,10 @@ export class VisualScene {
       alpha: false,
       powerPreference: 'high-performance',
       stencil: false,
+      depth: false, // all materials disable depth testing and depth writes
     });
     this.renderer.setClearColor(0x000000, 1);
+    this.renderer.autoClearDepth = false;
     this.basePixelRatio = Math.min(window.devicePixelRatio || 1, 2);
     this.quality = 1; // adaptive multiplier on pixel ratio
 
@@ -455,6 +457,7 @@ export class VisualScene {
   setIdleVis(v, dtMs = 16) {
     this.idleVis = v;
     this.uniforms.uVis.value = v;
+    if(this.points) this.points.visible=v>0;
     if (this.backdrop && !this.backdrop.isDestroyed) {
       const base = this.hideBackdrop ? 0 : this.backdropBaseDim;
       const target = base + (1 - base) * (1 - v);

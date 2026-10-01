@@ -17,6 +17,12 @@ contextBridge.exposeInMainWorld('dv', {
   disableWallpaper: () => ipcRenderer.invoke('wallpaperMode:disable'),
   isWallpaperActive: () => ipcRenderer.invoke('wallpaperMode:state'),
   isVisualizerPaused: () => ipcRenderer.invoke('gamemode:state'),
+  isWindowVisible: () => ipcRenderer.invoke('window:visible'),
+  onWindowVisibility: (cb) => {
+    const handler = (_e, visible) => cb(visible);
+    ipcRenderer.on('window:visibility', handler);
+    return () => ipcRenderer.removeListener('window:visibility', handler);
+  },
   onWallpaperState: (cb) => {
     const handler = (_e, on) => cb(on);
     ipcRenderer.on('wallpaperMode:changed', handler);

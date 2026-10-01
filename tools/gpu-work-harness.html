@@ -1,0 +1,34 @@
+<!doctype html><meta charset="utf-8"><title>GPU work regression check</title><pre id="result">Running…</pre>
+<script type="module">
+import {VisualScene} from '../src/js/scene.js';
+import {getAll} from '../src/js/settings.js';
+try{
+  const url=new URL('../src/js/scene.js',location.href);
+  let source=await(await fetch(url)).text();
+  source=source.replace('depth: false, //','depth: true, //').replace('this.renderer.autoClearDepth = false;','this.renderer.autoClearDepth = true;');
+  source=source.replace(/from (['"])([^'"]+)\1/g,(_,q,path)=>`from ${q}${new URL(path,url).href}${q}`);
+  const blobUrl=URL.createObjectURL(new Blob([source],{type:'text/javascript'}));
+  const {VisualScene:Baseline}=await import(blobUrl);URL.revokeObjectURL(blobUrl);
+  const make=Class=>{const c=document.createElement('canvas');document.body.append(c);const scene=new Class(c);scene.renderer.setSize(320,180,false);scene.camera.aspect=16/9;return scene;};
+  const before=make(Baseline),after=make(VisualScene);
+  const positions=[],colors=[],rands=[];
+  for(let y=0;y<90;y++)for(let x=0;x<160;x++){
+    positions.push((x/159-.5)*16/9,y/89-.5,x/159);colors.push(x/159,y/89,.45);rands.push(((x*37+y*19)%101)/101);
+  }
+  const cloud={count:rands.length,aspect:16/9,positions:new Float32Array(positions),colors:new Float32Array(colors),rands:new Float32Array(rands)};
+  const image=document.createElement('canvas');image.width=160;image.height=90;image.getContext('2d').fillStyle='#315488';image.getContext('2d').fillRect(0,0,160,90);
+  for(const scene of [before,after]){scene.setCloud(cloud);scene.setBackdrop(image,'dim');}
+  if(after.renderer.getContext().getContextAttributes().depth!==false)throw new Error('Depth buffer still allocated');
+  const read=scene=>{scene.renderer.render(scene.scene,scene.camera);const gl=scene.renderer.getContext(),pixels=new Uint8Array(320*180*4);gl.readPixels(0,0,320,180,gl.RGBA,gl.UNSIGNED_BYTE,pixels);if(gl.getError()!==gl.NO_ERROR)throw new Error('WebGL error');return pixels;};
+  for(const map of ['depth','radial','vertical','horizontal'])for(const idle of [0,.4,1]){
+    const settings={...getAll(),bandMap:map,bandDistribution:-.6,motionWave:.3,motionSwirl:.5,motionBreathe:.4,motionBandShake:.2,hueReaction:60,hueCycle:30,vibrancyPulse:1,lightFollowMotion:true,centeredMotion:true,equalDepthMovement:true};
+    for(const scene of [before,after]){scene.applySettings(settings);scene.setIdleVis(idle);scene.uniforms.uWaveTime.value=1.7;scene.uniforms.uXYTime.value=.7;scene.uniforms.uSize.value=12;scene.bandData.fill(128);scene.bandTex.needsUpdate=true;}
+    // Baseline previously submitted invisible points, whose RGB contribution is zero.
+    before.points.visible=true;
+    const a=read(before),b=read(after);if(!a.every((v,i)=>v===b[i]))throw new Error(`Pixels changed: ${map}, idle=${idle}`);
+    if(idle===0&&after.renderer.info.render.points!==0)throw new Error('Invisible particles still submitted');
+  }
+  document.querySelector('#result').textContent='PASS: pixel-identical output across four mappings and three fade states; no depth buffer; zero invisible-particle submissions.';
+  for(const s of [before,after])s.renderer.dispose();
+}catch(e){document.querySelector('#result').textContent='FAIL: '+e.stack;}
+</script>

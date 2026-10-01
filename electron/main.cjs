@@ -251,6 +251,11 @@ function createWindow({ show = true } = {}) {
     },
   });
   mainWindow.loadURL('app://bundle/src/index.html');
+  const preview = mainWindow;
+  const sendVisibility = () => {
+    if (!preview.isDestroyed()) preview.webContents.send('window:visibility', preview.isVisible() && !preview.isMinimized());
+  };
+  for (const event of ['show', 'hide', 'minimize', 'restore']) preview.on(event, sendVisibility);
   // Closing the preview while wallpaper mode is running hides it to the tray
   // instead of quitting — the wallpaper (and its audio analysis) keep playing.
   mainWindow.on('close', (e) => {
@@ -324,6 +329,10 @@ ipcMain.handle('app:info', () => ({
   version: app.getVersion(),
   electron: process.versions.electron,
 }));
+ipcMain.handle('window:visible', event => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  return !!win && !win.isDestroyed() && win.isVisible() && !win.isMinimized();
+});
 
 ipcMain.handle('wallpaper:get', async () => {
   const p = await getWallpaperPath();
