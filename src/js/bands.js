@@ -6,6 +6,16 @@ export const BAND_COUNT = 64;   // default; the count is now user-configurable
 
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
+// Input is a band level divided by the shared, decaying peak reference.
+// Used by both audio analysis and the static settings diagram.
+export function bandResponse(level, gain, floor, curve) {
+  const amplified = clamp01(level * gain);
+  return Math.pow(amplified <= floor ? 0 : (amplified - floor) / (1 - floor), curve);
+}
+export function easingRates(easeIn, easeOut) {
+  return { up: .9 - .6 * clamp01(easeIn), down: .5 - .46 * clamp01(easeOut) };
+}
+
 export class BandAnalyzer {
   constructor(count = BAND_COUNT) {
     this.count = count;
@@ -169,9 +179,7 @@ export class BandAnalyzer {
     // small; only peaks reach full movement.
     const gain = this.sensitivity, floor = this.floor, curve = this.curve;
     const shape = (v) => {
-      v = clamp01(v * norm * gain);
-      v = v <= floor ? 0 : (v - floor) / (1 - floor);
-      return Math.pow(v, curve);
+      return bandResponse(v * norm, gain, floor, curve);
     };
 
     // stickiness split into attack ("in") and release ("out"): how fast
@@ -179,8 +187,7 @@ export class BandAnalyzer {
     // 0 = instant, 1 = reluctant/long hold
     const sIn = Math.max(0, Math.min(1, this.stickyIn ?? 0.5));
     const sOut = Math.max(0, Math.min(1, this.stickyOut ?? 0.5));
-    const up = 0.9 - 0.6 * sIn;
-    const down = 0.5 - 0.46 * sOut;
+    const { up, down } = easingRates(sIn, sOut);
 
     bass = shape(clamp01(bass / 10));
     this.bassEnergy = bass;

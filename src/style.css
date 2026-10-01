@@ -111,6 +111,12 @@ body.settings-only #closePanel { display: none; }
 .recent-wallpaper { flex: 0 0 68px; height: 42px; padding: 2px; border: 1px solid var(--border); border-radius: 6px; background: transparent; cursor: pointer; }
 .recent-wallpaper img { width: 100%; height: 100%; object-fit: cover; border-radius: 3px; display: block; }
 .recent-wallpaper:hover, .recent-wallpaper[aria-pressed="true"] { border-color: var(--accent-2); }
+.response-graph { width: 100%; height: auto; display: block; color: var(--accent-2); margin-top: 12px; }
+.graph-axis { fill: none; stroke: var(--text-dim); opacity: .4; }
+.graph-line { fill: none; stroke: currentColor; stroke-width: 2; }
+.graph-guide { fill: none; stroke: var(--text-dim); stroke-dasharray: 3 3; opacity: .65; }
+.graph-dashed { stroke-dasharray: 5 3; stroke: var(--text-dim); }
+.graph-label { fill: var(--text-dim); font-size: 10px; }
 
 .panel-head {
   display: flex; align-items: center; justify-content: space-between;

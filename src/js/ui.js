@@ -3,7 +3,7 @@
 
 import { get, set, onChange, getAll } from './settings.js';
 import { bridge } from './bridge.js';
-import { movementResponse } from './response.js';
+import { responsePlots } from './response-plots.js';
 import { BAND_CHOICES, bandChoiceIndex } from './band-choices.js';
 import { imageAccent, PURPLE_ACCENT } from './ui-accent.js';
 
@@ -370,25 +370,18 @@ export class UI {
     setSlider('quietMovement', get('quietMovement'));
     $('quietMovement').parentElement.querySelector('.val').textContent = `${Math.round(get('quietMovement') * 100)}%`;
     setSlider('energyResponse', get('energyResponse'));
-    const curveKey = `${get('quietMovement')}:${get('energyResponse')}:${get('sensGain')}:${get('sensFloor')}:${get('sensCurve')}`;
+    const curveKey = ['quietMovement','energyResponse','sensGain','sensFloor','sensCurve',
+      'eqCurve','tiltEQ','tiltPivot','highBoost','stickyIn','stickyOut','bands'].map(get).join(':');
     if (this._curveKey !== curveKey) {
       this._curveKey = curveKey;
-      const gain = get('sensGain');
-      const floor = get('sensFloor');
-      const curve = get('sensCurve');
-      const threshold = Math.min(1, floor / gain);
-      const cutoffX = 28 + threshold * 238;
-      $('noiseFloorShade').setAttribute('width', String(threshold * 238));
-      $('noiseFloorLine').setAttribute('d', `M${cutoffX} 8V72`);
-      const points = Array.from({ length: 65 }, (_, i) => {
-        const x = i / 64;
-        const amplified = Math.min(1, x * gain);
-        const aboveFloor = amplified <= floor ? 0 : (amplified - floor) / (1 - floor);
-        const band = Math.pow(aboveFloor, curve);
-        const motion = band * movementResponse(x, get('quietMovement'), get('energyResponse'));
-        return `${i ? 'L' : 'M'}${28 + x * 238},${72 - motion * 64}`;
-      });
-      $('responseLine').setAttribute('d', points.join(' '));
+      const plots = responsePlots(getAll());
+      $('noiseFloorShade').setAttribute('width', String(plots.threshold * 242));
+      $('noiseFloorLine').setAttribute('d', `M${42 + plots.threshold * 242} 20V106`);
+      for (const [id,key] of Object.entries({ energyLine:'energy', responseLine:'band', frequencyLine:'frequency',
+        highBoostLine:'highBoost', frequencyZero:'frequencyZero', easingLine:'easing', easingInput:'easingInput' })) $(id).setAttribute('d', plots[key]);
+      $('frequencyMax').textContent = `+${plots.max}`;
+      $('frequencyMin').textContent = String(plots.min);
+      $('frequencyZeroLabel').setAttribute('y', String(plots.zeroY + 3));
     }
     $('keepScreenCovered').checked = !!get('keepScreenCovered');
 
