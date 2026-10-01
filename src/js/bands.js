@@ -33,6 +33,7 @@ export class BandAnalyzer {
     this.easeInStyle = this.easeOutStyle = 'envelope';
     this.easeInSlope = this.easeOutSlope = .5;
     this.easeInPosition = this.easeOutPosition = .5;
+    this.easeInBezier = this.easeOutBezier = undefined;
     this.energy = 0;                                  // overall loudness 0..1
     this.bassEnergy = 0;
     this.level = 0;                                   // for the UI meter
@@ -197,11 +198,11 @@ export class BandAnalyzer {
     const sIn = Math.max(0, Math.min(1, this.stickyIn ?? 0.5));
     const sOut = Math.max(0, Math.min(1, this.stickyOut ?? 0.5));
     const { up, down } = easingRates(sIn, sOut);
-    const easingKey = `${up}/${down}/${this.easeInShape}/${this.easeOutShape}/${this.easeInStyle}/${this.easeOutStyle}/${this.easeInSlope}/${this.easeOutSlope}/${this.easeInPosition}/${this.easeOutPosition}`;
+    const easingKey = `${up}/${down}/${this.easeInShape}/${this.easeOutShape}/${this.easeInStyle}/${this.easeOutStyle}/${this.easeInSlope}/${this.easeOutSlope}/${this.easeInPosition}/${this.easeOutPosition}/${this.easeInBezier}/${this.easeOutBezier}`;
     if (this._easingKey !== easingKey) {
       this._easingKey = easingKey;
-      this._easeInCurve = easingCurve(up,this.easeInShape,this.easeInStyle,this.easeInSlope,this.easeInPosition);
-      this._easeOutCurve = easingCurve(down,this.easeOutShape,this.easeOutStyle,this.easeOutSlope,this.easeOutPosition);
+      this._easeInCurve = easingCurve(up,this.easeInShape,this.easeInStyle,this.easeInSlope,this.easeInPosition,this.easeInBezier);
+      this._easeOutCurve = easingCurve(down,this.easeOutShape,this.easeOutStyle,this.easeOutSlope,this.easeOutPosition,this.easeOutBezier);
       this._easeDirection.fill(0);
     }
 

@@ -1,6 +1,30 @@
 const SETTLE = -Math.log(.01);
 const SAMPLE_COUNT = 512;
 const curves = new Map();
+export const DEFAULT_BEZIER = [.2,.35,.6,1];
+export function constrainBezier(points=DEFAULT_BEZIER) {
+  const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
+  const x1=clamp(points[0],.02,.98), y1=clamp(points[1],0,1);
+  return [x1,y1,clamp(points[2],x1,.98),clamp(points[3],y1,1)];
+}
+export function moveBezierControl(points,index,x,y) {
+  const next=constrainBezier(points);
+  next[index]=Math.max(index===0 ? .02:next[0],Math.min(index===0 ? next[2]:.98,x));
+  next[index+1]=Math.max(index===0 ? 0:next[1],Math.min(index===0 ? next[3]:1,y));
+  return next.map(v=>Math.round(v*100)/100);
+}
+const cubic=(t,a,b)=>3*(1-t)*(1-t)*t*a+3*(1-t)*t*t*b+t*t*t;
+export function bezierProgress(u,points=DEFAULT_BEZIER) {
+  if(u<=0) return 0;
+  if(u>=1) return 1;
+  const [x1,y1,x2,y2]=points;
+  let lo=0,hi=1;
+  for(let i=0;i<28;i++) {
+    const t=(lo+hi)/2;
+    if(cubic(t,x1,x2)<u) lo=t; else hi=t;
+  }
+  return cubic((lo+hi)/2,y1,y2);
+}
 
 // Envelope tension, as in an audio envelope editor: zero is a straight ramp,
 // negative bows toward a fast start, positive bows toward a slow start.
@@ -37,13 +61,15 @@ export function sCurveTangent(slope=.5,position=.5) {
 }
 
 // Tables are shared across bands and built only when controls change.
-export function easingCurve(rate, bend = 0, style='envelope', slope=.5, position=.5) {
-  const key = `${rate}/${bend}/${style}/${slope}/${position}`;
+export function easingCurve(rate, bend = 0, style='envelope', slope=.5, position=.5, points=DEFAULT_BEZIER) {
+  const controls=constrainBezier(points);
+  const key = `${rate}/${bend}/${style}/${slope}/${position}/${controls.join(',')}`;
   if (curves.has(key)) return curves.get(key);
   const step = -Math.log(1-rate) / SETTLE;
-  const forward = new Float64Array(SAMPLE_COUNT+1);
-  const progressAt=u=>style==='s' ? sCurveProgress(u,slope,position) : easingProgress(u,bend);
-  for(let i=0;i<=SAMPLE_COUNT;i++) forward[i]=progressAt(i/SAMPLE_COUNT);
+  const count=style==='custom' ? 2048:SAMPLE_COUNT;
+  const forward = new Float64Array(count+1);
+  const progressAt=u=>style==='custom' ? bezierProgress(u,controls):style==='s' ? sCurveProgress(u,slope,position) : easingProgress(u,bend);
+  for(let i=0;i<=count;i++) forward[i]=progressAt(i/count);
   const curve = {
     seconds: .033/step,
     atSeconds: seconds => progressAt(seconds/.033*step),
@@ -51,17 +77,17 @@ export function easingCurve(rate, bend = 0, style='envelope', slope=.5, position
       const gap=Math.abs(target-previous);
       if(!gap) return previous;
       span=Math.max(gap,span);
-      if(style!=='s' && !bend) return previous+Math.sign(target-previous)*Math.min(gap,span*step);
+      if(style==='envelope' && !bend) return previous+Math.sign(target-previous)*Math.min(gap,span*step);
       const progress=1-gap/span;
-      let lo=0,hi=SAMPLE_COUNT;
+      let lo=0,hi=count;
       while(hi-lo>1) {
         const mid=(lo+hi)>>>1;
         if(forward[mid]<progress) lo=mid; else hi=mid;
       }
       const width=forward[hi]-forward[lo];
-      const u=(lo+(width ? (progress-forward[lo])/width : 0))/SAMPLE_COUNT+step;
-      const index=Math.min(SAMPLE_COUNT,u*SAMPLE_COUNT);
-      const indexLo=Math.min(SAMPLE_COUNT-1,Math.floor(index));
+      const u=(lo+(width ? (progress-forward[lo])/width : 0))/count+step;
+      const index=Math.min(count,u*count);
+      const indexLo=Math.min(count-1,Math.floor(index));
       const next=forward[indexLo]+(forward[indexLo+1]-forward[indexLo])*(index-indexLo);
       const delta=Math.max(0,Math.min(gap,span*(next-progress)));
       return previous+Math.sign(target-previous)*delta;

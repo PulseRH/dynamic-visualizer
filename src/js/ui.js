@@ -4,7 +4,7 @@
 import { get, set, onChange, getAll } from './settings.js';
 import { bridge } from './bridge.js';
 import { responsePlots } from './response-plots.js';
-import { easingBendAt } from './easing.js';
+import { easingBendAt, constrainBezier, moveBezierControl, DEFAULT_BEZIER } from './easing.js';
 import { BAND_CHOICES, bandChoiceIndex } from './band-choices.js';
 import { imageAccent, PURPLE_ACCENT } from './ui-accent.js';
 
@@ -55,6 +55,8 @@ export class UI {
         let pointer=null, offset={x:0,y:0};
         const local=event=>new DOMPoint(event.clientX,event.clientY).matrixTransform(graph.getScreenCTM().inverse());
         const key=()=>`${prefix}${tangent ? 'Slope':get(`${prefix}Style`)==='s' ? 'Position':'Shape'}`;
+        const isCustom=()=>get(`${prefix}Style`)==='custom';
+        const changeControl=(x,y)=>set({[`${prefix}Bezier`]:moveBezierControl(get(`${prefix}Bezier`),tangent ? 2:0,x,y)});
         const change=value=>{
           const active=key(), position=active.endsWith('Position'), slope=active.endsWith('Slope');
           set({[active]:Math.max(position ? .15:slope ? 0:-1,Math.min(position ? .85:1,Math.round(value*100)/100))});
@@ -69,7 +71,8 @@ export class UI {
         handle.addEventListener('pointermove',event=>{
           if(pointer!==event.pointerId) return;
           const point=local(event), x=point.x-offset.x, y=point.y-offset.y;
-          if(tangent) {
+          if(isCustom()) changeControl((x-60)/224,fall ? (y-20)/96:(116-y)/96);
+          else if(tangent) {
             const p=get(`${prefix}Position`), dx=(x-(60+224*p))/224, dy=(68-y)/96*(fall ? -1:1);
             // Constrain the tangent to the forward quadrant; it cannot reverse.
             if(dx<=0 || dy<0) return;
@@ -82,8 +85,17 @@ export class UI {
         });
         handle.addEventListener('lostpointercapture',()=>{pointer=null;});
         handle.addEventListener('pointerup',event=>{if(pointer===event.pointerId) handle.releasePointerCapture(pointer);});
-        handle.addEventListener('dblclick',()=>change(key().endsWith('Shape') ? 0:.5));
+        handle.addEventListener('dblclick',()=>isCustom() ? set({[`${prefix}Bezier`]:[...DEFAULT_BEZIER]}):change(key().endsWith('Shape') ? 0:.5));
         handle.addEventListener('keydown',event=>{
+          if(isCustom()) {
+            const controls=constrainBezier(get(`${prefix}Bezier`)), index=tangent ? 2:0, step=event.shiftKey ? .1:.01;
+            if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key)) {
+              event.preventDefault();
+              changeControl(controls[index]+(event.key==='ArrowLeft' ? -step:event.key==='ArrowRight' ? step:0),
+                controls[index+1]+(event.key==='ArrowUp' ? (fall ? -step:step):event.key==='ArrowDown' ? (fall ? step:-step):0));
+            }
+            return;
+          }
           const isShape=key().endsWith('Shape');
           const direction={ArrowLeft:-1,ArrowRight:1,ArrowUp:isShape && !fall ? -1:1,ArrowDown:isShape && !fall ? 1:-1}[event.key];
           if(direction) {event.preventDefault();change(get(key())+direction*(event.shiftKey ? .1:.01));}
@@ -95,7 +107,11 @@ export class UI {
         });
         handle.addEventListener('wheel',event=>{
           if(!event.deltaY) return;
-          event.preventDefault();change(get(key())+Math.sign(event.deltaY)*.01);
+          event.preventDefault();
+          if(isCustom()) {
+            const controls=constrainBezier(get(`${prefix}Bezier`)), index=tangent ? 2:0;
+            changeControl(controls[index],controls[index+1]+Math.sign(event.deltaY)*(fall ? 1:-1)*.01);
+          } else change(get(key())+Math.sign(event.deltaY)*.01);
         },{passive:false});
       }
     }
@@ -428,10 +444,11 @@ export class UI {
     setSlider('easeInShape', get('easeInShape'));
     setSlider('easeOutShape', get('easeOutShape'));
     for(const part of ['In','Out']) {
-      const prefix=`ease${part}`, isS=get(`${prefix}Style`)==='s';
+      const prefix=`ease${part}`, isS=get(`${prefix}Style`)==='s', isCustom=get(`${prefix}Style`)==='custom';
       syncSeg(`${prefix}Style`,get(`${prefix}Style`));
       $(`${prefix}SControls`).hidden=!isS;
-      $(`${prefix}Shape`).parentElement.hidden=isS;
+      $(`${prefix}Shape`).parentElement.hidden=isS || isCustom;
+      $(`${prefix}CustomHint`).hidden=!isCustom;
       for(const name of ['Slope','Position']) {
         setSlider(`${prefix}${name}`,get(`${prefix}${name}`));
         $(`${prefix}${name}`).parentElement.querySelector('.val').textContent=`${Math.round(get(`${prefix}${name}`)*100)}%`;
@@ -447,7 +464,7 @@ export class UI {
     setSlider('energyResponse', get('energyResponse'));
     const curveKey = ['quietMovement','energyResponse','sensGain','sensFloor','sensCurve',
       'eqCurve','tiltEQ','tiltPivot','highBoost','stickyIn','stickyOut','easeInShape','easeOutShape',
-      'easeInStyle','easeOutStyle','easeInSlope','easeOutSlope','easeInPosition','easeOutPosition','bands'].map(get).join(':');
+      'easeInStyle','easeOutStyle','easeInSlope','easeOutSlope','easeInPosition','easeOutPosition','easeInBezier','easeOutBezier','bands'].map(get).join(':');
     if (this._curveKey !== curveKey) {
       this._curveKey = curveKey;
       const plots = responsePlots(getAll());
@@ -466,6 +483,24 @@ export class UI {
         const prefix=`ease${part}`, plotPrefix=`easing${part}`, isS=get(`${prefix}Style`)==='s', fall=part==='Out';
         const x=plots[`${plotPrefix}MidX`], y=plots[`${plotPrefix}MidY`], dx=224*.25/plots[`${plotPrefix}Tangent`], dy=fall ? 24:-24;
         const handle=$(`${plotPrefix}Handle`), slopeHandle=$(`${plotPrefix}SlopeHandle`), tangent=$(`${plotPrefix}Tangent`);
+        if(get(`${prefix}Style`)==='custom') {
+          const points=constrainBezier(get(`${prefix}Bezier`)), coords=[];
+          for(const [control,index] of [[handle,0],[slopeHandle,2]]) {
+            const cx=60+224*points[index], cy=116-96*(fall ? 1-points[index+1]:points[index+1]);
+            coords.push([cx,cy]);control.toggleAttribute('hidden',false);
+            control.setAttribute('transform',`translate(${cx} ${cy})`);
+            control.setAttribute('aria-label',`Ease ${part.toLowerCase()} ${index===0 ? 'start':'finish'} curve handle`);
+            control.setAttribute('aria-valuemin','0');control.setAttribute('aria-valuemax','1');
+            control.setAttribute('aria-valuenow',String(points[index+1]));
+            control.setAttribute('aria-valuetext',`Time ${Math.round(points[index]*100)}%, progress ${Math.round(points[index+1]*100)}%`);
+            control.style.cursor='move';
+          }
+          tangent.toggleAttribute('hidden',false);
+          tangent.setAttribute('d',`M60 ${fall ? 20:116}L${coords[0].join(' ')} M${coords[1].join(' ')}L284 ${fall ? 116:20}`);
+          continue;
+        }
+        handle.removeAttribute('aria-valuetext');slopeHandle.removeAttribute('aria-valuetext');
+        slopeHandle.setAttribute('aria-label',`Ease ${part.toLowerCase()} middle slope`);
         handle.setAttribute('transform',`translate(${x} ${y})`);
         handle.setAttribute('aria-label',`Ease ${part.toLowerCase()} ${isS ? 'transition point':'curve bend'}`);
         handle.setAttribute('aria-valuemin',isS ? '.15':'-1');

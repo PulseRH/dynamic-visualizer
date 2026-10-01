@@ -242,7 +242,8 @@
         <label class="slider-row"><span class="lbl">Ease in<span class="q" data-tip="Rise duration: 0 = fastest, 1 = slowest. The time shown on the graph is the full transition duration."></span></span>
           <input type="range" id="stickyIn" min="0" max="1" step="0.05" /><span class="val"></span>
         </label>
-        <div class="seg" id="easeInStyle"><button data-v="envelope">Envelope</button><button data-v="s">S-curve</button></div>
+        <div class="seg" id="easeInStyle"><button data-v="envelope">Envelope</button><button data-v="s">S-curve</button><button data-v="custom">Custom</button></div>
+        <p id="easeInCustomHint" class="hint" hidden>Drag both handles in any direction. The first controls the start; the second controls the finish. Double-click either to reset to a quick start and gentle finish.</p>
         <div id="easeInSControls" hidden>
           <label class="slider-row"><span class="lbl">Middle slope<span class="q" data-tip="How steeply the S-curve crosses its middle. Higher gives a gentler start and finish with a faster middle. Always moves toward the target."></span></span><input type="range" id="easeInSlope" min="0" max="1" step="0.01" /><span class="val"></span></label>
           <label class="slider-row"><span class="lbl">Transition point<span class="q" data-tip="Where the curve reaches half response within its duration. Move left for earlier response, right for later."></span></span><input type="range" id="easeInPosition" min="0.15" max="0.85" step="0.01" /><span class="val"></span></label>
@@ -261,7 +262,8 @@
         <label class="slider-row"><span class="lbl">Ease out<span class="q" data-tip="Fall duration: 0 = fastest, 1 = slowest. The time shown on the graph is the full transition duration."></span></span>
           <input type="range" id="stickyOut" min="0" max="1" step="0.05" /><span class="val"></span>
         </label>
-        <div class="seg" id="easeOutStyle"><button data-v="envelope">Envelope</button><button data-v="s">S-curve</button></div>
+        <div class="seg" id="easeOutStyle"><button data-v="envelope">Envelope</button><button data-v="s">S-curve</button><button data-v="custom">Custom</button></div>
+        <p id="easeOutCustomHint" class="hint" hidden>Drag both handles in any direction. The first controls the start; the second controls the finish. Double-click either to reset to a quick start and gentle finish.</p>
         <div id="easeOutSControls" hidden>
           <label class="slider-row"><span class="lbl">Middle slope<span class="q" data-tip="How steeply the S-curve crosses its middle. Higher gives a gentler start and finish with a faster middle. Always moves toward the target."></span></span><input type="range" id="easeOutSlope" min="0" max="1" step="0.01" /><span class="val"></span></label>
           <label class="slider-row"><span class="lbl">Transition point<span class="q" data-tip="Where the curve reaches half response within its duration. Move left for earlier response, right for later."></span></span><input type="range" id="easeOutPosition" min="0.15" max="0.85" step="0.01" /><span class="val"></span></label>

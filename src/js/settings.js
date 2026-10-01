@@ -65,6 +65,8 @@ const DEFAULTS = {
   easeOutSlope: .5,
   easeInPosition: .5,
   easeOutPosition: .5,
+  easeInBezier: [.2,.35,.6,1],
+  easeOutBezier: [.2,.35,.6,1],
   settingsOnly: false,    // compact controls with no preview rendering
   previewFullQuality: false, // don't throttle the preview while wallpaper mode is on
   audioSource: 'demo',     // 'system' | 'mic' | 'file' | 'demo'
