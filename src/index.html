@@ -26,6 +26,7 @@
   <aside id="panel" class="closed">
     <div class="panel-head">
       <h2>Settings</h2>
+      <button id="showPreview" class="btn" hidden>Show preview</button>
       <button id="closePanel" class="icon-btn" aria-label="Close">✕</button>
     </div>
 
@@ -36,6 +37,7 @@
         <button id="uploadImage" class="btn">Upload…</button>
       </div>
       <div class="thumb-wrap"><img id="imgThumb" alt="" /></div>
+      <div id="recentWallpapers" class="recent-wallpapers" aria-label="Recent wallpapers" hidden></div>
       <p class="hint">Tip: drag &amp; drop or paste (Ctrl+V) an image any time.</p>
     </section>
 
@@ -272,6 +274,7 @@
         <button data-v="0">Max</button>
       </div>
       <label class="check-row"><input type="checkbox" id="autoQuality" /> Adaptive resolution<span class="q" data-tip="Lowers render resolution automatically when frame time runs over budget, raises it back when there is headroom."></span></label>
+      <label class="check-row"><input type="checkbox" id="settingsOnly" /> Settings-only window<span class="q" data-tip="Use a compact window with no visualiser preview rendering. Your desktop wallpaper and audio capture keep running. You can also resize the window narrow to show only settings."></span></label>
       <label class="check-row"><input type="checkbox" id="previewPaused" /> Pause preview window<span class="q" data-tip="Freeze the preview window completely — the wallpaper keeps running. Saves GPU."></span></label>
       <label class="check-row"><input type="checkbox" id="previewFullQuality" /> Full quality preview<span class="q" data-tip="While wallpaper mode is on, the preview normally mirrors at 15 fps to save GPU. This removes the throttle."></span></label>
       <label class="check-row"><input type="checkbox" id="idleSleep" /> Sleep when music stops<span class="q" data-tip="Points fade out and rendering stops entirely while the music is silent."></span></label>

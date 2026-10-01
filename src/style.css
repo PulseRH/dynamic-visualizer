@@ -97,6 +97,21 @@ html, body {
 }
 #panel.open { transform: translateX(0); }
 
+body.settings-only #gl, body.settings-only #hud { display: none; }
+body.settings-only #panel {
+  width: 100%; max-width: none; transform: none;
+  background: #101116; backdrop-filter: none; -webkit-backdrop-filter: none;
+  border-left: none; transition: none;
+}
+body.settings-only #closePanel { display: none; }
+#showPreview { flex: 0 0 auto; padding: 5px 9px; font-size: .76rem; }
+#showPreview[hidden] { display: none; }
+.recent-wallpapers { display: flex; gap: 6px; overflow-x: auto; padding: 8px 0 2px; }
+.recent-wallpapers[hidden] { display: none; }
+.recent-wallpaper { flex: 0 0 68px; height: 42px; padding: 2px; border: 1px solid var(--border); border-radius: 6px; background: transparent; cursor: pointer; }
+.recent-wallpaper img { width: 100%; height: 100%; object-fit: cover; border-radius: 3px; display: block; }
+.recent-wallpaper:hover, .recent-wallpaper[aria-pressed="true"] { border-color: var(--accent-2); }
+
 .panel-head {
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 6px;

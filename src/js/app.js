@@ -90,12 +90,26 @@ function setMainImage(imageLike, urlForThumb) {
   currentImageUrl = urlForThumb;
   ui.setThumb(urlForThumb || '');
   if (!isWallpaperWindow) ui.setImageAccent(imageLike);
+  if (!isWallpaperWindow && urlForThumb?.startsWith('app://')) {
+    const thumb = document.createElement('canvas');
+    thumb.width = 160; thumb.height = Math.max(1, Math.round(160 * imageLike.height / imageLike.width));
+    // Bound unusually tall images too.
+    if (thumb.height > 90) { thumb.width = Math.max(1, Math.round(160 * 90 / thumb.height)); thumb.height = 90; }
+    thumb.getContext('2d').drawImage(imageLike, 0, 0, thumb.width, thumb.height);
+    const thumbnail = thumb.toDataURL('image/jpeg', .75);
+    ui.setThumb(thumbnail);
+    bridge.rememberImage(urlForThumb, thumbnail).then(entries => ui.setRecentImages(entries, currentImageUrl)).catch(console.warn);
+  }
   rebuildCloud();
 }
 
-async function handleImagePick({ kind, file }) {
+async function handleImagePick({ kind, file, url }) {
   try {
-    if (kind === 'wallpaper') {
+    if (kind === 'recent') {
+      await loadFromUrl(url);
+      lastSyncedImageUrl = url;
+      set({ imageUrl: url });
+    } else if (kind === 'wallpaper') {
       const res = await bridge.getWallpaper();
       if (res.ok) {
         lastSyncedImageUrl = null;
@@ -141,6 +155,7 @@ async function handleImagePick({ kind, file }) {
 }
 
 async function loadInitialImage() {
+  if (!isWallpaperWindow) bridge.recentImages().then(entries => ui.setRecentImages(entries, currentImageUrl)).catch(console.warn);
   // 1. persisted explicit image (works if it's an app:// URL; blob URLs die)
   const saved = get('imageUrl');
   if (saved && !saved.startsWith('blob:')) {
@@ -406,7 +421,7 @@ function loop(now) {
   const analyzer = isWallpaperWindow ? remoteAnalyzer : audio.analyzer;
   if (gameMode) return;
   // preview window paused: hold the last frame (wallpaper windows ignore it)
-  if (get('previewPaused') && !isWallpaperWindow) return;
+  if (!isWallpaperWindow && (get('previewPaused') || document.body.classList.contains('settings-only'))) return;
 
   if (document.hidden) return;
 

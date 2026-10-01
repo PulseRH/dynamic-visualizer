@@ -46,11 +46,32 @@ export class UI {
   // ------------------------------------------------------------------ panel
 
   _wirePanel() {
+    this.narrowWindow = window.matchMedia('(max-width: 480px)');
+    this.narrowWindow.addEventListener('change', () => this._syncWindowLayout());
+    $('showPreview').onclick = () => {
+      if (get('settingsOnly')) set({ settingsOnly: false });
+      else bridge.settingsOnly(false, true);
+    };
     $('gearBtn').onclick = () => {
       $('panel').classList.toggle('open');
       $('hud').classList.remove('faded');
     };
-    $('closePanel').onclick = () => $('panel').classList.remove('open');
+    $('closePanel').onclick = () => {
+      if (document.body.classList.contains('settings-only')) set({ settingsOnly: false });
+      else $('panel').classList.remove('open');
+    };
+  }
+
+  _syncWindowLayout() {
+    if (new URLSearchParams(location.search).get('wallpaper') === '1') return;
+    const compact = get('settingsOnly') || this.narrowWindow.matches;
+    document.body.classList.toggle('settings-only', compact);
+    $('showPreview').hidden = !compact;
+    if (compact) $('panel').classList.add('open');
+    if (this.lastSettingsOnly !== !!get('settingsOnly')) {
+      this.lastSettingsOnly = !!get('settingsOnly');
+      bridge.settingsOnly(this.lastSettingsOnly).catch(console.warn);
+    }
   }
 
   _wireSegments() {
@@ -127,6 +148,7 @@ export class UI {
 
     $('autoQuality').onchange = (e) => set({ autoQuality: e.target.checked });
     $('previewPaused').onchange = (e) => set({ previewPaused: e.target.checked });
+    $('settingsOnly').onchange = (e) => set({ settingsOnly: e.target.checked });
     $('previewFullQuality').onchange = (e) => set({ previewFullQuality: e.target.checked });
     $('idleSleep').onchange = (e) => set({ idleSleep: e.target.checked });
     $('invertBands').onchange = (e) => set({ invertBands: e.target.checked });
@@ -372,6 +394,8 @@ export class UI {
 
     $('autoQuality').checked = get('autoQuality');
     $('previewPaused').checked = !!get('previewPaused');
+    $('settingsOnly').checked = !!get('settingsOnly');
+    this._syncWindowLayout();
     $('previewFullQuality').checked = !!get('previewFullQuality');
     $('idleSleep').checked = get('idleSleep');
     $('invertBands').checked = !!get('invertBands');
@@ -401,6 +425,24 @@ export class UI {
     if (!url) { wrap.parentElement.classList.remove('show'); wrap.src = ''; return; }
     wrap.src = url;
     wrap.parentElement.classList.add('show');
+  }
+
+  setRecentImages(entries, currentUrl) {
+    const strip = $('recentWallpapers');
+    strip.replaceChildren();
+    strip.hidden = !entries.length;
+    for (const entry of entries) {
+      const button = document.createElement('button');
+      button.className = 'recent-wallpaper';
+      button.title = entry.name;
+      button.setAttribute('aria-label', `Use recent wallpaper: ${entry.name}`);
+      button.setAttribute('aria-pressed', String(entry.url === currentUrl || entry.sourceUrl === currentUrl));
+      const image = document.createElement('img');
+      image.src = entry.thumb; image.alt = ''; image.width = 80; image.height = 45;
+      button.append(image);
+      button.onclick = () => this.cb.onImagePicked({ kind: 'recent', url: entry.url });
+      strip.append(button);
+    }
   }
 
   setWallpaperActive(on) {

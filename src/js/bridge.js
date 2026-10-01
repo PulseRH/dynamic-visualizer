@@ -34,6 +34,9 @@ function pickFileBrowser(kind) {
 }
 
 export const bridge = {
+  recentImages: () => ev ? ev.recentImages() : Promise.resolve([]),
+  rememberImage: (url, thumb) => ev ? ev.rememberImage(url, thumb) : Promise.resolve([]),
+  settingsOnly: (enabled, expand = false) => ev ? ev.settingsOnly(enabled, expand) : Promise.resolve(),
   async getWallpaper() {
     if (ev) return ev.getWallpaper(); // { ok, path, url }
     return { ok: false, path: null };

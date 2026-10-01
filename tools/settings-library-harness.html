@@ -1,0 +1,19 @@
+<!doctype html><meta charset="utf-8"><title>Settings-only and recent wallpapers</title>
+<link rel="stylesheet" href="../src/style.css"><body>
+<script type="module">
+import { UI } from '../src/js/ui.js';
+const markup = await (await fetch('../src/index.html')).text();
+const parsed = new DOMParser().parseFromString(markup, 'text/html');
+parsed.querySelectorAll('script').forEach(s => s.remove());
+document.body.innerHTML = parsed.body.innerHTML;
+const ui = new UI({ onImagePicked: ({url}) => {
+  ui.setAbout(`Selected recent wallpaper: ${url}`);
+  ui.setRecentImages(entries,url);
+}, onAudioMode:()=>{}, onWallpaperToggle:()=>{}, onCalibrateEnergy:()=>{} });
+const canvas=document.createElement('canvas'); canvas.width=160; canvas.height=90;
+const ctx=canvas.getContext('2d');
+function thumb(color) { ctx.fillStyle=color; ctx.fillRect(0,0,160,90); return canvas.toDataURL('image/jpeg'); }
+const entries=[{name:'Blue hills',url:'blue',thumb:thumb('#385b8c')},{name:'Warm sky',url:'warm',thumb:thumb('#b15a43')}];
+ui.setThumb(entries[0].thumb); ui.setRecentImages(entries,'blue');
+document.querySelector('#panel').classList.add('open');
+</script>

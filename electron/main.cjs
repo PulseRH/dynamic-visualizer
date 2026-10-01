@@ -229,13 +229,14 @@ function stopPulseCapture() {
 // Window & IPC
 // ---------------------------------------------------------------------------
 let mainWindow = null;
+let previewBounds = null;
 
 function createWindow({ show = true } = {}) {
   mainWindow = new BrowserWindow({
     show,
-    width: 1280,
+    width: readConfig().settingsOnly ? 400 : 1280,
     height: 800,
-    minWidth: 720,
+    minWidth: 380,
     minHeight: 480,
     backgroundColor: '#000000',
     title: 'Dynamic Visualizer',
@@ -357,6 +358,36 @@ ipcMain.handle('image:saveDataUrl', async (_e, dataUrl) => {
   } catch (err) {
     return null;
   }
+});
+
+const { RecentImages } = require('./recent-images.cjs');
+let recentImages;
+function imageHistory() {
+  return recentImages ||= new RecentImages(path.join(app.getPath('userData'), 'recent-wallpapers'), p => 'app://abs/' + encodePath(p));
+}
+ipcMain.handle('images:recent', () => imageHistory().list());
+ipcMain.handle('images:remember', async (event, url, thumb) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) return [];
+  if (typeof thumb !== 'string' || thumb.length > 100000 || !thumb.startsWith('data:image/jpeg;base64,')) return [];
+  const parsed = new URL(url);
+  if (parsed.protocol !== 'app:' || parsed.hostname !== 'abs') return [];
+  const source = path.resolve(decodeURIComponent(parsed.pathname).replace(/^\//, ''));
+  return imageHistory().add(source, thumb);
+});
+ipcMain.handle('window:settingsOnly', (event, enabled, expand) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents || typeof enabled !== 'boolean') return;
+  const cfg = readConfig();
+  if (cfg.settingsOnly === enabled) {
+    if (!enabled && expand === true) mainWindow.setSize(1280, 800);
+    return;
+  }
+  cfg.settingsOnly = enabled; writeConfig(cfg);
+  if (enabled) {
+    previewBounds = mainWindow.getBounds();
+    if (mainWindow.isMaximized()) mainWindow.unmaximize();
+    mainWindow.setSize(400, Math.max(480, Math.min(previewBounds.height, screen.getDisplayMatching(previewBounds).workArea.height)));
+  } else if (previewBounds) mainWindow.setBounds(previewBounds);
+  else mainWindow.setSize(1280, 800);
 });
 
 ipcMain.handle('image:choose', async () => {
