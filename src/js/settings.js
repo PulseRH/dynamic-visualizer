@@ -3,6 +3,8 @@ const DEFAULTS = {
   imageUrl: null,          // explicit image (blob or app:// URL); null = try wallpaper, then procedural
   depthMode: 'auto',       // 'auto' | 'onnx' (small) | 'onnx-base' | 'flat'
   depthScale: 0.35,
+  gapFill: 0,              // bounded same-surface infill, generated during cloud rebuild
+  depthShading: 0,         // dim distant surfaces while retaining foreground highlights
   pointCount: 160000,
   pointSize: 1.0,
   glow: 1.1,

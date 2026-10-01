@@ -12,6 +12,7 @@ const VERT = /* glsl */ `
   uniform float uEnergy;
   uniform float uIntensity;
   uniform float uDepthScale;
+  uniform float uDepthShading;
   uniform float uAspect;
   uniform float uSize;
   uniform float uCamZ;
@@ -201,6 +202,7 @@ const VERT = /* glsl */ `
     lit *= uSizeComp;
     // points nearer the camera cover more screen: dim them the same way
     lit /= sqrt(max(uCamZ / -mv.z, 0.5));
+    if(uDepthShading>0.0) lit *= 1.0-uDepthShading*.45*(1.0-near);
     if (uHueEnabled > 0.5 && amp > 0.0) {
       float c = bandSample.g * 2.0 - 1.0;
       float h = bandSample.b * 2.0 - 1.0;
@@ -300,6 +302,7 @@ export class VisualScene {
       uLayers: { value: new THREE.Vector4() },
       uExtraLayers: { value: new THREE.Vector4() },
       uBandMap: { value: 1 },
+      uDepthShading: { value: 0 },
       uBandDistribution: { value: 1 },
       uBandCount: { value: 64 },
       uInvert: { value: 0 },
@@ -438,7 +441,7 @@ export class VisualScene {
     this.points.frustumCulled = false;
     this.scene.add(this.points);
     // world spacing between points -> density-aware pixel size for the shader
-    const rows = Math.max(1, Math.round(Math.sqrt(cloud.count / cloud.aspect)));
+    const rows = Math.max(1, Math.round(Math.sqrt((cloud.baseCount ?? cloud.count) / cloud.aspect)));
     this.spacingWorld = 1 / rows;
     this._fitCamera();
     this._layoutBackdrop();
@@ -550,6 +553,7 @@ export class VisualScene {
     this.uniforms.uHueEnabled.value = hueReaction !== 0 || hueCycle > 0 ? 1 : 0;
     this.uniforms.uIntensity.value = s.intensity;
     this.uniforms.uDepthScale.value = s.depthScale;
+    this.uniforms.uDepthShading.value = Math.max(0,Math.min(1,s.depthShading || 0));
     this.uniforms.uLayers.value.set(s.motionWave, s.motionRipple, s.motionBands, s.motionDrift);
     this.uniforms.uExtraLayers.value.set(s.motionSwirl, s.motionBreathe, s.motionSweep, s.motionBandShake);
     this.uniforms.uBandMap.value = BAND_MAPS[s.bandMap] ?? 0;

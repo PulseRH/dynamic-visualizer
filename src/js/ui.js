@@ -184,6 +184,8 @@ export class UI {
       };
     };
     slider('depthScale', 'depthScale', (v) => v.toFixed(2));
+    slider('gapFill','gapFill',v=>`${Math.round(v*100)}%`);
+    slider('depthShading','depthShading',v=>`${Math.round(v*100)}%`);
     slider('pointCount', 'pointCount', (v) => `${Math.round(v / 1000)}k`);
     slider('pointSize', 'pointSize', (v) => v.toFixed(1));
     slider('glow', 'glow', (v) => v.toFixed(2));
@@ -418,6 +420,10 @@ export class UI {
       }
     };
     setSlider('depthScale', get('depthScale'));
+    for(const key of ['gapFill','depthShading']){
+      setSlider(key,get(key));
+      $(key).parentElement.querySelector('.val').textContent=`${Math.round(get(key)*100)}%`;
+    }
     setSlider('pointCount', get('pointCount'));
     setSlider('pointSize', get('pointSize'));
     setSlider('glow', get('glow'));

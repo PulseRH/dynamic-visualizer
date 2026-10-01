@@ -1,0 +1,27 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+const source=await readFile(new URL('../src/js/sampler.js',import.meta.url),'utf8');
+const {sampleImageToCloud}=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+let pixels;
+globalThis.OffscreenCanvas=class {getContext(){return {drawImage(){},getImageData(){return {data:pixels};}};}};
+const image={width:400,height:240};pixels=new Uint8ClampedArray(image.width*image.height*4).fill(255);
+const depth={w:100,h:60,data:new Float32Array(6000)};
+for(let y=0;y<60;y++)for(let x=0;x<100;x++)depth.data[y*100+x]=x<50 ? .05:.95;
+const base=sampleImageToCloud(image,depth,12000), filled=sampleImageToCloud(image,depth,12000,1), repeat=sampleImageToCloud(image,depth,12000,1);
+assert.ok(filled.count>base.count);assert.ok(filled.count<=base.count*1.5);
+assert.deepEqual(filled.positions.subarray(0,base.positions.length),base.positions);
+assert.deepEqual(filled.colors.subarray(0,base.colors.length),base.colors);
+assert.deepEqual(filled.rands.subarray(0,base.rands.length),base.rands);
+assert.deepEqual(filled,repeat,'infill is deterministic');
+for(let i=base.count;i<filled.count;i++)assert.equal(filled.positions[i*3+2],Math.fround(filled.positions[i*3]<0 ? .05:.95),'infill must stay on its surface');
+for(let y=0;y<image.height;y++)for(let x=170;x<230;x++)pixels[(y*image.width+x)*4+3]=0;
+const transparent=sampleImageToCloud(image,null,12000,1);
+for(let i=0;i<transparent.count;i++){
+  const sx=(transparent.positions[i*3]/transparent.aspect+.5)*image.width;
+  assert.ok(sx<170.01 || sx>=229.99,'transparent holes are not bridged');
+}
+pixels.fill(255);
+const large=sampleImageToCloud(image,null,400000,1);
+assert.ok(large.count-large.baseCount<=60000);
+assert.equal(sampleImageToCloud(image,null,12000,0).count,sampleImageToCloud(image,null,12000).count);
+console.log(`Gap fill adds ${filled.count-base.count} same-surface points; base data unchanged, repeatable, transparent holes preserved, extra count capped.`);

@@ -221,15 +221,16 @@ async function rebuildCloud() {
       depth = await estimateDepth(currentImage, 'auto');
       if (token !== rebuildToken) return;
     } else {
-      if (aiModelUrl) ui.toast(`Running ${depthMode === 'onnx-base' ? 'detailed' : 'fast'} AI depth model…`, '', 8000);
+      let ranDepthModel=false;
       const controller = aiModelUrl ? new AbortController() : null;
       activeDepthAbort = controller;
       try {
         depth = await estimateDepth(currentImage, depthMode, aiModelUrl, (s) => {
-          if (aiModelUrl && token === rebuildToken) ui.toast(`Depth: ${s}`, '', 2500);
+          if(s==='running AI model…') ranDepthModel=true;
+          if (aiModelUrl && s!=='using saved depth…' && token === rebuildToken) ui.toast(`Depth: ${s}`, '', 2500);
         }, controller?.signal);
         if (token !== rebuildToken) return;
-        if (aiModelUrl) ui.toast('AI depth ready', '', 2000);
+        if (ranDepthModel) ui.toast('AI depth ready', '', 2000);
       } catch (err) {
         if (controller?.signal.aborted || token !== rebuildToken) return;
         console.warn('depth failed', err);
@@ -246,7 +247,7 @@ async function rebuildCloud() {
   }
   if (token !== rebuildToken) return; // superseded
 
-  const cloud = await buildCloud(currentImage, depth, get('pointCount'));
+  const cloud = await buildCloud(currentImage, depth, get('pointCount'),get('gapFill'));
   if (token !== rebuildToken) return;
   const previousImage=displayedImage;
   if(currentImage!==previousImage) {
@@ -355,6 +356,7 @@ async function switchAudio(mode, opts = {}) {
 // point-count / depth-mode changes rebuild the cloud (debounced); every other
 // setting (glow, intensity, modes, …) applies live to the scene
 let lastCount = get('pointCount');
+let lastGapFill = get('gapFill');
 let lastDepthMode = get('depthMode');
 let lastBands = get('bands');
 let lastSyncedImageUrl = get('imageUrl');
@@ -406,8 +408,9 @@ onChange((all, patch) => {
       }
     }, 350);
   }
-  if (get('pointCount') !== lastCount || get('depthMode') !== lastDepthMode) {
+  if (get('pointCount') !== lastCount || get('depthMode') !== lastDepthMode || get('gapFill') !== lastGapFill) {
     lastCount = get('pointCount');
+    lastGapFill=get('gapFill');
     lastDepthMode = get('depthMode');
     clearTimeout(countTimer);
     countTimer = setTimeout(() => rebuildCloud(), 350);

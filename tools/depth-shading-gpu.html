@@ -1,0 +1,25 @@
+<!doctype html><meta charset="utf-8"><title>Depth shading GPU check</title><canvas id="cloud"></canvas><pre id="result">Running…</pre>
+<script type="module">
+import {VisualScene} from '../src/js/scene.js';
+import {getAll} from '../src/js/settings.js';
+try{
+ const scene=new VisualScene(document.querySelector('canvas'));
+ scene.renderer.setSize(320,180,false);scene.camera.aspect=16/9;scene.camera.updateProjectionMatrix();
+ scene.setCloud({count:2,aspect:16/9,positions:new Float32Array([-.3,0,0,.3,0,1]),colors:new Float32Array(6).fill(.5),rands:new Float32Array([.5,.5])});
+ const settings={...getAll(),depthScale:0,glow:1,pointSize:1,boost:0,hueReaction:0,hueCycle:0,vibrancyPulse:0,depthShading:0};
+ const gl=scene.renderer.getContext();
+ const read=shade=>{scene.applySettings({...settings,depthShading:shade});scene.uniforms.uSize.value=16;scene.renderer.render(scene.scene,scene.camera);const p=new Uint8Array(320*180*4);gl.readPixels(0,0,320,180,gl.RGBA,gl.UNSIGNED_BYTE,p);if(gl.getError()!==gl.NO_ERROR)throw new Error('WebGL error');return p;};
+ const base=read(0),shaded=read(1),reset=read(0);let a=0,b=0;
+ for(let y=0;y<180;y++)for(let x=0;x<320;x++){
+  const i=(y*320+x)*4;
+  for(let c=0;c<3;c++){
+   if(x<160){a+=base[i+c];b+=shaded[i+c];}
+   else if(base[i+c]!==shaded[i+c])throw new Error('Foreground highlights changed');
+   if(base[i+c]!==reset[i+c])throw new Error('Zero shading did not restore original pixels');
+  }
+ }
+ if(a===0||Math.abs(b/a-.55)>.03)throw new Error('Incorrect distant-layer shading '+b/a);
+ document.querySelector('#result').textContent='PASS: distant layer dimmed, near highlights unchanged, zero restores exact pixels; no WebGL errors.';
+ scene.renderer.dispose();
+}catch(e){document.querySelector('#result').textContent='FAIL: '+e.stack;}
+</script>
