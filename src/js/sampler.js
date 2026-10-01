@@ -4,7 +4,7 @@
 
 export function sampleImageToCloud(bitmap, depth, count) {
   const W = bitmap.width, H = bitmap.height;
-  const canvas = document.createElement('canvas');
+  const canvas = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(W, H) : document.createElement('canvas');
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   ctx.drawImage(bitmap, 0, 0);

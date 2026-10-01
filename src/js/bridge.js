@@ -79,6 +79,7 @@ export const bridge = {
     if (!ev) return false;
     return !!(await ev.isWallpaperActive());
   },
+  isVisualizerPaused: () => ev ? ev.isVisualizerPaused() : Promise.resolve(false),
 
   saveImage(dataUrl) {
     if (ev) return ev.saveImage(dataUrl);

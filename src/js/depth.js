@@ -20,6 +20,52 @@ export function depthModelUrl(mode) {
 // Cache per image object: different wallpapers often share the same resolution.
 // Weak keys let old images and their depth grids be reclaimed after a switch.
 const resultCache = new WeakMap(); // bitmap -> Map<mode:modelUrl, {data,w,h}>
+const imageIds = new WeakMap();
+const DEPTH_CACHE = 'dv-depth-results-v1';
+
+// Content identity also handles a wallpaper file overwritten at the same path.
+export async function identifyDepthImage(bitmap, blob) {
+  try {
+    const hash = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
+    imageIds.set(bitmap, Array.from(new Uint8Array(hash), b => b.toString(16).padStart(2, '0')).join(''));
+  } catch { /* Caching is optional; estimation still works without it. */ }
+}
+
+async function diskKey(bitmap, modelUrl) {
+  const imageId = imageIds.get(bitmap);
+  if (!imageId || !modelUrl) return null;
+  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(modelUrl));
+  const modelId = Array.from(new Uint8Array(hash), b => b.toString(16).padStart(2, '0')).join('');
+  // Cache API accepts HTTP(S) keys only, even on Electron's app:// origin.
+  // This is a storage key; it is never fetched or sent over the network.
+  return `https://dynamic-visualizer.invalid/depth-results/${imageId}-${modelId}.bin`;
+}
+
+async function readDepthResult(key) {
+  if (!key) return null;
+  try {
+    const hit = await (await caches.open(DEPTH_CACHE)).match(key);
+    if (!hit) return null;
+    const w = Number(hit.headers.get('grid-width')), h = Number(hit.headers.get('grid-height'));
+    const buffer = await hit.arrayBuffer();
+    if (w !== DEPTH_GRID_W || !Number.isInteger(h) || h < 32 || buffer.byteLength !== w * h * 4) return null;
+    return { data: new Float32Array(buffer), w, h };
+  } catch { return null; }
+}
+
+let saveQueue = Promise.resolve();
+function saveDepthResult(key, result) {
+  if (!key) return;
+  saveQueue = saveQueue.then(async () => {
+    const cache = await caches.open(DEPTH_CACHE);
+    await cache.put(key, new Response(result.data, { headers: {
+      'grid-width': String(result.w), 'grid-height': String(result.h),
+    } }));
+    // Small completed grids only; cap storage independently of model downloads.
+    const keys = await cache.keys();
+    for (const old of keys.slice(0, Math.max(0, keys.length - 8))) await cache.delete(old);
+  }).catch(() => {});
+}
 
 // ------------------------------------------------------------------ heuristic
 
@@ -151,7 +197,15 @@ export async function estimateDepth(bitmap, mode, modelUrl, onStatus = () => {},
   if (imageCache?.has(key)) return imageCache.get(key);
   let result;
   if (selectedModel) {
-    result = await onnxDepth(bitmap, selectedModel, onStatus, signal);
+    let key = null;
+    try { key = await diskKey(bitmap, selectedModel); } catch {}
+    result = await readDepthResult(key);
+    if (signal?.aborted) throw new DOMException('Depth estimate cancelled', 'AbortError');
+    if (result) onStatus('using saved depth…');
+    else {
+      result = await onnxDepth(bitmap, selectedModel, onStatus, signal);
+      if (!signal?.aborted) saveDepthResult(key, result);
+    }
   } else {
     result = heuristicDepth(bitmap);
   }

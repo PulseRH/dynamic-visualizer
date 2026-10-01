@@ -285,13 +285,6 @@ if (!gotLock) {
         if (e.level >= 2) console.log('[renderer]', e.message);
       });
     });
-    // TEMP: verify eqCurve reaches the live analyzer
-    setInterval(() => {
-      if (!mainWindow || mainWindow.isDestroyed()) return;
-      mainWindow.webContents.executeJavaScript(
-        `JSON.stringify({ eq: window.__dv.get('eqCurve'), aeq: window.__dv.audio.analyzer.eq, b1: +window.__dv.audio.analyzer.bands[1].toFixed(3), b32: +window.__dv.audio.analyzer.bands[32].toFixed(3), b50: +window.__dv.audio.analyzer.bands[50].toFixed(3) })`
-      ).then((r) => console.log('[diag]', r)).catch(() => {});
-    }, 3000);
     // Allow microphone / loopback capture without prompts.
     session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
       callback(permission === 'media' || permission === 'audioCapture');
@@ -555,6 +548,7 @@ function setGameMode(on) {
 function registerGameHotkey() {
   try { globalShortcut.register('CommandOrControl+Alt+D', () => setGameMode(!gameMode)); } catch {}
 }
+ipcMain.handle('gamemode:state', () => gameMode);
 
 // ---------------------------------------------------------- auto game mode
 // While enabled, watch the foreground window: when a normal app covers an
@@ -659,8 +653,8 @@ function refreshTrayMenu() {
       label: wallpaperActive ? 'Stop wallpaper mode' : 'Start wallpaper mode',
       click: () => (wallpaperActive ? disableWallpaperMode() : enableWallpaperMode()),
     },
-    { label: (gameMode ? '✓ ' : '') + 'Game mode (hide wallpaper)', click: () => setGameMode(!gameMode) },
-    { label: (readConfig().autoGameMode ? '✓ ' : '') + 'Auto game mode (any fullscreen app)', click: () => setAutoGameEnabled(!readConfig().autoGameMode) },
+    { label: gameMode ? 'Resume visualiser' : 'Pause visualiser (hide wallpaper)', click: () => setGameMode(!gameMode) },
+    { label: 'Auto pause for fullscreen apps', type: 'checkbox', checked: !!readConfig().autoGameMode, click: () => setAutoGameEnabled(!readConfig().autoGameMode) },
     { type: 'separator' },
     { label: 'Quit', click: () => { app.isQuitting = true; app.quit(); } },
   ]);
@@ -735,7 +729,7 @@ function getWin32() {
   return win32;
 }
 
-function win32ParentToWorkerW(hwnd, displayBounds) {
+async function win32ParentToWorkerW(hwnd, displayBounds) {
   const {
     FindWindowW, FindWindowExW, SendMessageTimeoutW,
     GetWindowLongPtrW, SetWindowLongPtrW, GetWindowRect, GetClientRect,
@@ -747,7 +741,10 @@ function win32ParentToWorkerW(hwnd, displayBounds) {
   // Ask Progman to spawn the wallpaper WorkerW layer (behind the desktop icons)
   const progman = FindWindowW('Progman', null);
   if (!progman) throw new Error('Progman window not found');
-  SendMessageTimeoutW(progman, 0x052C, 0n, 0n, SMTO_ABORTIFHUNG, 1000, Buffer.alloc(8));
+  // Explorer may take the entire timeout: never block the app's main thread.
+  await new Promise((resolve, reject) => SendMessageTimeoutW.async(
+    progman, 0x052C, 0n, 0n, SMTO_ABORTIFHUNG, 1000, Buffer.alloc(8),
+    (err, result) => err ? reject(err) : resolve(result)));
 
   // Locate the desktop-icon layer (SHELLDLL_DefView). Classic builds: it lives
   // in a WorkerW and 0x052C spawns a second WorkerW for the wallpaper. Some
@@ -891,11 +888,12 @@ async function doEnableWallpaperMode() {
 
       if (process.platform === 'win32') {
         const hwnd = win.getNativeWindowHandle().readBigUInt64LE(0);
-        win32ParentToWorkerW(hwnd, b);
+        await win32ParentToWorkerW(hwnd, b);
       } else if (process.platform === 'linux') {
         const xid = win.getNativeWindowHandle().readUInt32LE(0);
         await runX11DesktopHints(xid);
       }
+      if (gameMode) win.hide();
 
       win.on('closed', () => {
         console.log('[wallpaper] window closed');
@@ -904,7 +902,8 @@ async function doEnableWallpaperMode() {
           // closed from outside (e.g. taskkill of the window)
           wallpaperActive = false;
           if (psBlockerId !== null) { powerSaveBlocker.stop(psBlockerId); psBlockerId = null; }
-          if (tray) { tray.destroy(); tray = null; }
+          stopCursorBroadcast();
+          refreshTrayMenu();
           broadcastWallpaperState();
         }
       });
@@ -928,11 +927,14 @@ async function doEnableWallpaperMode() {
 }
 
 function disableWallpaperMode() {
-  for (const win of wallpaperWins) {
+  // Mark the stop before destroying windows: their synchronous closed events
+  // must not treat an intentional stop as an unexpected last-window closure.
+  wallpaperActive = false;
+  const stopped = wallpaperWins;
+  wallpaperWins = [];
+  for (const win of stopped) {
     if (!win.isDestroyed()) win.destroy();
   }
-  wallpaperWins = [];
-  wallpaperActive = false;
   const cfg = readConfig(); cfg.wallpaperMode = false; writeConfig(cfg);
   stopCursorBroadcast();
   if (psBlockerId !== null) { powerSaveBlocker.stop(psBlockerId); psBlockerId = null; }

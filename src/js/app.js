@@ -7,8 +7,9 @@
 import { VisualScene } from './scene.js';
 import { AudioEngine } from './audio.js';
 import { AudioActivity } from './audio-activity.js';
-import { sampleImageToCloud, makeProceduralImage } from './sampler.js';
-import { estimateDepth, depthModelUrl } from './depth.js';
+import { makeProceduralImage } from './sampler.js';
+import { buildCloud } from './cloud-builder.js';
+import { estimateDepth, depthModelUrl, identifyDepthImage } from './depth.js';
 import { copySpectrumBands } from './spectrum-relay.js';
 import { UI } from './ui.js';
 import { bridge, platform } from './bridge.js';
@@ -77,7 +78,9 @@ async function fetchBitmap(url) {
   const resp = await fetch(url);
   if (!resp.ok) throw new Error(`image load failed (${resp.status})`);
   const blob = await resp.blob();
-  return createImageBitmap(blob);
+  const bitmap = await createImageBitmap(blob);
+  await identifyDepthImage(bitmap, blob);
+  return bitmap;
 }
 
 async function loadFromUrl(url) {
@@ -220,7 +223,8 @@ async function rebuildCloud() {
   }
   if (token !== rebuildToken) return; // superseded
 
-  const cloud = sampleImageToCloud(currentImage, depth, get('pointCount'));
+  const cloud = await buildCloud(currentImage, depth, get('pointCount'));
+  if (token !== rebuildToken) return;
   scene.setCloud(cloud);
   scene.setBackdrop(currentImage, 'dim');
   scene.applySettings(getAll());
@@ -487,6 +491,7 @@ window.__dv = { audio, scene, get, set, loadUrl: (u) => loadFromUrl(u), rebuild:
   applyAudioResponse();
   // game mode (manual hotkey or auto-fullscreen): every window stops rendering
   bridge.onGameMode((on) => { gameMode = on; });
+  gameMode = await bridge.isVisualizerPaused();
   // wallpaper mode may have been restored before this window existed — the
   // broadcast was missed, so pick up the current state directly
   bridge.isWallpaperActive().then((on) => {

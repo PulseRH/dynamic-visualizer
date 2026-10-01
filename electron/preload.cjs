@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('dv', {
   enableWallpaper: () => ipcRenderer.invoke('wallpaperMode:enable'),
   disableWallpaper: () => ipcRenderer.invoke('wallpaperMode:disable'),
   isWallpaperActive: () => ipcRenderer.invoke('wallpaperMode:state'),
+  isVisualizerPaused: () => ipcRenderer.invoke('gamemode:state'),
   onWallpaperState: (cb) => {
     const handler = (_e, on) => cb(on);
     ipcRenderer.on('wallpaperMode:changed', handler);
