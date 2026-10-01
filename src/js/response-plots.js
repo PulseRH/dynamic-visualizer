@@ -44,17 +44,19 @@ export function responsePlots(s) {
   const rise = [], fall = [];
   const {up,down} = easingRates(s.stickyIn,s.stickyOut);
   const inCurve=easingCurve(up,s.easeInShape || 0), outCurve=easingCurve(down,s.easeOutShape || 0);
-  const seconds=Math.max(.1,Math.ceil(Math.max(inCurve.seconds,outCurve.seconds)*10)/10);
   for (let i = 0; i <= 256; i++) {
     const t=i/256;
-    rise.push([xAt(t),yAt(inCurve.atSeconds(t*seconds))]);
-    fall.push([xAt(t),yAt(1-outCurve.atSeconds(t*seconds))]);
+    rise.push([xAt(t),yAt(inCurve.atSeconds(t*inCurve.seconds))]);
+    fall.push([xAt(t),yAt(1-outCurve.atSeconds(t*outCurve.seconds))]);
   }
   return {
     energy: path(energy), energyOriginY: yAt(movementResponse(0,s.quietMovement,s.energyResponse)), band: path(band), threshold: Math.min(1,s.sensFloor / s.sensGain),
     frequencyWeights: weights, frequency: path(weights.map((w,i) => [fx(i),fy(w)])),
     highBoost: path(highs.map((w,i) => [fx(i),fy(w)])),
     frequencyZero: `M60 ${fy(0)}H284`, zeroY: fy(0), min, max,
-    easingIn: smoothPath(rise,Math.abs(s.easeInShape)===1), easingOut: smoothPath(fall,Math.abs(s.easeOutShape)===1), easingSeconds: seconds,
+    easingIn: smoothPath(rise), easingOut: smoothPath(fall),
+    easingInSeconds: inCurve.seconds, easingOutSeconds: outCurve.seconds,
+    easingInMidY: yAt(inCurve.atSeconds(inCurve.seconds*.5)),
+    easingOutMidY: yAt(1-outCurve.atSeconds(outCurve.seconds*.5)),
   };
 }

@@ -117,6 +117,11 @@ body.settings-only #closePanel { display: none; }
 .graph-guide { fill: none; stroke: var(--text-dim); stroke-dasharray: 3 3; opacity: .65; }
 .graph-dashed { stroke-dasharray: 5 3; stroke: var(--text-dim); }
 .graph-label { fill: var(--text-dim); font-size: 10px; }
+.graph-endpoint { fill: currentColor; }
+.graph-handle { cursor: ns-resize; touch-action: none; outline: none; }
+.graph-hit { fill: transparent; }
+.graph-knob { fill: currentColor; stroke: var(--bg); stroke-width: 2; pointer-events: none; }
+.graph-handle:hover .graph-knob, .graph-handle:focus .graph-knob { stroke: var(--text); }
 
 .panel-head {
   display: flex; align-items: center; justify-content: space-between;

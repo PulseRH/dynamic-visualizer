@@ -4,6 +4,7 @@
 import { get, set, onChange, getAll } from './settings.js';
 import { bridge } from './bridge.js';
 import { responsePlots } from './response-plots.js';
+import { easingBendAt } from './easing.js';
 import { BAND_CHOICES, bandChoiceIndex } from './band-choices.js';
 import { imageAccent, PURPLE_ACCENT } from './ui-accent.js';
 
@@ -21,6 +22,7 @@ export class UI {
     this._wirePanel();
     this._wireSegments();
     this._wireSliders();
+    this._wireEasingGraphs();
     this._wireImageButtons();
     this._wireDragDrop();
     this._wireStartup();
@@ -44,6 +46,44 @@ export class UI {
   }
 
   // ------------------------------------------------------------------ panel
+
+  _wireEasingGraphs() {
+    for (const [id,key,fall] of [['easingInHandle','easeInShape',false],['easingOutHandle','easeOutShape',true]]) {
+      const handle=$(id), graph=handle.ownerSVGElement;
+      let pointer=null, offset=0;
+      const localY=event => {
+        const point=new DOMPoint(event.clientX,event.clientY);
+        return point.matrixTransform(graph.getScreenCTM().inverse()).y;
+      };
+      const change=value=>set({[key]:Math.max(-1,Math.min(1,Math.round(value*100)/100))});
+      handle.addEventListener('pointerdown',event=>{
+        if(event.button!==0) return;
+        event.preventDefault();
+        pointer=event.pointerId;
+        offset=localY(event)-handle.transform.baseVal.getItem(0).matrix.f;
+        handle.setPointerCapture(pointer);
+      });
+      handle.addEventListener('pointermove',event=>{
+        if(pointer!==event.pointerId) return;
+        const height=Math.max(0,Math.min(1,(116-localY(event)+offset)/96));
+        change(easingBendAt(.5,fall ? 1-height : height));
+      });
+      handle.addEventListener('lostpointercapture',()=>{pointer=null;});
+      handle.addEventListener('pointerup',event=>{
+        if(pointer===event.pointerId) handle.releasePointerCapture(pointer);
+      });
+      handle.addEventListener('dblclick',()=>change(0));
+      handle.addEventListener('keydown',event=>{
+        const direction={ArrowLeft:-1,ArrowRight:1,ArrowUp:fall ? 1:-1,ArrowDown:fall ? -1:1}[event.key];
+        if(direction) {event.preventDefault();change(get(key)+direction*(event.shiftKey ? .1:.01));}
+        else if(event.key==='Home' || event.key==='End') {event.preventDefault();change(event.key==='Home' ? -1:1);}
+      });
+      handle.addEventListener('wheel',event=>{
+        if(!event.deltaY) return;
+        event.preventDefault();change(get(key)+Math.sign(event.deltaY)*(fall ? -1:1)*.01);
+      },{passive:false});
+    }
+  }
 
   _wirePanel() {
     this.narrowWindow = window.matchMedia('(max-width: 480px)');
@@ -388,7 +428,12 @@ export class UI {
       $('frequencyMax').textContent = `+${plots.max}`;
       $('frequencyMin').textContent = String(plots.min);
       $('frequencyZeroLabel').setAttribute('y', String(plots.zeroY + 3));
-      $('easingTimeEnd').textContent = `${plots.easingSeconds.toFixed(1)} s`;
+      $('easingTimeEnd').textContent = `${plots.easingInSeconds.toFixed(2)} s`;
+      $('easingOutTimeEnd').textContent = `${plots.easingOutSeconds.toFixed(2)} s`;
+      for (const [id,key,y] of [['easingInHandle','easeInShape',plots.easingInMidY],['easingOutHandle','easeOutShape',plots.easingOutMidY]]) {
+        $(id).setAttribute('transform', `translate(172 ${y})`);
+        $(id).setAttribute('aria-valuenow', String(get(key)));
+      }
     }
     $('keepScreenCovered').checked = !!get('keepScreenCovered');
 

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { responsePlots } from '../src/js/response-plots.js';
 import { BandAnalyzer, bandResponse, easeBand } from '../src/js/bands.js';
-import { easingCurve } from '../src/js/easing.js';
+import { easingCurve, easingProgress, easingBendAt } from '../src/js/easing.js';
 const s = {bands:64,quietMovement:.6,energyResponse:1,sensGain:1,sensFloor:.1,sensCurve:1.5,
   eqCurve:.4,tiltEQ:0,tiltPivot:.5,highBoost:0,stickyIn:.5,stickyOut:.5};
 const original = responsePlots(s);
@@ -18,8 +18,8 @@ assert.equal(bandResponse(1,1,.1,2),1,'peak reference gives full drive');
 assert.notEqual(original.frequency,responsePlots({...s,eqCurve:1}).frequency);
 assert.deepEqual(original.frequencyWeights,responsePlots({...s,highBoost:2}).frequencyWeights,'high boost is separate from pre-normalisation weighting');
 assert.notEqual(original.highBoost,responsePlots({...s,highBoost:2}).highBoost);
-assert.notEqual(original.easingOut,responsePlots({...s,stickyOut:1}).easingOut);
-assert.ok(responsePlots({...s,stickyOut:1}).easingSeconds>original.easingSeconds,'time axis expands to fit slower settling');
+assert.ok(responsePlots({...s,stickyOut:1}).easingOutSeconds>original.easingOutSeconds,'speed sets the duration, shape stays independent');
+assert.equal(original.easingInSeconds,responsePlots({...s,stickyOut:1}).easingInSeconds);
 assert.notEqual(original.easingIn,responsePlots({...s,easeInShape:1}).easingIn);
 assert.equal(original.easingOut,responsePlots({...s,easeInShape:1}).easingOut);
 assert.notEqual(original.easingOut,responsePlots({...s,easeOutShape:-1}).easingOut);
@@ -30,6 +30,7 @@ for(const rate of [.04,.1,.3,.6,.9]) {
   assert.equal(early.seconds,late.seconds,'bend moves the response within the same interval');
   assert.ok(early.atSeconds(early.seconds*.5)>.7 && late.atSeconds(late.seconds*.5)<.3);
   assert.equal(early.atSeconds(early.seconds),1);
+  assert.equal(easingCurve(rate,0).atSeconds(early.seconds*.5),.5,'zero tension is a straight ramp');
   for(const bend of [-1,-.5,0,.5,1]) {
     const profile=easingCurve(rate,bend);
     let value=0;
@@ -37,6 +38,15 @@ for(const rate of [.04,.1,.3,.6,.9]) {
       value=profile.advance(value,1,1);
       assert.ok(Math.abs(value-profile.atSeconds(tick*.033))<.00004,'audio steps match the continuous graph, including flat endpoints');
     }
+  }
+}
+for(let b=-1;b<=1;b+=.02) {
+  assert.ok(Math.abs(easingBendAt(.5,easingProgress(.5,b))-b)<.0051,'dragging the midpoint recovers the displayed/audio tension');
+}
+for(const bend of [-1,-.5,.5,1]) {
+  for(let i=1;i<100;i++) {
+    const second=easingProgress((i+1)/100,bend)-2*easingProgress(i/100,bend)+easingProgress((i-1)/100,bend);
+    assert.ok(second*Math.sign(bend)>0,'tension bows consistently, without the unwanted S-curve');
   }
 }
 for(const name of ['easingIn','easingOut']) {
@@ -61,8 +71,8 @@ for(const bend of [-1,-.5,0,.5,1]) {
   }
 }
 for (const value of Object.values(original)) if (typeof value==='string') assert.ok(!/NaN|Infinity/.test(value));
-// Compare shared graph helpers against the pre-change analyzer through actual
-// spectra, normalization, EQ, high boost and smoothing. Audio must stay exact.
+// Only the envelope changes: spectra, peak normalization, EQ, high boost and
+// measured loudness must remain exact compared with the original analyzer.
 const oldSource = execFileSync('git',['show','dc861d0:src/js/bands.js'],{encoding:'utf8'});
 const {BandAnalyzer:Previous} = await import(`data:text/javascript;base64,${Buffer.from(oldSource).toString('base64')}`);
 const old = new Previous(64), now = new BandAnalyzer(64);
@@ -75,6 +85,7 @@ for(let frame=0;frame<600;frame++) {
   }
   for(let i=0;i<samples.length;i++) samples[i]=Math.max(0,Math.sin(i*.013+frame*.17))*.3;
   old.fromFloat(samples,48000); now.fromFloat(samples,48000);
-  assert.deepEqual(now.bands,old.bands); assert.equal(now.loud,old.loud); assert.equal(now.energy,old.energy);
+  assert.deepEqual(now.raw,old.raw); assert.deepEqual(now._wraw,old._wraw);
+  assert.equal(now.peak,old.peak); assert.equal(now.loud,old.loud); assert.equal(now.bassEnergy,old.bassEnergy);
 }
-console.log('PASS: independent, labelled graph stages, no-input drive, frequency/easing controls and exact analyzer regression across 600 spectra.');
+console.log('PASS: envelope tension/drag mapping, graph/audio agreement, bounded retargeting and unchanged spectrum processing across 600 spectra.');

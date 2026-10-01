@@ -197,8 +197,8 @@ export class BandAnalyzer {
     const easingKey = `${up}/${down}/${this.easeInShape}/${this.easeOutShape}`;
     if (this._easingKey !== easingKey) {
       this._easingKey = easingKey;
-      this._easeInCurve = this.easeInShape ? easingCurve(up,this.easeInShape) : null;
-      this._easeOutCurve = this.easeOutShape ? easingCurve(down,this.easeOutShape) : null;
+      this._easeInCurve = easingCurve(up,this.easeInShape);
+      this._easeOutCurve = easingCurve(down,this.easeOutShape);
       this._easeDirection.fill(0);
     }
 
@@ -214,16 +214,10 @@ export class BandAnalyzer {
       if (!Number.isFinite(v)) v = 0;
       const prev = bands[b];
       const direction = v > prev ? 1 : v < prev ? -1 : 0;
-      const bend = direction > 0 ? this.easeInShape : this.easeOutShape;
-      if (bend) {
-        const gap = Math.abs(v - prev);
-        this._easeSpan[b] = direction !== this._easeDirection[b] ? gap : Math.max(gap, this._easeSpan[b]);
-        bands[b] = (direction > 0 ? this._easeInCurve : this._easeOutCurve).advance(prev, v, this._easeSpan[b]);
-        this._easeDirection[b] = direction;
-      } else {
-        bands[b] = prev + (v - prev) * (v > prev ? up : down);
-        this._easeDirection[b] = 0;
-      }
+      const gap = Math.abs(v - prev);
+      this._easeSpan[b] = direction !== this._easeDirection[b] ? gap : Math.max(gap, this._easeSpan[b]);
+      bands[b] = (direction > 0 ? this._easeInCurve : this._easeOutCurve).advance(prev, v, this._easeSpan[b]);
+      this._easeDirection[b] = direction;
       energy += bands[b];
     }
     this.energy = clamp01((energy / this.count) * 2.2);
