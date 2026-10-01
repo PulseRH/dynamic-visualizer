@@ -38,6 +38,12 @@
       </div>
       <div class="thumb-wrap"><img id="imgThumb" alt="" /></div>
       <div id="recentWallpapers" class="recent-wallpapers" aria-label="Recent wallpapers" hidden></div>
+      <label class="check-row"><input type="checkbox" id="wallpaperCycle" /> Cycle recent wallpapers<span class="q" data-tip="Rotate through your recent wallpapers while wallpaper mode is running. Pauses during Pause visualiser. Only the next image is loaded, when needed."></span></label>
+      <div id="cycleControls" hidden>
+        <label class="slider-row"><span class="lbl">Change every</span><input type="range" id="wallpaperCycleMinutes" min="1" max="60" step="1" /><span class="val"></span></label>
+        <button id="nextWallpaper" class="btn full">Next wallpaper</button>
+      </div>
+      <label class="slider-row"><span class="lbl">Crossfade<span class="q" data-tip="Blend from a saved frame into the new live visualiser when changing images. Avoids rendering two particle clouds. Zero switches immediately."></span></span><input type="range" id="wallpaperCrossfade" min="0" max="10" step="0.1" /><span class="val"></span></label>
       <p class="hint">Tip: drag &amp; drop or paste (Ctrl+V) an image any time.</p>
     </section>
 
@@ -145,6 +151,7 @@
         <button data-v="depth">Depth</button>
       </div>
       <p class="hint" id="bandMapHint"></p>
+      <label class="slider-row" id="bandDistributionRow"><span class="lbl">Band placement<span class="q" data-tip="Depth bands: move left to fit more frequency bands into distant layers, or right to fit more into near layers. The midpoint divides depth evenly. Does not move particles or change their audio displacement range."></span></span><input type="range" id="bandDistribution" min="-1" max="1" step="0.01" /><span class="val"></span></label>
       <label class="check-row"><input type="checkbox" id="invertBands" /> Invert bands<span class="q" data-tip="Swaps which end gets the bass. On Depth: bass moves to the front layers. On the others it flips the direction."></span></label>
       <label class="slider-row"><span class="lbl">Intensity<span class="q" data-tip="Overall strength of the music-driven wave motion."></span></span>
         <input type="range" id="intensity" min="0" max="2.5" step="0.05" />

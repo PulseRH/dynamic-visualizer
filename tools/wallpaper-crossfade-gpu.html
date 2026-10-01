@@ -1,0 +1,31 @@
+<!doctype html><meta charset="utf-8"><title>Wallpaper crossfade GPU check</title>
+<canvas id="cloud"></canvas><pre id="result">Running…</pre>
+<script type="module">
+import { VisualScene } from '../src/js/scene.js';
+const out=document.querySelector('#result');
+try {
+  const scene=new VisualScene(document.querySelector('canvas'));
+  scene.renderer.setSize(128,128,false);
+  scene.setCloud({count:1,aspect:1,positions:new Float32Array([0,0,.5]),colors:new Float32Array([1,1,1]),rands:new Float32Array([.5])});
+  scene.renderer.setClearColor(0xff0000,1);
+  scene.renderer.render(scene.scene,scene.camera);
+  scene.beginCrossfade(2);
+  scene.renderer.setClearColor(0x0000ff,1);
+  const gl=scene.renderer.getContext(), pixel=new Uint8Array(4);
+  const sample=t=>{
+    scene.renderer.render(scene.scene,scene.camera);
+    scene.drawCrossfade(scene.crossfade.start+t*2000);
+    gl.readPixels(1,1,1,1,gl.RGBA,gl.UNSIGNED_BYTE,pixel);
+    if(gl.getError()!==gl.NO_ERROR)throw new Error('WebGL error');
+    return [...pixel];
+  };
+  const start=sample(0),middle=sample(.5),end=sample(1);
+  if(start[0]<250||start[2]>5)throw new Error('Old frame not preserved: '+start);
+  if(Math.abs(middle[0]-128)>3||Math.abs(middle[2]-128)>3)throw new Error('Blend midpoint incorrect: '+middle);
+  if(end[2]<250||end[0]>5||scene.crossfade)throw new Error('New frame or cleanup incorrect');
+  scene.beginCrossfade(2);scene.beginCrossfade(1);scene.beginCrossfade(0);
+  if(scene.crossfade)throw new Error('Zero duration must release transition resources');
+  out.textContent='PASS: old frame, smooth midpoint, new frame, interrupted fade and resource cleanup; no WebGL errors.';
+  scene.renderer.dispose();
+} catch(error){out.textContent='FAIL: '+error.stack;}
+</script>

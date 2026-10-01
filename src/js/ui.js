@@ -224,6 +224,12 @@ export class UI {
     slider('quietMovement', 'quietMovement', (v) => `${Math.round(v * 100)}%`);
     slider('energyResponse', 'energyResponse', (v) => v.toFixed(2));
     slider('fillStrength','fillStrength',v=>`${Math.round(v*100)}%`);
+    const placement = v => Math.abs(v)<.005 ? 'Even' : `${Math.round(v*100)}%`;
+    slider('bandDistribution','bandDistribution',placement);
+    slider('wallpaperCycleMinutes','wallpaperCycleMinutes',v=>`${v} min`);
+    slider('wallpaperCrossfade','wallpaperCrossfade',v=>`${v.toFixed(1)} s`);
+    $('wallpaperCycle').onchange=e=>set({wallpaperCycle:e.target.checked});
+    $('nextWallpaper').onclick=()=>this.cb.onNextWallpaper?.();
     slider('framingSmoothing','framingSmoothing',v=>`${(.25+1.75*v*v).toFixed(2)} s`);
     $('calibrateEnergy').onclick = () => this.cb.onCalibrateEnergy();
 
@@ -517,6 +523,16 @@ export class UI {
       }
     }
     $('keepScreenCovered').checked = !!get('keepScreenCovered');
+    setSlider('bandDistribution',get('bandDistribution'));
+    const placement=get('bandDistribution');
+    $('bandDistribution').parentElement.querySelector('.val').textContent=Math.abs(placement)<.005 ? 'Even' : `${Math.round(placement*100)}%`;
+    $('bandDistributionRow').hidden=get('bandMap')!=='depth';
+    $('wallpaperCycle').checked=!!get('wallpaperCycle');
+    $('cycleControls').hidden=!get('wallpaperCycle');
+    setSlider('wallpaperCycleMinutes',get('wallpaperCycleMinutes'));
+    $('wallpaperCycleMinutes').parentElement.querySelector('.val').textContent=`${get('wallpaperCycleMinutes')} min`;
+    setSlider('wallpaperCrossfade',get('wallpaperCrossfade'));
+    $('wallpaperCrossfade').parentElement.querySelector('.val').textContent=`${get('wallpaperCrossfade').toFixed(1)} s`;
     $('framingControls').hidden=!get('keepScreenCovered');
     setSlider('fillStrength',get('fillStrength'));
     $('fillStrength').parentElement.querySelector('.val').textContent=`${Math.round(get('fillStrength')*100)}%`;

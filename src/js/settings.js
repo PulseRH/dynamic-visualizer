@@ -27,6 +27,10 @@ const DEFAULTS = {
   waveMode: 'ripple',      // legacy single-style setting, retained for migration
   motionMix: 0,           // legacy single-style amount, retained for migration
   bandMap: 'radial',       // which region reacts to which bands: 'depth' | 'radial' | 'vertical' | 'horizontal'
+  bandDistribution: 0,    // depth split: negative packs more bands toward the back
+  wallpaperCycle: false,
+  wallpaperCycleMinutes: 5,
+  wallpaperCrossfade: 2,  // seconds; snapshot blend avoids rendering two clouds
   intensity: 1.0,
   depthMove: 1.0,          // Z motion multiplier (toward/away from viewer)
   xyMove: 1.0,             // lateral motion multiplier (x/y shimmer + swell)

@@ -18,6 +18,7 @@ const VERT = /* glsl */ `
   uniform vec4 uLayers; // wave, ripple, bands, drift
   uniform vec4 uExtraLayers; // swirl, breathe, sweep, band shake
   uniform float uBandMap;
+  uniform float uBandDistribution;
   uniform float uBandCount;
   uniform float uInvert;
   uniform float uLightPulse;
@@ -54,6 +55,7 @@ const VERT = /* glsl */ `
     float bt;
     if (uBandMap < 0.5) {
       bt = near;
+      if (uBandDistribution != 1.0) bt = pow(clamp(near, 0.0, 1.0), uBandDistribution);
     } else if (uBandMap < 1.5) {
       bt = clamp(distance(uvw, vec2(0.5)) * 1.25, 0.0, 1.0);   // center = bass, edges = highs
     } else if (uBandMap < 2.5) {
@@ -296,6 +298,7 @@ export class VisualScene {
       uLayers: { value: new THREE.Vector4() },
       uExtraLayers: { value: new THREE.Vector4() },
       uBandMap: { value: 1 },
+      uBandDistribution: { value: 1 },
       uBandCount: { value: 64 },
       uInvert: { value: 0 },
       uLightPulse: { value: 1 },
@@ -547,6 +550,7 @@ export class VisualScene {
     this.uniforms.uLayers.value.set(s.motionWave, s.motionRipple, s.motionBands, s.motionDrift);
     this.uniforms.uExtraLayers.value.set(s.motionSwirl, s.motionBreathe, s.motionSweep, s.motionBandShake);
     this.uniforms.uBandMap.value = BAND_MAPS[s.bandMap] ?? 0;
+    this.uniforms.uBandDistribution.value = Math.pow(4, Math.max(-1, Math.min(1,s.bandDistribution || 0)));
     this.uniforms.uInvert.value = s.invertBands ? 1 : 0;
     this.uniforms.uGlow.value = s.glow;
     this.uniforms.uLightPulse.value = s.boost;
@@ -737,6 +741,45 @@ export class VisualScene {
     }
 
     this.renderer.render(this.scene, this.camera);
+    this.drawCrossfade(performance.now());
     return dt;
+  }
+
+  beginCrossfade(seconds) {
+    if (!this.points || !(seconds>0)) { this.endCrossfade(); return; }
+    // Capture on the GPU immediately after drawing; the default framebuffer
+    // is not preserved between frames. Include any unfinished prior blend.
+    this.renderer.render(this.scene,this.camera);
+    this.drawCrossfade(performance.now());
+    const size=this.renderer.getDrawingBufferSize(new THREE.Vector2());
+    const texture=new THREE.FramebufferTexture(size.x,size.y);
+    this.renderer.copyFramebufferToTexture(texture);
+    this.endCrossfade();
+    const material=new THREE.ShaderMaterial({
+      uniforms:{uTex:{value:texture},uOpacity:{value:1}},
+      vertexShader:'varying vec2 vUv; void main(){vUv=uv;gl_Position=vec4(position.xy,0.0,1.0);}',
+      fragmentShader:'uniform sampler2D uTex; uniform float uOpacity; varying vec2 vUv; void main(){gl_FragColor=vec4(texture2D(uTex,vUv).rgb,uOpacity);}',
+      transparent:true,depthTest:false,depthWrite:false,
+    });
+    const mesh=new THREE.Mesh(new THREE.PlaneGeometry(2,2),material);
+    mesh.frustumCulled=false;
+    const overlay=new THREE.Scene();overlay.add(mesh);
+    this.crossfade={texture,material,mesh,overlay,camera:new THREE.Camera(),start:performance.now(),duration:seconds*1000};
+  }
+
+  drawCrossfade(now) {
+    const fade=this.crossfade;
+    if (!fade) return;
+    const t=Math.max(0,Math.min(1,(now-fade.start)/fade.duration));
+    if(t>=1){this.endCrossfade();return;}
+    fade.material.uniforms.uOpacity.value=1-t*t*(3-2*t);
+    const clear=this.renderer.autoClear;this.renderer.autoClear=false;
+    this.renderer.render(fade.overlay,fade.camera);this.renderer.autoClear=clear;
+  }
+
+  endCrossfade() {
+    if(!this.crossfade)return;
+    const {texture,material,mesh}=this.crossfade;
+    texture.dispose();material.dispose();mesh.geometry.dispose();this.crossfade=null;
   }
 }

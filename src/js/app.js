@@ -22,6 +22,10 @@ const audio = new AudioEngine();
 
 let currentImage = null;      // canvas or ImageBitmap currently visualized
 let currentImageUrl = null;   // for the thumbnail
+let displayedImage = null;
+let cycleEntries = [];
+let cycleBusy = false;
+let cycleElapsed = 0;
 let relayedDepth = null;      // depth grid received from the preview window
 let awaitingRelay = false;
 let lastDepthGrid = null;     // this window's last computed grid (preview: for re-sends)
@@ -68,6 +72,7 @@ const ui = new UI({
     return picked;
   },
   onCalibrateEnergy: calibrateEnergy,
+  onNextWallpaper: () => nextWallpaper(),
 });
 
 ui.setAbout(`Dynamic Visualizer · ${platform} · Electron/WebGL2`);
@@ -106,7 +111,8 @@ function setMainImage(imageLike, urlForThumb) {
   rebuildCloud();
 }
 
-async function handleImagePick({ kind, file, url }) {
+async function handleImagePick({ kind, file, url, cycling = false }) {
+  if(!cycling){cycleEntries=[];cycleElapsed=0;}
   try {
     if (kind === 'recent') {
       await loadFromUrl(url);
@@ -157,6 +163,19 @@ async function handleImagePick({ kind, file, url }) {
   }
 }
 
+async function nextWallpaper() {
+  if(isWallpaperWindow || cycleBusy) return;
+  cycleBusy=true;
+  try {
+    if(!cycleEntries.length) cycleEntries=await bridge.recentImages();
+    if(cycleEntries.length<2){ui.toast('Use at least two wallpapers to start cycling');cycleElapsed=0;return;}
+    const index=cycleEntries.findIndex(e=>e.url===currentImageUrl || e.sourceUrl===currentImageUrl);
+    const next=cycleEntries[(index+1)%cycleEntries.length];
+    await handleImagePick({kind:'recent',url:next.url,cycling:true});
+    cycleElapsed=0;
+  } finally {cycleBusy=false;}
+}
+
 async function loadInitialImage() {
   if (!isWallpaperWindow) bridge.recentImages().then(entries => ui.setRecentImages(entries, currentImageUrl)).catch(console.warn);
   // 1. persisted explicit image (works if it's an app:// URL; blob URLs die)
@@ -193,10 +212,13 @@ async function rebuildCloud() {
     } else if (isWallpaperWindow) {
       // relay hasn't arrived yet: show the fast heuristic now, upgrade when
       // the preview broadcasts the real grid
-      depth = await estimateDepth(currentImage, 'auto');
-      if (token !== rebuildToken) return;
       awaitingRelay = true;
       bridge.requestDepthGrid(); // ask the preview to re-send its grid
+      // During an image change, retain the old scene until the final shared
+      // depth arrives. Avoid fading twice through a temporary heuristic cloud.
+      if(scene.points && currentImage!==displayedImage) return;
+      depth = await estimateDepth(currentImage, 'auto');
+      if (token !== rebuildToken) return;
     } else {
       if (aiModelUrl) ui.toast(`Running ${depthMode === 'onnx-base' ? 'detailed' : 'fast'} AI depth model…`, '', 8000);
       const controller = aiModelUrl ? new AbortController() : null;
@@ -225,9 +247,13 @@ async function rebuildCloud() {
 
   const cloud = await buildCloud(currentImage, depth, get('pointCount'));
   if (token !== rebuildToken) return;
+  const previousImage=displayedImage;
+  if(currentImage!==previousImage) scene.beginCrossfade(get('wallpaperCrossfade'));
   scene.setCloud(cloud);
   scene.setBackdrop(currentImage, 'dim');
   scene.applySettings(getAll());
+  displayedImage=currentImage;
+  if(previousImage instanceof ImageBitmap && previousImage!==currentImage) previousImage.close();
 }
 
 // ------------------------------------------------------- wallpaper mode
@@ -349,6 +375,7 @@ function applyAudioResponse() {
 }
 
 onChange((all, patch) => {
+  if('wallpaperCycle' in patch || 'wallpaperCycleMinutes' in patch){cycleElapsed=0;cycleEntries=[];}
   if (calibration && ['audioSource', 'audioFileUrl', 'eqCurve', 'tiltEQ', 'tiltPivot', 'bands'].some((key) => key in patch)) finishCalibration(true);
   scene.applySettings(all);
   applyAudioResponse();
@@ -409,6 +436,13 @@ function advanceIdle(a, dtMs, now) {
 }
 
 if (!isWallpaperWindow) {
+  let lastCycle=performance.now();
+  setInterval(()=>{
+    const now=performance.now(), elapsed=Math.min(2000,now-lastCycle);lastCycle=now;
+    if(!get('wallpaperCycle') || !wallpaperAudioActive || gameMode || cycleBusy)return;
+    cycleElapsed+=elapsed;
+    if(cycleElapsed>=Math.max(1,get('wallpaperCycleMinutes'))*60000)nextWallpaper().catch(console.warn);
+  },1000);
   let lastA = performance.now();
   setInterval(() => {
     const now = performance.now();
@@ -460,7 +494,7 @@ function loop(now) {
     scene.setQuality(1);
     restoredIdleQuality = true;
   }
-  if (idleTarget === 0 && idleVis === 0 && scene.backdropSettled() && !restoredIdleQuality) return;
+  if (idleTarget === 0 && idleVis === 0 && scene.backdropSettled() && !restoredIdleQuality && !scene.crossfade) return;
 
   scene.render(analyzer, get('parallax'));
   ui.setLevel(analyzer.level);
