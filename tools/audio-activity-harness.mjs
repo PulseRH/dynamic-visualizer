@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 const load = async (file) => import(`data:text/javascript;base64,${Buffer.from(await readFile(new URL(file, import.meta.url))).toString('base64')}`);
 const { AudioActivity } = await load('../src/js/audio-activity.js');
-const { BandAnalyzer } = await load('../src/js/bands.js');
+const { BandAnalyzer } = await import('../src/js/bands.js');
 const gate = new AudioActivity();
 const analyzer = new BandAnalyzer();
 const silence = new Uint8Array(1024);

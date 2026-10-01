@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 const load = async (file) => import(`data:text/javascript;base64,${Buffer.from(await readFile(new URL(file, import.meta.url))).toString('base64')}`);
 const { movementResponse } = await load('../src/js/response.js');
-const { BandAnalyzer } = await load('../src/js/bands.js');
+const { BandAnalyzer } = await import('../src/js/bands.js');
 for (const floor of [0, 0.6, 1]) {
   for (const slope of [0.25, 1, 4]) {
     assert.equal(movementResponse(0, floor, slope), floor);

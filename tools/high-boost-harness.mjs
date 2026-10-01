@@ -1,8 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-
-const source = await readFile(new URL('../src/js/bands.js', import.meta.url), 'utf8');
-const { BandAnalyzer } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+import { BandAnalyzer } from '../src/js/bands.js';
 
 const bins = 2048;
 // Upper treble is deliberately weaker than high mids, as in typical music.

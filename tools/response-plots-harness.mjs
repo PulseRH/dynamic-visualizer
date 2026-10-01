@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { responsePlots } from '../src/js/response-plots.js';
 import { BandAnalyzer, bandResponse, easeBand } from '../src/js/bands.js';
+import { easingCurve } from '../src/js/easing.js';
 const s = {bands:64,quietMovement:.6,energyResponse:1,sensGain:1,sensFloor:.1,sensCurve:1.5,
   eqCurve:.4,tiltEQ:0,tiltPivot:.5,highBoost:0,stickyIn:.5,stickyOut:.5};
 const original = responsePlots(s);
@@ -18,13 +19,30 @@ assert.notEqual(original.frequency,responsePlots({...s,eqCurve:1}).frequency);
 assert.deepEqual(original.frequencyWeights,responsePlots({...s,highBoost:2}).frequencyWeights,'high boost is separate from pre-normalisation weighting');
 assert.notEqual(original.highBoost,responsePlots({...s,highBoost:2}).highBoost);
 assert.notEqual(original.easingOut,responsePlots({...s,stickyOut:1}).easingOut);
-assert.equal(original.easingIn,responsePlots({...s,stickyOut:1}).easingIn);
-assert.equal(original.easingOut,responsePlots({...s,stickyIn:1}).easingOut);
+assert.ok(responsePlots({...s,stickyOut:1}).easingSeconds>original.easingSeconds,'time axis expands to fit slower settling');
 assert.notEqual(original.easingIn,responsePlots({...s,easeInShape:1}).easingIn);
 assert.equal(original.easingOut,responsePlots({...s,easeInShape:1}).easingOut);
 assert.notEqual(original.easingOut,responsePlots({...s,easeOutShape:-1}).easingOut);
-assert.ok(easeBand(0,1,.3,-1,1)>easeBand(0,1,.3,0,1));
+assert.ok(easeBand(0,1,.3,-1,1)>easeBand(0,1,.3,1,1));
 assert.ok(easeBand(0,1,.3,1,1)<easeBand(0,1,.3,0,1));
+for(const rate of [.04,.1,.3,.6,.9]) {
+  const early=easingCurve(rate,-1), late=easingCurve(rate,1);
+  assert.equal(early.seconds,late.seconds,'bend moves the response within the same interval');
+  assert.ok(early.atSeconds(early.seconds*.5)>.7 && late.atSeconds(late.seconds*.5)<.3);
+  assert.equal(early.atSeconds(early.seconds),1);
+  for(const bend of [-1,-.5,0,.5,1]) {
+    const profile=easingCurve(rate,bend);
+    let value=0;
+    for(let tick=1;tick<=160;tick++) {
+      value=profile.advance(value,1,1);
+      assert.ok(Math.abs(value-profile.atSeconds(tick*.033))<.00004,'audio steps match the continuous graph, including flat endpoints');
+    }
+  }
+}
+for(const name of ['easingIn','easingOut']) {
+  assert.ok(original[name].includes(' C') && !original[name].includes(' L'),'curves use smooth cubic segments');
+}
+assert.ok(original.easingIn.startsWith('M60,116') && original.easingOut.startsWith('M60,20'));
 for(const bend of [-1,-.5,0,.5,1]) {
   let rise=0,fall=1;
   for(let i=0;i<100;i++) {

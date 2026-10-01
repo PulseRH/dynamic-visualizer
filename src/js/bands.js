@@ -2,6 +2,8 @@
 // Feed it either a byte array (WebAudio AnalyserNode) or a float magnitude
 // array (our own FFT). Output drives the GPU uniforms.
 
+import { easingCurve } from './easing.js';
+export { easeBand } from './easing.js';
 export const BAND_COUNT = 64;   // default; the count is now user-configurable
 
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
@@ -14,21 +16,6 @@ export function bandResponse(level, gain, floor, curve) {
 }
 export function easingRates(easeIn, easeOut) {
   return { up: .9 - .6 * clamp01(easeIn), down: .5 - .46 * clamp01(easeOut) };
-}
-
-// Warp progress, rather than just changing the smoothing rate. Positive bends
-// start more slowly; negative bends start faster. Invert the warp from the
-// current value before advancing, so changing targets cannot jump the output.
-export function easeBand(previous, target, rate, bend = 0, span = 1) {
-  if (!bend) return previous + (target - previous) * rate;
-  const gap = Math.abs(target - previous);
-  if (!gap) return previous;
-  span = Math.max(gap, span);
-  const exponent = Math.pow(3, Math.max(-1, Math.min(1, bend)));
-  const progress = Math.pow(clamp01(1 - gap / span), 1 / exponent);
-  const next = progress + (1 - progress) * rate;
-  const step = Math.max(0, Math.min(gap, gap - span * (1 - Math.pow(next, exponent))));
-  return previous + Math.sign(target - previous) * step;
 }
 
 export class BandAnalyzer {
@@ -207,6 +194,13 @@ export class BandAnalyzer {
     const sIn = Math.max(0, Math.min(1, this.stickyIn ?? 0.5));
     const sOut = Math.max(0, Math.min(1, this.stickyOut ?? 0.5));
     const { up, down } = easingRates(sIn, sOut);
+    const easingKey = `${up}/${down}/${this.easeInShape}/${this.easeOutShape}`;
+    if (this._easingKey !== easingKey) {
+      this._easingKey = easingKey;
+      this._easeInCurve = this.easeInShape ? easingCurve(up,this.easeInShape) : null;
+      this._easeOutCurve = this.easeOutShape ? easingCurve(down,this.easeOutShape) : null;
+      this._easeDirection.fill(0);
+    }
 
     bass = shape(clamp01(bass / 10));
     this.bassEnergy = bass;
@@ -224,7 +218,7 @@ export class BandAnalyzer {
       if (bend) {
         const gap = Math.abs(v - prev);
         this._easeSpan[b] = direction !== this._easeDirection[b] ? gap : Math.max(gap, this._easeSpan[b]);
-        bands[b] = easeBand(prev, v, direction > 0 ? up : down, bend, this._easeSpan[b]);
+        bands[b] = (direction > 0 ? this._easeInCurve : this._easeOutCurve).advance(prev, v, this._easeSpan[b]);
         this._easeDirection[b] = direction;
       } else {
         bands[b] = prev + (v - prev) * (v > prev ? up : down);

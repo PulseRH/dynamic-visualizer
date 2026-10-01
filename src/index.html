@@ -247,18 +247,18 @@
           <input type="range" id="stickyOut" min="0" max="1" step="0.05" />
           <span class="val"></span>
         </label>
-        <label class="slider-row"><span class="lbl">Ease in curve<span class="q" data-tip="Bends the rise: negative starts faster and finishes gently; positive starts slowly and catches up later. Zero keeps the original easing. Ease in still sets its speed."></span></span>
+        <label class="slider-row"><span class="lbl">Ease in curve<span class="q" data-tip="Bends the rise: negative moves the main response earlier; positive moves it later. Full bend has a smooth start and finish. Zero keeps the original easing. Ease in sets the settling time."></span></span>
           <input type="range" id="easeInShape" min="-1" max="1" step="0.05" /><span class="val"></span>
         </label>
-        <label class="slider-row"><span class="lbl">Ease out curve<span class="q" data-tip="Bends the fall: negative drops faster at first and finishes gently; positive holds at first, then drops later. Zero keeps the original easing. Ease out still sets its speed."></span></span>
+        <label class="slider-row"><span class="lbl">Ease out curve<span class="q" data-tip="Bends the fall: negative moves the main drop earlier; positive holds longer and drops later. Full bend has a smooth start and finish. Zero keeps the original easing. Ease out sets the settling time."></span></span>
           <input type="range" id="easeOutShape" min="-1" max="1" step="0.05" /><span class="val"></span>
         </label>
-        <p class="hint">Curve bend: − faster start · 0 original · + slower start.</p>
+        <p class="hint">Curve bend: − earlier response · 0 original · + later response.</p>
         <svg id="easingGraph" class="response-graph" viewBox="0 0 300 160" role="img" aria-label="Separate ease in rising curve and ease out falling curve over time">
           <path d="M60 20V116H284" class="graph-axis" /><path id="easingInLine" class="graph-line" /><path id="easingOutLine" class="graph-line graph-dashed" />
-          <g class="graph-label"><text transform="translate(12 68) rotate(-90)" text-anchor="middle">Band response</text><text x="52" y="25" text-anchor="end">100%</text><text x="52" y="119" text-anchor="end">0%</text><text x="60" y="132">0 s</text><text x="284" y="132" text-anchor="end">1 s</text><text x="172" y="151" text-anchor="middle">Time since level change</text></g>
+          <g class="graph-label"><text transform="translate(12 68) rotate(-90)" text-anchor="middle">Band response</text><text x="52" y="25" text-anchor="end">100%</text><text x="52" y="119" text-anchor="end">0%</text><text x="60" y="132">0 s</text><text id="easingTimeEnd" x="284" y="132" text-anchor="end">1 s</text><text x="172" y="151" text-anchor="middle">Time since level change</text></g>
         </svg>
-        <p class="hint">Solid rising curve: Ease in after sound starts. Dashed falling curve: Ease out after sound stops. Each slider changes its own curve. First second shown at the normal 33 ms analysis interval.</p>
+        <p class="hint">Solid: Ease in. Dashed: Ease out. Curve controls bend a smooth Bézier transition earlier or later; speed controls set its settling interval. Zero curve keeps the original response. Time range fits both curves; the diagram uses the same easing function as the audio.</p>
       </details>
     </section>
 

@@ -388,6 +388,7 @@ export class UI {
       $('frequencyMax').textContent = `+${plots.max}`;
       $('frequencyMin').textContent = String(plots.min);
       $('frequencyZeroLabel').setAttribute('y', String(plots.zeroY + 3));
+      $('easingTimeEnd').textContent = `${plots.easingSeconds.toFixed(1)} s`;
     }
     $('keepScreenCovered').checked = !!get('keepScreenCovered');
 
