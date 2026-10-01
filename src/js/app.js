@@ -341,6 +341,7 @@ function applyAudioResponse() {
   a.stickyOut = get('stickyOut');
   a.easeInShape = get('easeInShape');
   a.easeOutShape = get('easeOutShape');
+  for(const key of ['easeInStyle','easeOutStyle','easeInSlope','easeOutSlope','easeInPosition','easeOutPosition']) a[key]=get(key);
 }
 
 onChange((all, patch) => {

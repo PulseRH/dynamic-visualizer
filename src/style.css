@@ -118,6 +118,9 @@ body.settings-only #closePanel { display: none; }
 .graph-dashed { stroke-dasharray: 5 3; stroke: var(--text-dim); }
 .graph-label { fill: var(--text-dim); font-size: 10px; }
 .graph-endpoint { fill: currentColor; }
+.easing-editor [hidden] { display: none; }
+.slider-row[hidden] { display: none; }
+.graph-tangent { fill: none; stroke: currentColor; stroke-width: 1; opacity: .65; pointer-events: none; }
 .graph-handle { cursor: ns-resize; touch-action: none; outline: none; }
 .graph-hit { fill: transparent; }
 .graph-knob { fill: currentColor; stroke: var(--bg); stroke-width: 2; pointer-events: none; }

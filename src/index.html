@@ -242,28 +242,42 @@
         <label class="slider-row"><span class="lbl">Ease in<span class="q" data-tip="Rise duration: 0 = fastest, 1 = slowest. The time shown on the graph is the full transition duration."></span></span>
           <input type="range" id="stickyIn" min="0" max="1" step="0.05" /><span class="val"></span>
         </label>
+        <div class="seg" id="easeInStyle"><button data-v="envelope">Envelope</button><button data-v="s">S-curve</button></div>
+        <div id="easeInSControls" hidden>
+          <label class="slider-row"><span class="lbl">Middle slope<span class="q" data-tip="How steeply the S-curve crosses its middle. Higher gives a gentler start and finish with a faster middle. Always moves toward the target."></span></span><input type="range" id="easeInSlope" min="0" max="1" step="0.01" /><span class="val"></span></label>
+          <label class="slider-row"><span class="lbl">Transition point<span class="q" data-tip="Where the curve reaches half response within its duration. Move left for earlier response, right for later."></span></span><input type="range" id="easeInPosition" min="0.15" max="0.85" step="0.01" /><span class="val"></span></label>
+        </div>
         <label class="slider-row"><span class="lbl">Ease in curve<span class="q" data-tip="Envelope tension: negative gives a quick rise then eases off; zero is straight; positive builds slowly then rises faster. Drag the graph's middle point to bend it."></span></span>
           <input type="range" id="easeInShape" min="-1" max="1" step="0.01" /><span class="val"></span>
         </label>
         <svg id="easingGraph" class="response-graph easing-editor" viewBox="0 0 300 160" role="group" aria-label="Editable ease in envelope">
           <path d="M60 20V116H284" class="graph-axis" /><path d="M60 116L284 20" class="graph-guide" /><path id="easingInLine" class="graph-line" />
           <circle cx="60" cy="116" r="3" class="graph-endpoint" /><circle cx="284" cy="20" r="3" class="graph-endpoint" />
+          <path id="easingInTangent" class="graph-tangent" hidden />
+          <g id="easingInSlopeHandle" class="graph-handle" hidden role="slider" tabindex="0" aria-label="Ease in middle slope" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0.5"><circle r="14" class="graph-hit" /><circle r="4" class="graph-knob" /></g>
           <g id="easingInHandle" class="graph-handle" transform="translate(172 68)" role="slider" tabindex="0" aria-label="Ease in curve bend" aria-valuemin="-1" aria-valuemax="1" aria-valuenow="0"><circle r="14" class="graph-hit" /><circle r="5" class="graph-knob" /></g>
           <g class="graph-label"><text transform="translate(12 68) rotate(-90)" text-anchor="middle">Band response</text><text x="52" y="25" text-anchor="end">100%</text><text x="52" y="119" text-anchor="end">0%</text><text x="60" y="132">0 s</text><text id="easingTimeEnd" x="284" y="132" text-anchor="end"></text><text x="172" y="151" text-anchor="middle">Time since level rises</text></g>
         </svg>
         <label class="slider-row"><span class="lbl">Ease out<span class="q" data-tip="Fall duration: 0 = fastest, 1 = slowest. The time shown on the graph is the full transition duration."></span></span>
           <input type="range" id="stickyOut" min="0" max="1" step="0.05" /><span class="val"></span>
         </label>
+        <div class="seg" id="easeOutStyle"><button data-v="envelope">Envelope</button><button data-v="s">S-curve</button></div>
+        <div id="easeOutSControls" hidden>
+          <label class="slider-row"><span class="lbl">Middle slope<span class="q" data-tip="How steeply the S-curve crosses its middle. Higher gives a gentler start and finish with a faster middle. Always moves toward the target."></span></span><input type="range" id="easeOutSlope" min="0" max="1" step="0.01" /><span class="val"></span></label>
+          <label class="slider-row"><span class="lbl">Transition point<span class="q" data-tip="Where the curve reaches half response within its duration. Move left for earlier response, right for later."></span></span><input type="range" id="easeOutPosition" min="0.15" max="0.85" step="0.01" /><span class="val"></span></label>
+        </div>
         <label class="slider-row"><span class="lbl">Ease out curve<span class="q" data-tip="Envelope tension: negative gives a quick drop then eases off; zero is straight; positive holds at first then drops faster. Drag the graph's middle point to bend it."></span></span>
           <input type="range" id="easeOutShape" min="-1" max="1" step="0.01" /><span class="val"></span>
         </label>
         <svg id="easingOutGraph" class="response-graph easing-editor" viewBox="0 0 300 160" role="group" aria-label="Editable ease out envelope">
           <path d="M60 20V116H284" class="graph-axis" /><path d="M60 20L284 116" class="graph-guide" /><path id="easingOutLine" class="graph-line" />
           <circle cx="60" cy="20" r="3" class="graph-endpoint" /><circle cx="284" cy="116" r="3" class="graph-endpoint" />
+          <path id="easingOutTangent" class="graph-tangent" hidden />
+          <g id="easingOutSlopeHandle" class="graph-handle" hidden role="slider" tabindex="0" aria-label="Ease out middle slope" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0.5"><circle r="14" class="graph-hit" /><circle r="4" class="graph-knob" /></g>
           <g id="easingOutHandle" class="graph-handle" transform="translate(172 68)" role="slider" tabindex="0" aria-label="Ease out curve bend" aria-valuemin="-1" aria-valuemax="1" aria-valuenow="0"><circle r="14" class="graph-hit" /><circle r="5" class="graph-knob" /></g>
           <g class="graph-label"><text transform="translate(12 68) rotate(-90)" text-anchor="middle">Band response</text><text x="52" y="25" text-anchor="end">100%</text><text x="52" y="119" text-anchor="end">0%</text><text x="60" y="132">0 s</text><text id="easingOutTimeEnd" x="284" y="132" text-anchor="end"></text><text x="172" y="151" text-anchor="middle">Time since level falls</text></g>
         </svg>
-        <p class="hint">Drag a middle point up or down to bend its curve. Double-click it for a straight line. Curve: − quick start · 0 straight · + slow start. Each graph uses the same envelope as the audio, with its own duration.</p>
+        <p class="hint">Envelope: drag the middle point up/down; double-click for straight. S-curve: drag the centre left/right to move the transition; rotate its outer handle to change the middle slope. S-curves always move toward the target, without overshoot.</p>
       </details>
     </section>
 

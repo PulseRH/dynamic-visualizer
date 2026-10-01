@@ -59,6 +59,12 @@ const DEFAULTS = {
   previewPaused: false,    // freeze the preview window (wallpaper keeps running)
   easeInShape: 0,         // envelope tension: negative quick start, zero linear, positive slow start
   easeOutShape: 0,
+  easeInStyle: 'envelope',
+  easeOutStyle: 'envelope',
+  easeInSlope: .5,
+  easeOutSlope: .5,
+  easeInPosition: .5,
+  easeOutPosition: .5,
   settingsOnly: false,    // compact controls with no preview rendering
   previewFullQuality: false, // don't throttle the preview while wallpaper mode is on
   audioSource: 'demo',     // 'system' | 'mic' | 'file' | 'demo'

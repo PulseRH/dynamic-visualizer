@@ -48,43 +48,58 @@ export class UI {
   // ------------------------------------------------------------------ panel
 
   _wireEasingGraphs() {
-    for (const [id,key,fall] of [['easingInHandle','easeInShape',false],['easingOutHandle','easeOutShape',true]]) {
-      const handle=$(id), graph=handle.ownerSVGElement;
-      let pointer=null, offset=0;
-      const localY=event => {
-        const point=new DOMPoint(event.clientX,event.clientY);
-        return point.matrixTransform(graph.getScreenCTM().inverse()).y;
-      };
-      const change=value=>set({[key]:Math.max(-1,Math.min(1,Math.round(value*100)/100))});
-      handle.addEventListener('pointerdown',event=>{
-        if(event.button!==0) return;
-        event.preventDefault();
-        pointer=event.pointerId;
-        offset=localY(event)-handle.transform.baseVal.getItem(0).matrix.f;
-        handle.setPointerCapture(pointer);
-      });
-      handle.addEventListener('pointermove',event=>{
-        if(pointer!==event.pointerId) return;
-        const height=Math.max(0,Math.min(1,(116-localY(event)+offset)/96));
-        change(easingBendAt(.5,fall ? 1-height : height));
-      });
-      handle.addEventListener('lostpointercapture',()=>{pointer=null;});
-      handle.addEventListener('pointerup',event=>{
-        if(pointer===event.pointerId) handle.releasePointerCapture(pointer);
-      });
-      handle.addEventListener('dblclick',()=>change(0));
-      handle.addEventListener('keydown',event=>{
-        const direction={ArrowLeft:-1,ArrowRight:1,ArrowUp:fall ? 1:-1,ArrowDown:fall ? -1:1}[event.key];
-        if(direction) {event.preventDefault();change(get(key)+direction*(event.shiftKey ? .1:.01));}
-        else if(event.key==='Home' || event.key==='End') {event.preventDefault();change(event.key==='Home' ? -1:1);}
-      });
-      handle.addEventListener('wheel',event=>{
-        if(!event.deltaY) return;
-        event.preventDefault();change(get(key)+Math.sign(event.deltaY)*(fall ? -1:1)*.01);
-      },{passive:false});
+    for(const part of ['In','Out']) {
+      const prefix=`ease${part}`, fall=part==='Out';
+      for(const tangent of [false,true]) {
+        const handle=$(`easing${part}${tangent ? 'SlopeHandle':'Handle'}`), graph=handle.ownerSVGElement;
+        let pointer=null, offset={x:0,y:0};
+        const local=event=>new DOMPoint(event.clientX,event.clientY).matrixTransform(graph.getScreenCTM().inverse());
+        const key=()=>`${prefix}${tangent ? 'Slope':get(`${prefix}Style`)==='s' ? 'Position':'Shape'}`;
+        const change=value=>{
+          const active=key(), position=active.endsWith('Position'), slope=active.endsWith('Slope');
+          set({[active]:Math.max(position ? .15:slope ? 0:-1,Math.min(position ? .85:1,Math.round(value*100)/100))});
+        };
+        handle.addEventListener('pointerdown',event=>{
+          if(event.button!==0) return;
+          event.preventDefault(); pointer=event.pointerId;
+          const point=local(event), matrix=handle.transform.baseVal.getItem(0).matrix;
+          offset={x:point.x-matrix.e,y:point.y-matrix.f};
+          handle.setPointerCapture(pointer);
+        });
+        handle.addEventListener('pointermove',event=>{
+          if(pointer!==event.pointerId) return;
+          const point=local(event), x=point.x-offset.x, y=point.y-offset.y;
+          if(tangent) {
+            const p=get(`${prefix}Position`), dx=(x-(60+224*p))/224, dy=(68-y)/96*(fall ? -1:1);
+            // Constrain the tangent to the forward quadrant; it cannot reverse.
+            if(dx<=0 || dy<0) return;
+            change((4*p*(1-p)*dy/Math.max(.001,dx)-1)/3);
+          } else if(get(`${prefix}Style`)==='s') change((x-60)/224);
+          else {
+            const height=Math.max(0,Math.min(1,(116-y)/96));
+            change(easingBendAt(.5,fall ? 1-height:height));
+          }
+        });
+        handle.addEventListener('lostpointercapture',()=>{pointer=null;});
+        handle.addEventListener('pointerup',event=>{if(pointer===event.pointerId) handle.releasePointerCapture(pointer);});
+        handle.addEventListener('dblclick',()=>change(key().endsWith('Shape') ? 0:.5));
+        handle.addEventListener('keydown',event=>{
+          const isShape=key().endsWith('Shape');
+          const direction={ArrowLeft:-1,ArrowRight:1,ArrowUp:isShape && !fall ? -1:1,ArrowDown:isShape && !fall ? 1:-1}[event.key];
+          if(direction) {event.preventDefault();change(get(key())+direction*(event.shiftKey ? .1:.01));}
+          else if(event.key==='Home' || event.key==='End') {
+            event.preventDefault();
+            const position=key().endsWith('Position');
+            change(event.key==='Home' ? (position ? .15:isShape ? -1:0):(position ? .85:1));
+          }
+        });
+        handle.addEventListener('wheel',event=>{
+          if(!event.deltaY) return;
+          event.preventDefault();change(get(key())+Math.sign(event.deltaY)*.01);
+        },{passive:false});
+      }
     }
   }
-
   _wirePanel() {
     this.narrowWindow = window.matchMedia('(max-width: 480px)');
     this.narrowWindow.addEventListener('change', () => this._syncWindowLayout());
@@ -126,6 +141,8 @@ export class UI {
       });
     };
     seg('depthSeg', 'depthMode');
+    seg('easeInStyle','easeInStyle');
+    seg('easeOutStyle','easeOutStyle');
     seg('bandMapSeg', 'bandMap');
     seg('fpsSeg', 'fpsCap', (v) => set({ fpsCap: Number(v) }));
     seg('audioSeg', 'audioSource', async (v) => {
@@ -178,6 +195,10 @@ export class UI {
     slider('stickyOut', 'stickyOut', (v) => v.toFixed(2));
     slider('easeInShape', 'easeInShape', (v) => v.toFixed(2));
     slider('easeOutShape', 'easeOutShape', (v) => v.toFixed(2));
+    for(const part of ['In','Out']) {
+      slider(`ease${part}Slope`,`ease${part}Slope`,v=>`${Math.round(v*100)}%`);
+      slider(`ease${part}Position`,`ease${part}Position`,v=>`${Math.round(v*100)}%`);
+    }
     $('bands').max = String(BAND_CHOICES.length - 1);
     slider('bands', 'bands', (v) => String(v), (i) => BAND_CHOICES[i]);
     slider('depthMove', 'depthMove', (v) => v.toFixed(2));
@@ -406,6 +427,16 @@ export class UI {
     setSlider('stickyOut', get('stickyOut'));
     setSlider('easeInShape', get('easeInShape'));
     setSlider('easeOutShape', get('easeOutShape'));
+    for(const part of ['In','Out']) {
+      const prefix=`ease${part}`, isS=get(`${prefix}Style`)==='s';
+      syncSeg(`${prefix}Style`,get(`${prefix}Style`));
+      $(`${prefix}SControls`).hidden=!isS;
+      $(`${prefix}Shape`).parentElement.hidden=isS;
+      for(const name of ['Slope','Position']) {
+        setSlider(`${prefix}${name}`,get(`${prefix}${name}`));
+        $(`${prefix}${name}`).parentElement.querySelector('.val').textContent=`${Math.round(get(`${prefix}${name}`)*100)}%`;
+      }
+    }
     setSlider('bands', bandChoiceIndex(get('bands')));
     setSlider('depthMove', get('depthMove'));
     setSlider('xyMove', get('xyMove'));
@@ -415,7 +446,8 @@ export class UI {
     $('quietMovement').parentElement.querySelector('.val').textContent = `${Math.round(get('quietMovement') * 100)}%`;
     setSlider('energyResponse', get('energyResponse'));
     const curveKey = ['quietMovement','energyResponse','sensGain','sensFloor','sensCurve',
-      'eqCurve','tiltEQ','tiltPivot','highBoost','stickyIn','stickyOut','easeInShape','easeOutShape','bands'].map(get).join(':');
+      'eqCurve','tiltEQ','tiltPivot','highBoost','stickyIn','stickyOut','easeInShape','easeOutShape',
+      'easeInStyle','easeOutStyle','easeInSlope','easeOutSlope','easeInPosition','easeOutPosition','bands'].map(get).join(':');
     if (this._curveKey !== curveKey) {
       this._curveKey = curveKey;
       const plots = responsePlots(getAll());
@@ -430,9 +462,21 @@ export class UI {
       $('frequencyZeroLabel').setAttribute('y', String(plots.zeroY + 3));
       $('easingTimeEnd').textContent = `${plots.easingInSeconds.toFixed(2)} s`;
       $('easingOutTimeEnd').textContent = `${plots.easingOutSeconds.toFixed(2)} s`;
-      for (const [id,key,y] of [['easingInHandle','easeInShape',plots.easingInMidY],['easingOutHandle','easeOutShape',plots.easingOutMidY]]) {
-        $(id).setAttribute('transform', `translate(172 ${y})`);
-        $(id).setAttribute('aria-valuenow', String(get(key)));
+      for(const part of ['In','Out']) {
+        const prefix=`ease${part}`, plotPrefix=`easing${part}`, isS=get(`${prefix}Style`)==='s', fall=part==='Out';
+        const x=plots[`${plotPrefix}MidX`], y=plots[`${plotPrefix}MidY`], dx=224*.25/plots[`${plotPrefix}Tangent`], dy=fall ? 24:-24;
+        const handle=$(`${plotPrefix}Handle`), slopeHandle=$(`${plotPrefix}SlopeHandle`), tangent=$(`${plotPrefix}Tangent`);
+        handle.setAttribute('transform',`translate(${x} ${y})`);
+        handle.setAttribute('aria-label',`Ease ${part.toLowerCase()} ${isS ? 'transition point':'curve bend'}`);
+        handle.setAttribute('aria-valuemin',isS ? '.15':'-1');
+        handle.setAttribute('aria-valuemax',isS ? '.85':'1');
+        handle.setAttribute('aria-valuenow',String(get(`${prefix}${isS ? 'Position':'Shape'}`)));
+        handle.style.cursor=isS ? 'ew-resize':'ns-resize';
+        slopeHandle.toggleAttribute('hidden',!isS); tangent.toggleAttribute('hidden',!isS);
+        slopeHandle.style.cursor='crosshair';
+        slopeHandle.setAttribute('transform',`translate(${x+dx} ${y+dy})`);
+        slopeHandle.setAttribute('aria-valuenow',String(get(`${prefix}Slope`)));
+        tangent.setAttribute('d',`M${x-dx} ${y-dy}L${x+dx} ${y+dy}`);
       }
     }
     $('keepScreenCovered').checked = !!get('keepScreenCovered');

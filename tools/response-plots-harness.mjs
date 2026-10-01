@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { responsePlots } from '../src/js/response-plots.js';
 import { BandAnalyzer, bandResponse, easeBand } from '../src/js/bands.js';
-import { easingCurve, easingProgress, easingBendAt } from '../src/js/easing.js';
+import { easingCurve, easingProgress, easingBendAt, sCurveProgress } from '../src/js/easing.js';
 const s = {bands:64,quietMovement:.6,energyResponse:1,sensGain:1,sensFloor:.1,sensCurve:1.5,
   eqCurve:.4,tiltEQ:0,tiltPivot:.5,highBoost:0,stickyIn:.5,stickyOut:.5};
 const original = responsePlots(s);
@@ -43,6 +43,38 @@ for(const rate of [.04,.1,.3,.6,.9]) {
 for(let b=-1;b<=1;b+=.02) {
   assert.ok(Math.abs(easingBendAt(.5,easingProgress(.5,b))-b)<.0051,'dragging the midpoint recovers the displayed/audio tension');
 }
+for(const slope of [0,.25,.5,1]) for(const position of [.15,.3,.5,.7,.85]) {
+  assert.equal(sCurveProgress(0,slope,position),0);
+  assert.equal(sCurveProgress(1,slope,position),1);
+  assert.ok(Math.abs(sCurveProgress(position,slope,position)-.5)<1e-12);
+  let before=0;
+  for(let i=0;i<=1000;i++) {
+    const value=sCurveProgress(i/1000,slope,position);
+    assert.ok(value>=before && value<=1,'S-curve never reverses or overshoots');before=value;
+  }
+  for(const rate of [.04,.1,.3,.6,.9]) {
+    const profile=easingCurve(rate,0,'s',slope,position);
+    let value=0;
+    for(let tick=1;tick<=160;tick++) {
+      const next=profile.advance(value,1,1);
+      assert.ok(next>=value && next<=1);
+      assert.ok(Math.abs(next-profile.atSeconds(tick*.033))<.0001,'S-curve audio matches its graph');
+      value=next;
+    }
+    assert.ok(value>.999,'flat starts must not stall');
+  }
+  const reactive=new BandAnalyzer(2);
+  reactive.curve=1;reactive.easeInStyle=reactive.easeOutStyle='s';
+  reactive.easeInSlope=reactive.easeOutSlope=slope;
+  reactive.easeInPosition=reactive.easeOutPosition=position;
+  for(let i=0;i<500;i++) {
+    const target=Math.max(0,Math.sin(i*.31));reactive.raw.set([1,target]);
+    const prev=reactive.bands[1];reactive._finish();const next=reactive.bands[1];
+    assert.ok(Number.isFinite(next) && next>=Math.min(prev,target)-1e-6 && next<=Math.max(prev,target)+1e-6,'S-curve retargeting cannot overshoot');
+  }
+}
+assert.notEqual(original.easingIn,responsePlots({...s,easeInStyle:'s'}).easingIn);
+assert.equal(original.easingOut,responsePlots({...s,easeInStyle:'s'}).easingOut);
 for(const bend of [-1,-.5,.5,1]) {
   for(let i=1;i<100;i++) {
     const second=easingProgress((i+1)/100,bend)-2*easingProgress(i/100,bend)+easingProgress((i-1)/100,bend);

@@ -1,6 +1,6 @@
 import { movementResponse } from './response.js';
 import { BandAnalyzer, bandResponse, easingRates } from './bands.js';
-import { easingCurve } from './easing.js';
+import { easingCurve, sCurveTangent } from './easing.js';
 
 const xAt = x => 60 + x * 224;
 const yAt = y => 116 - y * 96;
@@ -43,7 +43,8 @@ export function responsePlots(s) {
   const fx = i => xAt(Math.max(0, Math.min(1, Math.log(((lo[i] + hi[i]) / 2) * 24000 / 1024 / 30) / Math.log(16000 / 30))));
   const rise = [], fall = [];
   const {up,down} = easingRates(s.stickyIn,s.stickyOut);
-  const inCurve=easingCurve(up,s.easeInShape || 0), outCurve=easingCurve(down,s.easeOutShape || 0);
+  const inCurve=easingCurve(up,s.easeInShape || 0,s.easeInStyle,s.easeInSlope,s.easeInPosition);
+  const outCurve=easingCurve(down,s.easeOutShape || 0,s.easeOutStyle,s.easeOutSlope,s.easeOutPosition);
   for (let i = 0; i <= 256; i++) {
     const t=i/256;
     rise.push([xAt(t),yAt(inCurve.atSeconds(t*inCurve.seconds))]);
@@ -56,7 +57,11 @@ export function responsePlots(s) {
     frequencyZero: `M60 ${fy(0)}H284`, zeroY: fy(0), min, max,
     easingIn: smoothPath(rise), easingOut: smoothPath(fall),
     easingInSeconds: inCurve.seconds, easingOutSeconds: outCurve.seconds,
-    easingInMidY: yAt(inCurve.atSeconds(inCurve.seconds*.5)),
-    easingOutMidY: yAt(1-outCurve.atSeconds(outCurve.seconds*.5)),
+    easingInMidY: s.easeInStyle==='s' ? 68 : yAt(inCurve.atSeconds(inCurve.seconds*.5)),
+    easingOutMidY: s.easeOutStyle==='s' ? 68 : yAt(1-outCurve.atSeconds(outCurve.seconds*.5)),
+    easingInMidX: xAt(s.easeInStyle==='s' ? (s.easeInPosition ?? .5) : .5),
+    easingOutMidX: xAt(s.easeOutStyle==='s' ? (s.easeOutPosition ?? .5) : .5),
+    easingInTangent: sCurveTangent(s.easeInSlope,s.easeInPosition),
+    easingOutTangent: sCurveTangent(s.easeOutSlope,s.easeOutPosition),
   };
 }
