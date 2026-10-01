@@ -99,7 +99,10 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
       }
     }
     const pointBudget=Math.floor(Math.min(baseCount*.5,60000)*fill);
-    const budget=Math.min(candidates,Math.floor(pointBudget/3));
+    // More fill increases both the number of bridges and their density.
+    // Ordinary point sizes are retained even when animated bands pull apart.
+    const samplesPerEdge=3+Math.round(fill*9);
+    const budget=Math.min(candidates,Math.floor(pointBudget/samplesPerEdge));
     let threshold=255,above=0;
     while(threshold>0 && above+histogram[threshold]<budget){above+=histogram[threshold];threshold--;}
     let ties=budget-above;
@@ -109,7 +112,8 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
       const slot=keys[c]>>1, axis=keys[c]&1;
       const ai=grid[slot]*3,bi=grid[slot+(axis===0 ? 1:cols)]*3;
       edges++;
-      for(const t of [.25,.5,.75]){
+      for(let sample=1;sample<=samplesPerEdge;sample++){
+        const t=sample/(samplesPerEdge+1);
         const x=positions[ai]*(1-t)+positions[bi]*t,y=positions[ai+1]*(1-t)+positions[bi+1]*t,u=x/aspect+.5,v=.5-y;
         const sx=Math.min(W-1,Math.max(0,Math.floor(u*W))),sy=Math.min(H-1,Math.max(0,Math.floor(v*H))),i=(sy*W+sx)*4,p=used*3;
         const near=depth ? sampleGrid(depth,u,v):.5;

@@ -27,8 +27,10 @@ assert.ok(seams.fillFractions.length>0);
 for(let f=0;f<seams.fillFractions.length;f++){
   const startBand=Math.min(15,Math.floor(seams.fillStarts[f*4+2]*16)),endBand=Math.min(15,Math.floor(seams.fillEnds[f*4+2]*16));
   assert.notEqual(startBand,endBand,'moving band seams must outrank ordinary density gaps');
-  assert.ok([.25,.5,.75].includes(seams.fillFractions[f]));
+  assert.equal(seams.fillFractions[f],Math.fround((f%5+1)/6),'five evenly spaced samples per seam at 20% fill');
 }
+const dense=sampleImageToCloud(image,gradient,12000,1,{bandMap:'depth',bands:16});
+for(let f=0;f<dense.fillFractions.length;f++)assert.equal(dense.fillFractions[f],Math.fround((f%12+1)/13),'twelve evenly spaced samples per seam at full fill');
 const large=sampleImageToCloud(image,null,400000,1);
 assert.ok(large.count-large.baseCount<=60000);
 assert.equal(sampleImageToCloud(image,null,12000,0).count,sampleImageToCloud(image,null,12000).count);

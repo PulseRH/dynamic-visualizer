@@ -47,7 +47,6 @@ const VERT = /* glsl */ `
     attribute vec4 aFillStart;
     attribute vec4 aFillEnd;
     attribute float aFillT;
-    uniform vec2 uViewport;
   #endif
 
   varying vec3 vColor;
@@ -228,11 +227,8 @@ const VERT = /* glsl */ `
       evaluatePoint(aFillStart.xyz, aFillStart.w, aColor, first, firstColour, firstAmp, firstSize);
       evaluatePoint(aFillEnd.xyz, aFillEnd.w, aColor, last, lastColour, lastAmp, lastSize);
       vec3 pos = mix(first, last, aFillT);
-      vec4 firstClip = projectionMatrix * (modelViewMatrix * vec4(first, 1.0));
-      vec4 lastClip = projectionMatrix * (modelViewMatrix * vec4(last, 1.0));
-      float gapPixels = length((firstClip.xy / firstClip.w - lastClip.xy / lastClip.w) * uViewport * 0.5);
       gl_Position = projectionMatrix * (modelViewMatrix * vec4(pos, 1.0));
-      gl_PointSize = clamp(max(mix(firstSize, lastSize, aFillT), gapPixels * 0.35), 0.75, 24.0);
+      gl_PointSize = mix(firstSize, lastSize, aFillT);
       vColor = mix(firstColour, lastColour, aFillT);
       vAmp = mix(firstAmp, lastAmp, aFillT);
     #else
@@ -331,7 +327,6 @@ export class VisualScene {
       uExtraLayers: { value: new THREE.Vector4() },
       uBandMap: { value: 1 },
       uDepthShading: { value: 0 },
-      uViewport: { value: new THREE.Vector2() },
       uBandDistribution: { value: 1 },
       uBandCount: { value: 64 },
       uInvert: { value: 0 },
@@ -706,7 +701,6 @@ export class VisualScene {
     // point size in pixels when the cloud is at rest distance:
     //   pointSize=1.0 means a point's diameter equals the point spacing
     const hPx = this.renderer.domElement.height; // drawing-buffer pixels
-    this.uniforms.uViewport.value.set(this.renderer.domElement.width,hPx);
     const tanHalf = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
     this.uniforms.uSize.value =
       (this.pointSizeSetting || 1) * hPx * (this.spacingWorld || 1 / 300)
@@ -801,7 +795,6 @@ export class VisualScene {
     if (!this.points || !(seconds>0)) { this.endCrossfade(); return; }
     // Capture on the GPU immediately after drawing; the default framebuffer
     // is not preserved between frames. Include any unfinished prior blend.
-    this.uniforms.uViewport.value.set(this.renderer.domElement.width,this.renderer.domElement.height);
     this.renderer.render(this.scene,this.camera);
     this.drawCrossfade(performance.now());
     const size=this.renderer.getDrawingBufferSize(new THREE.Vector2());
