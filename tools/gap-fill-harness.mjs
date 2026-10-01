@@ -21,6 +21,14 @@ for(let i=0;i<transparent.count;i++){
   assert.ok(sx<170.01 || sx>=229.99,'transparent holes are not bridged');
 }
 pixels.fill(255);
+const gradient={w:400,h:240,data:Float32Array.from({length:400*240},(_,i)=>(i%400)/399)};
+const seams=sampleImageToCloud(image,gradient,12000,.2,{bandMap:'depth',bands:16});
+assert.ok(seams.fillFractions.length>0);
+for(let f=0;f<seams.fillFractions.length;f++){
+  const startBand=Math.min(15,Math.floor(seams.fillStarts[f*4+2]*16)),endBand=Math.min(15,Math.floor(seams.fillEnds[f*4+2]*16));
+  assert.notEqual(startBand,endBand,'moving band seams must outrank ordinary density gaps');
+  assert.ok([.25,.5,.75].includes(seams.fillFractions[f]));
+}
 const large=sampleImageToCloud(image,null,400000,1);
 assert.ok(large.count-large.baseCount<=60000);
 assert.equal(sampleImageToCloud(image,null,12000,0).count,sampleImageToCloud(image,null,12000).count);

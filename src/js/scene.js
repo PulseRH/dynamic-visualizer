@@ -43,13 +43,19 @@ const VERT = /* glsl */ `
 
   attribute vec3 aColor;
   attribute float aRand;
+  #ifdef GAP_FILL
+    attribute vec4 aFillStart;
+    attribute vec4 aFillEnd;
+    attribute float aFillT;
+    uniform vec2 uViewport;
+  #endif
 
   varying vec3 vColor;
   varying float vAmp;
 
-  void main() {
-    float near = position.z;                 // 0..1, 1 = closest to viewer
-    vec2 uvw = vec2(position.x / uAspect + 0.5, position.y + 0.5);
+  void evaluatePoint(vec3 pointPosition, float pointRand, vec3 pointColor, out vec3 pos, out vec3 colourOut, out float ampOut, out float pointSize) {
+    float near = pointPosition.z;                 // 0..1, 1 = closest to viewer
+    vec2 uvw = vec2(pointPosition.x / uAspect + 0.5, pointPosition.y + 0.5);
 
     // which region of the image listens to which frequency band:
     // 0 = by depth layer, 1 = radial from center, 2 = bottom->top, 3 = left->right
@@ -80,7 +86,7 @@ const VERT = /* glsl */ `
     float layerTotal = dot(uLayers, vec4(1.0)) + uExtraLayers.z;
     if (uLayers.x > 0.0) {
       // traveling wave across the image
-      style += uLayers.x * sin(uWaveTime * 1.7 + uvw.x * 7.0 + near * 5.0 + aRand * 0.7);
+      style += uLayers.x * sin(uWaveTime * 1.7 + uvw.x * 7.0 + near * 5.0 + pointRand * 0.7);
     }
     if (uLayers.y > 0.0) {
       // radial ripple from the center
@@ -95,7 +101,7 @@ const VERT = /* glsl */ `
     if (uLayers.w > 0.0) {
       // slow ambient drift (nice at idle / low energy)
       float drift = sin(uvw.x * 9.0 + uWaveTime * 0.5) * sin(uvw.y * 7.0 - uWaveTime * 0.42) * 1.3
-        + sin(uWaveTime * 0.8 + aRand * 6.2831) * 0.45;
+        + sin(uWaveTime * 0.8 + pointRand * 6.2831) * 0.45;
       style += uLayers.w * clamp(drift, -1.0, 1.0);
     }
     if (uExtraLayers.z > 0.0) {
@@ -106,18 +112,18 @@ const VERT = /* glsl */ `
     float depthRange = mix(0.35 + 0.65 * near, 1.0, uEqualDepthMovement);
     float disp = w * amp * uIntensity * uZMove * 0.11 * depthRange * uDyn;
 
-    vec3 pos = vec3(position.xy, near * uDepthScale + disp);
-    pos.xy += vec2(sin(uXYTime * 3.1 + aRand * 40.0), cos(uXYTime * 2.6 + aRand * 30.0))
+    pos = vec3(pointPosition.xy, near * uDepthScale + disp);
+    pos.xy += vec2(sin(uXYTime * 3.1 + pointRand * 40.0), cos(uXYTime * 2.6 + pointRand * 30.0))
             * amp * 0.006 * uIntensity * uXYMove * uDyn;
     // Explicit layers have their own amounts; XY move controls the original
     // shimmer only. Apply a true rotation and scale so their shapes remain
     // clear and adding Breathe cannot dilute Swirl (or vice versa).
-    vec2 layeredXY = position.xy;
+    vec2 layeredXY = pointPosition.xy;
     float layerDrive = amp * min(uIntensity * uDyn, 1.5);
     float lightStyle = style;
     float lightTotal = layerTotal;
     if (uExtraLayers.x > 0.0) {
-      float swirlPhase = sin(uWaveTime * 0.8 + length(position.xy) * 4.0 + near * 1.2);
+      float swirlPhase = sin(uWaveTime * 0.8 + length(pointPosition.xy) * 4.0 + near * 1.2);
       float turn = swirlPhase * uExtraLayers.x * layerDrive * 0.112; // new maximum = former 28%
       float c = cos(turn), s = sin(turn);
       layeredXY = vec2(c * layeredXY.x - s * layeredXY.y,
@@ -136,7 +142,7 @@ const VERT = /* glsl */ `
         lightTotal += uExtraLayers.y;
       }
     }
-    pos.xy += layeredXY - position.xy;
+    pos.xy += layeredXY - pointPosition.xy;
     if (uLightFollowMotion > 0.5 && uLightPulse > 0.0 && lightTotal > 0.0) {
       // Shape only the extra light, never the resting image/glow. Keep the
       // original band's level and peak brightness; stronger layer mixes
@@ -167,15 +173,15 @@ const VERT = /* glsl */ `
     pos.xy += (pos.xy - uCursor.xy) * ripple * 0.05;
 
     vec4 mv = modelViewMatrix * vec4(pos, 1.0);
-    gl_Position = projectionMatrix * mv;
+
 
     float ps = uSize * (1.0 + amp * 0.9 * uSizePulse) * (uCamZ / -mv.z);
-    gl_PointSize = clamp(ps, 0.75, 24.0);
+    pointSize = clamp(ps, 0.75, 24.0);
 
-    vAmp = lightAmp;
+    ampOut = amp;
     // every particle stays visible at base brightness; the loud/moving ones
     // brighten on top, and dark particles catch a cool shimmer
-    float lum = max(aColor.r, max(aColor.g, aColor.b));
+    float lum = max(pointColor.r, max(pointColor.g, pointColor.b));
     float extraLight = uLightPulse * lightAmp;
     float shimmer = 1.0;
     if (uPreserveBoostColor > 0.5) {
@@ -185,7 +191,7 @@ const VERT = /* glsl */ `
       extraLight /= 1.0 + 0.35 * extraLight;
       shimmer = 0.25;
     }
-    vec3 colour = aColor;
+    vec3 colour = pointColor;
     if (uVibrancyPulse > 0.0 && amp > 0.0) {
       float low = min(colour.r, min(colour.g, colour.b));
       float luma = dot(colour, vec3(0.2126, 0.7152, 0.0722));
@@ -206,15 +212,37 @@ const VERT = /* glsl */ `
     if (uHueEnabled > 0.5 && amp > 0.0) {
       float c = bandSample.g * 2.0 - 1.0;
       float h = bandSample.b * 2.0 - 1.0;
-      vColor = max(vec3(
+      colourOut = max(vec3(
         dot(vec3(0.213 + 0.787*c - 0.213*h, 0.715 - 0.715*c - 0.715*h, 0.072 - 0.072*c + 0.928*h), lit),
         dot(vec3(0.213 - 0.213*c + 0.143*h, 0.715 + 0.285*c + 0.140*h, 0.072 - 0.072*c - 0.283*h), lit),
         dot(vec3(0.213 - 0.213*c - 0.787*h, 0.715 - 0.715*c + 0.715*h, 0.072 + 0.928*c + 0.072*h), lit)
       ), vec3(0.0));
     } else {
-      vColor = lit;
+      colourOut = lit;
     }
   }
+  void main() {
+    #ifdef GAP_FILL
+      vec3 first, last, firstColour, lastColour;
+      float firstAmp, lastAmp, firstSize, lastSize;
+      evaluatePoint(aFillStart.xyz, aFillStart.w, aColor, first, firstColour, firstAmp, firstSize);
+      evaluatePoint(aFillEnd.xyz, aFillEnd.w, aColor, last, lastColour, lastAmp, lastSize);
+      vec3 pos = mix(first, last, aFillT);
+      vec4 firstClip = projectionMatrix * (modelViewMatrix * vec4(first, 1.0));
+      vec4 lastClip = projectionMatrix * (modelViewMatrix * vec4(last, 1.0));
+      float gapPixels = length((firstClip.xy / firstClip.w - lastClip.xy / lastClip.w) * uViewport * 0.5);
+      gl_Position = projectionMatrix * (modelViewMatrix * vec4(pos, 1.0));
+      gl_PointSize = clamp(max(mix(firstSize, lastSize, aFillT), gapPixels * 0.35), 0.75, 24.0);
+      vColor = mix(firstColour, lastColour, aFillT);
+      vAmp = mix(firstAmp, lastAmp, aFillT);
+    #else
+      vec3 pos; float amp, size;
+      evaluatePoint(position, aRand, aColor, pos, vColor, amp, size);
+      gl_Position = projectionMatrix * (modelViewMatrix * vec4(pos, 1.0));
+      gl_PointSize = size; vAmp = amp;
+    #endif
+  }
+
 `;
 
 const FRAG = /* glsl */ `
@@ -303,6 +331,7 @@ export class VisualScene {
       uExtraLayers: { value: new THREE.Vector4() },
       uBandMap: { value: 1 },
       uDepthShading: { value: 0 },
+      uViewport: { value: new THREE.Vector2() },
       uBandDistribution: { value: 1 },
       uBandCount: { value: 64 },
       uInvert: { value: 0 },
@@ -422,24 +451,38 @@ export class VisualScene {
 
   /** rebuild geometry from sampled cloud arrays */
   setCloud(cloud) {
+    if(this.fillPoints){this.scene.remove(this.fillPoints);this.fillPoints.geometry.dispose();this.fillPoints=null;}
     if (this.points) {
       this.scene.remove(this.points);
       this.points.geometry.dispose();
       this.points = null;
     }
     this.cloudAspect = cloud.aspect;
-    this.dynamicFraming = new DynamicFraming(cloud);
+    const baseCount=cloud.baseCount ?? cloud.count;
+    this.dynamicFraming = new DynamicFraming({...cloud,count:baseCount});
     this.uniforms.uAspect.value = cloud.aspect;
 
     const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(cloud.positions, 3));
-    geo.setAttribute('aColor', new THREE.BufferAttribute(cloud.colors, 3));
-    geo.setAttribute('aRand', new THREE.BufferAttribute(cloud.rands, 1));
+    geo.setAttribute('position', new THREE.BufferAttribute(cloud.positions.subarray(0,baseCount*3), 3));
+    geo.setAttribute('aColor', new THREE.BufferAttribute(cloud.colors.subarray(0,baseCount*3), 3));
+    geo.setAttribute('aRand', new THREE.BufferAttribute(cloud.rands.subarray(0,baseCount), 1));
     geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0.4), Math.max(cloud.aspect, 1));
 
     this.points = new THREE.Points(geo, this.material);
     this.points.frustumCulled = false;
     this.scene.add(this.points);
+    if(cloud.fillFractions?.length){
+      this.fillMaterial ||= new THREE.ShaderMaterial({uniforms:this.uniforms,defines:{GAP_FILL:1},vertexShader:VERT,fragmentShader:FRAG,blending:THREE.AdditiveBlending,depthTest:false,depthWrite:false,transparent:true});
+      const fill=new THREE.BufferGeometry();
+      fill.setAttribute('position',new THREE.BufferAttribute(cloud.positions.subarray(baseCount*3),3));
+      fill.setAttribute('aColor',new THREE.BufferAttribute(cloud.colors.subarray(baseCount*3),3));
+      fill.setAttribute('aRand',new THREE.BufferAttribute(cloud.rands.subarray(baseCount),1));
+      fill.setAttribute('aFillStart',new THREE.BufferAttribute(cloud.fillStarts,4));
+      fill.setAttribute('aFillEnd',new THREE.BufferAttribute(cloud.fillEnds,4));
+      fill.setAttribute('aFillT',new THREE.BufferAttribute(cloud.fillFractions,1));
+      this.fillPoints=new THREE.Points(fill,this.fillMaterial);this.fillPoints.frustumCulled=false;
+      this.scene.add(this.fillPoints);
+    }
     // world spacing between points -> density-aware pixel size for the shader
     const rows = Math.max(1, Math.round(Math.sqrt((cloud.baseCount ?? cloud.count) / cloud.aspect)));
     this.spacingWorld = 1 / rows;
@@ -461,6 +504,7 @@ export class VisualScene {
     this.idleVis = v;
     this.uniforms.uVis.value = v;
     if(this.points) this.points.visible=v>0;
+    if(this.fillPoints) this.fillPoints.visible=v>0;
     if (this.backdrop && !this.backdrop.isDestroyed) {
       const base = this.hideBackdrop ? 0 : this.backdropBaseDim;
       const target = base + (1 - base) * (1 - v);
@@ -662,6 +706,7 @@ export class VisualScene {
     // point size in pixels when the cloud is at rest distance:
     //   pointSize=1.0 means a point's diameter equals the point spacing
     const hPx = this.renderer.domElement.height; // drawing-buffer pixels
+    this.uniforms.uViewport.value.set(this.renderer.domElement.width,hPx);
     const tanHalf = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
     this.uniforms.uSize.value =
       (this.pointSizeSetting || 1) * hPx * (this.spacingWorld || 1 / 300)
@@ -756,6 +801,7 @@ export class VisualScene {
     if (!this.points || !(seconds>0)) { this.endCrossfade(); return; }
     // Capture on the GPU immediately after drawing; the default framebuffer
     // is not preserved between frames. Include any unfinished prior blend.
+    this.uniforms.uViewport.value.set(this.renderer.domElement.width,this.renderer.domElement.height);
     this.renderer.render(this.scene,this.camera);
     this.drawCrossfade(performance.now());
     const size=this.renderer.getDrawingBufferSize(new THREE.Vector2());

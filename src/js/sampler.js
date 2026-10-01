@@ -2,7 +2,7 @@
 // jittered grid sampling so coverage is even, colors in linear space,
 // z = nearness (0..1; the shader scales it and the audio drives displacement).
 
-export function sampleImageToCloud(bitmap, depth, count, gapFill=0) {
+export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) {
   const W = bitmap.width, H = bitmap.height;
   const canvas = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(W, H) : document.createElement('canvas');
   canvas.width = W; canvas.height = H;
@@ -23,6 +23,16 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0) {
   const positions = new Float32Array(capacity * 3);
   const colors = new Float32Array(capacity * 3);
   const rands = new Float32Array(capacity);
+  const fillStarts=extraCapacity ? new Float32Array(extraCapacity*4):null;
+  const fillEnds=extraCapacity ? new Float32Array(extraCapacity*4):null;
+  const fillFractions=extraCapacity ? new Float32Array(extraCapacity):null;
+  const bandAt=i=>{
+    const x=positions[i*3]/aspect+.5,y=positions[i*3+1]+.5,near=positions[i*3+2];
+    const mode=mapping.bandMap || 'depth';
+    let t=mode==='depth' ? near**(4**(mapping.bandDistribution || 0)):mode==='radial' ? Math.min(1,Math.hypot(x-.5,y-.5)*1.25):mode==='vertical' ? 1-y:x;
+    if(mapping.invertBands)t=1-t;
+    return Math.max(0,Math.min((mapping.bands || 64)-1,Math.floor(t*(mapping.bands || 64))));
+  };
 
   let used = 0;
   let rngState = 0x12345678;
@@ -80,24 +90,37 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0) {
         if(px[(sy*W+sx)*4+3]<24)continue;
         const distance2=(positions[ai]-positions[bi])**2+(positions[ai+1]-positions[bi+1])**2;
         const ratio=distance2/spacing2;
-        if(ratio<=1)continue;
-        const score=Math.min(255,Math.floor((ratio-1)*64));
+        const seam=bandAt(a)!==bandAt(b);
+        if(!seam && ratio<=1)continue;
+        // Band seams take precedence over density gaps. Unlike ordinary
+        // particles, the generated points will interpolate both endpoints.
+        const score=seam ? 192+Math.min(63,Math.floor(ratio*12)):Math.min(127,Math.floor((ratio-1)*32));
         keys[candidates]=slot*2+axis;scores[candidates]=score;histogram[score]++;candidates++;
       }
     }
-    const budget=Math.min(candidates,Math.floor(Math.min(baseCount*.5,60000)*fill));
+    const pointBudget=Math.floor(Math.min(baseCount*.5,60000)*fill);
+    const budget=Math.min(candidates,Math.floor(pointBudget/3));
     let threshold=255,above=0;
     while(threshold>0 && above+histogram[threshold]<budget){above+=histogram[threshold];threshold--;}
     let ties=budget-above;
-    for(let c=0;c<candidates && used-baseCount<budget;c++){
+    let edges=0;
+    for(let c=0;c<candidates && edges<budget;c++){
       if(scores[c]<threshold || (scores[c]===threshold && ties--<=0))continue;
       const slot=keys[c]>>1, axis=keys[c]&1;
       const ai=grid[slot]*3,bi=grid[slot+(axis===0 ? 1:cols)]*3;
-      const x=(positions[ai]+positions[bi])*.5,y=(positions[ai+1]+positions[bi+1])*.5,u=x/aspect+.5,v=.5-y;
-      const sx=Math.min(W-1,Math.max(0,Math.floor(u*W))),sy=Math.min(H-1,Math.max(0,Math.floor(v*H))),i=(sy*W+sx)*4,p=used*3;
-      positions[p]=x;positions[p+1]=y;positions[p+2]=depth ? sampleGrid(depth,u,v):.5;
-      colors[p]=px[i]/255;colors[p+1]=px[i+1]/255;colors[p+2]=px[i+2]/255;
-      rands[used]=rand();used++;
+      edges++;
+      for(const t of [.25,.5,.75]){
+        const x=positions[ai]*(1-t)+positions[bi]*t,y=positions[ai+1]*(1-t)+positions[bi+1]*t,u=x/aspect+.5,v=.5-y;
+        const sx=Math.min(W-1,Math.max(0,Math.floor(u*W))),sy=Math.min(H-1,Math.max(0,Math.floor(v*H))),i=(sy*W+sx)*4,p=used*3;
+        const near=depth ? sampleGrid(depth,u,v):.5;
+        if(px[i+3]<24 || Math.abs(near-positions[ai+2])>.06 || Math.abs(near-positions[bi+2])>.06)continue;
+        positions[p]=x;positions[p+1]=y;positions[p+2]=near;
+        colors[p]=px[i]/255;colors[p+1]=px[i+1]/255;colors[p+2]=px[i+2]/255;
+        const f=used-baseCount;
+        fillStarts.set([positions[ai],positions[ai+1],positions[ai+2],rands[ai/3]],f*4);
+        fillEnds.set([positions[bi],positions[bi+1],positions[bi+2],rands[bi/3]],f*4);
+        fillFractions[f]=t;rands[used]=rand();used++;
+      }
     }
   }
 
@@ -107,6 +130,9 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0) {
     rands: rands.subarray(0, used),
     count: used,
     baseCount,
+    fillStarts:fillStarts?.subarray(0,(used-baseCount)*4),
+    fillEnds:fillEnds?.subarray(0,(used-baseCount)*4),
+    fillFractions:fillFractions?.subarray(0,used-baseCount),
     aspect,
   };
 }

@@ -247,7 +247,9 @@ async function rebuildCloud() {
   }
   if (token !== rebuildToken) return; // superseded
 
-  const cloud = await buildCloud(currentImage, depth, get('pointCount'),get('gapFill'));
+  const cloud = await buildCloud(currentImage, depth, get('pointCount'),get('gapFill'),{
+    bandMap:get('bandMap'),bandDistribution:get('bandDistribution'),bands:get('bands'),invertBands:get('invertBands'),
+  });
   if (token !== rebuildToken) return;
   const previousImage=displayedImage;
   if(currentImage!==previousImage) {
@@ -415,6 +417,9 @@ onChange((all, patch) => {
     clearTimeout(countTimer);
     countTimer = setTimeout(() => rebuildCloud(), 350);
   }
+  else if(get('gapFill')>0 && ['bands','bandMap','bandDistribution','invertBands'].some(key=>key in patch)){
+    clearTimeout(countTimer);countTimer=setTimeout(()=>rebuildCloud(),350);
+  }
 });
 
 let lastRender = 0;
@@ -519,7 +524,8 @@ function loop(now) {
   statTimer += spaced;
   if (statTimer > 500) {
     statTimer = 0;
-    ui.setStats(`${Math.round(1000 / Math.max(frameEMA, 0.1))} fps · ${(scene.points ? scene.points.geometry.attributes.position.count / 1000 : 0).toFixed(0)}k pts${scene.quality < 1 ? ` · q${scene.quality.toFixed(2)}` : ''}`);
+    const pointTotal=(scene.points?.geometry.attributes.position.count || 0)+(scene.fillPoints?.geometry.attributes.position.count || 0);
+    ui.setStats(`${Math.round(1000 / Math.max(frameEMA, 0.1))} fps · ${(pointTotal / 1000).toFixed(0)}k pts${scene.quality < 1 ? ` · q${scene.quality.toFixed(2)}` : ''}`);
     if (audio.mode !== 'none' && !audio.error) ui.setAudioStatus(audio.status, analyzer.energy > 0.02 ? 'live' : 'warn');
   }
 }

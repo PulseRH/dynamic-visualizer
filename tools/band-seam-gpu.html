@@ -1,0 +1,35 @@
+<!doctype html><meta charset="utf-8"><title>Band seam GPU check</title><canvas id="cloud"></canvas><pre id="result">Running…</pre>
+<script type="module">
+import {VisualScene} from '../src/js/scene.js';
+import {getAll} from '../src/js/settings.js';
+import {animatedSample} from '../src/js/framing-motion.js';
+import * as THREE from '../src/vendor/three.module.js';
+try{
+ const scene=new VisualScene(document.querySelector('canvas'));
+ scene.renderer.setSize(400,300,false);scene.camera.aspect=4/3;scene.camera.updateProjectionMatrix();
+ const start=[-.08,0,.46,.2],end=[.08,0,.52,.8];
+ scene.setCloud({count:3,baseCount:2,aspect:4/3,positions:new Float32Array([...start.slice(0,3),...end.slice(0,3),0,0,.49]),colors:new Float32Array(9).fill(.3),rands:new Float32Array([.2,.8,.5]),fillStarts:new Float32Array(start),fillEnds:new Float32Array(end),fillFractions:new Float32Array([.5])});
+ const gl=scene.renderer.getContext(),a=new Float64Array(3),b=new Float64Array(3),pixels=new Uint8Array(400*300*4);
+ for(const map of ['depth','horizontal','vertical','radial'])for(const invert of [false,true]){
+  scene.applySettings({...getAll(),bands:64,bandMap:map,invertBands:invert,depthScale:.35,depthShading:0,hueReaction:0,hueCycle:0,glow:1,boost:0,motionWave:.5,motionSwirl:.8,motionBreathe:.5,motionBandShake:1,xyMove:1,depthMove:2,intensity:2,centeredMotion:true,equalDepthMovement:true});
+  scene.points.visible=false;scene.uniforms.uViewport.value.set(400,300);
+  scene.uniforms.uWaveTime.value=1.3;scene.uniforms.uXYTime.value=.8;scene.uniforms.uSize.value=3;scene.uniforms.uCamZ.value=1.9;
+  scene.uniforms.uCursor.value.set(.1,-.1,.5);
+  for(let band=0;band<scene.bandCount;band++)scene.bandData[band*4]=band%2 ? 255:0;
+  scene.bandTex.needsUpdate=true;
+  animatedSample(...start,scene.uniforms,scene.bandData,a,0);animatedSample(...end,scene.uniforms,scene.bandData,b,0);
+  scene.camera.updateMatrixWorld();
+  const target=new THREE.Vector3((a[0]+b[0])/2,(a[1]+b[1])/2,(a[2]+b[2])/2).project(scene.camera);
+  const tx=(target.x*.5+.5)*400,ty=(target.y*.5+.5)*300;
+  scene.renderer.render(scene.scene,scene.camera);gl.readPixels(0,0,400,300,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
+  let weight=0,cx=0,cy=0;
+  for(let y=0;y<300;y++)for(let x=0;x<400;x++){const i=(y*400+x)*4,w=pixels[i]+pixels[i+1]+pixels[i+2];weight+=w;cx+=(x+.5)*w;cy+=(y+.5)*w;}
+  if(!weight||Math.hypot(cx/weight-tx,cy/weight-ty)>1)throw new Error(`Fill did not follow both endpoints: ${map} ${invert}, ${cx/weight},${cy/weight} vs ${tx},${ty}`);
+  if(gl.getError()!==gl.NO_ERROR)throw new Error('WebGL error');
+ }
+ scene.setCloud({count:2,aspect:4/3,positions:new Float32Array([...start.slice(0,3),...end.slice(0,3)]),colors:new Float32Array(6).fill(.3),rands:new Float32Array([.2,.8])});
+ if(scene.fillPoints)throw new Error('Fill geometry retained after disabling');
+ document.querySelector('#result').textContent='PASS: GPU fill follows the interpolated endpoint motion for all mappings and both directions, including stacked layers and cursor ripple; geometry removed when off.';
+ scene.renderer.dispose();
+}catch(e){document.querySelector('#result').textContent='FAIL: '+e.stack;}
+</script>

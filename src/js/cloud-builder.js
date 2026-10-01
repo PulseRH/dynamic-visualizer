@@ -1,8 +1,8 @@
 import { sampleImageToCloud } from './sampler.js';
 
-export async function buildCloud(image, depth, count, gapFill=0) {
+export async function buildCloud(image, depth, count, gapFill=0, mapping={}) {
   if (typeof Worker === 'undefined' || typeof OffscreenCanvas === 'undefined') {
-    return sampleImageToCloud(image, depth, count, gapFill);
+    return sampleImageToCloud(image, depth, count, gapFill,mapping);
   }
   const bitmap = await createImageBitmap(image);
   const worker = new Worker(new URL('./sampler-worker.mjs', import.meta.url), { type: 'module' });
@@ -10,7 +10,7 @@ export async function buildCloud(image, depth, count, gapFill=0) {
     return await new Promise((resolve, reject) => {
       worker.onmessage = ({ data }) => data.error ? reject(new Error(data.error)) : resolve(data.cloud);
       worker.onerror = e => reject(new Error(e.message || 'Particle sampling failed'));
-      worker.postMessage({ bitmap, depth, count, gapFill }, [bitmap]);
+      worker.postMessage({ bitmap, depth, count, gapFill, mapping }, [bitmap]);
     });
   } finally {
     worker.terminate();
