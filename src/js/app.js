@@ -339,6 +339,8 @@ function applyAudioResponse() {
   a.tiltPivot = get('tiltPivot');
   a.stickyIn = get('stickyIn');
   a.stickyOut = get('stickyOut');
+  a.easeInShape = get('easeInShape');
+  a.easeOutShape = get('easeOutShape');
 }
 
 onChange((all, patch) => {

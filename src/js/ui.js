@@ -136,6 +136,8 @@ export class UI {
     slider('highBoost', 'highBoost', (v) => v.toFixed(2));
     slider('stickyIn', 'stickyIn', (v) => v.toFixed(2));
     slider('stickyOut', 'stickyOut', (v) => v.toFixed(2));
+    slider('easeInShape', 'easeInShape', (v) => v.toFixed(2));
+    slider('easeOutShape', 'easeOutShape', (v) => v.toFixed(2));
     $('bands').max = String(BAND_CHOICES.length - 1);
     slider('bands', 'bands', (v) => String(v), (i) => BAND_CHOICES[i]);
     slider('depthMove', 'depthMove', (v) => v.toFixed(2));
@@ -362,6 +364,8 @@ export class UI {
     setSlider('highBoost', get('highBoost'));
     setSlider('stickyIn', get('stickyIn'));
     setSlider('stickyOut', get('stickyOut'));
+    setSlider('easeInShape', get('easeInShape'));
+    setSlider('easeOutShape', get('easeOutShape'));
     setSlider('bands', bandChoiceIndex(get('bands')));
     setSlider('depthMove', get('depthMove'));
     setSlider('xyMove', get('xyMove'));
@@ -371,14 +375,16 @@ export class UI {
     $('quietMovement').parentElement.querySelector('.val').textContent = `${Math.round(get('quietMovement') * 100)}%`;
     setSlider('energyResponse', get('energyResponse'));
     const curveKey = ['quietMovement','energyResponse','sensGain','sensFloor','sensCurve',
-      'eqCurve','tiltEQ','tiltPivot','highBoost','stickyIn','stickyOut','bands'].map(get).join(':');
+      'eqCurve','tiltEQ','tiltPivot','highBoost','stickyIn','stickyOut','easeInShape','easeOutShape','bands'].map(get).join(':');
     if (this._curveKey !== curveKey) {
       this._curveKey = curveKey;
       const plots = responsePlots(getAll());
-      $('noiseFloorShade').setAttribute('width', String(plots.threshold * 242));
-      $('noiseFloorLine').setAttribute('d', `M${42 + plots.threshold * 242} 20V106`);
+      $('noiseFloorShade').setAttribute('width', String(plots.threshold * 224));
+      $('noiseFloorLine').setAttribute('d', `M${60 + plots.threshold * 224} 20V116`);
+      $('noiseFloorLabel').textContent = `Noise cutoff: ${Math.round(plots.threshold * 100)}%`;
+      $('energyOrigin').setAttribute('cy', String(plots.energyOriginY));
       for (const [id,key] of Object.entries({ energyLine:'energy', responseLine:'band', frequencyLine:'frequency',
-        highBoostLine:'highBoost', frequencyZero:'frequencyZero', easingLine:'easing', easingInput:'easingInput' })) $(id).setAttribute('d', plots[key]);
+        highBoostLine:'highBoost', frequencyZero:'frequencyZero', easingInLine:'easingIn', easingOutLine:'easingOut' })) $(id).setAttribute('d', plots[key]);
       $('frequencyMax').textContent = `+${plots.max}`;
       $('frequencyMin').textContent = String(plots.min);
       $('frequencyZeroLabel').setAttribute('y', String(plots.zeroY + 3));

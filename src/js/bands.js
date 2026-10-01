@@ -16,6 +16,21 @@ export function easingRates(easeIn, easeOut) {
   return { up: .9 - .6 * clamp01(easeIn), down: .5 - .46 * clamp01(easeOut) };
 }
 
+// Warp progress, rather than just changing the smoothing rate. Positive bends
+// start more slowly; negative bends start faster. Invert the warp from the
+// current value before advancing, so changing targets cannot jump the output.
+export function easeBand(previous, target, rate, bend = 0, span = 1) {
+  if (!bend) return previous + (target - previous) * rate;
+  const gap = Math.abs(target - previous);
+  if (!gap) return previous;
+  span = Math.max(gap, span);
+  const exponent = Math.pow(3, Math.max(-1, Math.min(1, bend)));
+  const progress = Math.pow(clamp01(1 - gap / span), 1 / exponent);
+  const next = progress + (1 - progress) * rate;
+  const step = Math.max(0, Math.min(gap, gap - span * (1 - Math.pow(next, exponent))));
+  return previous + Math.sign(target - previous) * step;
+}
+
 export class BandAnalyzer {
   constructor(count = BAND_COUNT) {
     this.count = count;
@@ -24,6 +39,10 @@ export class BandAnalyzer {
     this.curve = 1.5;       // gamma: higher = only peaks move
     this.bands = new Float32Array(count);       // smoothed 0..1
     this.raw = new Float32Array(count);         // pre-smoothing 0..1
+    this._easeSpan = new Float64Array(count);
+    this._easeDirection = new Int8Array(count);
+    this.easeInShape = 0;
+    this.easeOutShape = 0;
     this.energy = 0;                                  // overall loudness 0..1
     this.bassEnergy = 0;
     this.level = 0;                                   // for the UI meter
@@ -200,7 +219,17 @@ export class BandAnalyzer {
       let v = shape(this._wraw[b] * this._highBoostFactors[b]);
       if (!Number.isFinite(v)) v = 0;
       const prev = bands[b];
-      bands[b] = prev + (v - prev) * (v > prev ? up : down);
+      const direction = v > prev ? 1 : v < prev ? -1 : 0;
+      const bend = direction > 0 ? this.easeInShape : this.easeOutShape;
+      if (bend) {
+        const gap = Math.abs(v - prev);
+        this._easeSpan[b] = direction !== this._easeDirection[b] ? gap : Math.max(gap, this._easeSpan[b]);
+        bands[b] = easeBand(prev, v, direction > 0 ? up : down, bend, this._easeSpan[b]);
+        this._easeDirection[b] = direction;
+      } else {
+        bands[b] = prev + (v - prev) * (v > prev ? up : down);
+        this._easeDirection[b] = 0;
+      }
       energy += bands[b];
     }
     this.energy = clamp01((energy / this.count) * 2.2);

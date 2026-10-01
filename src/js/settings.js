@@ -57,6 +57,8 @@ const DEFAULTS = {
   centeredMotion: false,   // audio mode: quiet bands pull back, loud push forward
   equalDepthMovement: false, // remove the near-layer bias from audio depth displacement
   previewPaused: false,    // freeze the preview window (wallpaper keeps running)
+  easeInShape: 0,         // progress bend: negative early, positive late
+  easeOutShape: 0,
   settingsOnly: false,    // compact controls with no preview rendering
   previewFullQuality: false, // don't throttle the preview while wallpaper mode is on
   audioSource: 'demo',     // 'system' | 'mic' | 'file' | 'demo'

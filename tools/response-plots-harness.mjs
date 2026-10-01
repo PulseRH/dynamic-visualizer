@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { responsePlots } from '../src/js/response-plots.js';
-import { BandAnalyzer, bandResponse } from '../src/js/bands.js';
+import { BandAnalyzer, bandResponse, easeBand } from '../src/js/bands.js';
 const s = {bands:64,quietMovement:.6,energyResponse:1,sensGain:1,sensFloor:.1,sensCurve:1.5,
   eqCurve:.4,tiltEQ:0,tiltPivot:.5,highBoost:0,stickyIn:.5,stickyOut:.5};
 const original = responsePlots(s);
@@ -17,7 +17,31 @@ assert.equal(bandResponse(1,1,.1,2),1,'peak reference gives full drive');
 assert.notEqual(original.frequency,responsePlots({...s,eqCurve:1}).frequency);
 assert.deepEqual(original.frequencyWeights,responsePlots({...s,highBoost:2}).frequencyWeights,'high boost is separate from pre-normalisation weighting');
 assert.notEqual(original.highBoost,responsePlots({...s,highBoost:2}).highBoost);
-assert.notEqual(original.easing,responsePlots({...s,stickyOut:1}).easing);
+assert.notEqual(original.easingOut,responsePlots({...s,stickyOut:1}).easingOut);
+assert.equal(original.easingIn,responsePlots({...s,stickyOut:1}).easingIn);
+assert.equal(original.easingOut,responsePlots({...s,stickyIn:1}).easingOut);
+assert.notEqual(original.easingIn,responsePlots({...s,easeInShape:1}).easingIn);
+assert.equal(original.easingOut,responsePlots({...s,easeInShape:1}).easingOut);
+assert.notEqual(original.easingOut,responsePlots({...s,easeOutShape:-1}).easingOut);
+assert.ok(easeBand(0,1,.3,-1,1)>easeBand(0,1,.3,0,1));
+assert.ok(easeBand(0,1,.3,1,1)<easeBand(0,1,.3,0,1));
+for(const bend of [-1,-.5,0,.5,1]) {
+  let rise=0,fall=1;
+  for(let i=0;i<100;i++) {
+    const r=easeBand(rise,1,.3,bend,1), f=easeBand(fall,0,.1,bend,1);
+    assert.ok(r>=rise && r<=1 && f<=fall && f>=0);
+    rise=r; fall=f;
+  }
+  const reactive = new BandAnalyzer(2);
+  reactive.curve=1; reactive.easeInShape=bend; reactive.easeOutShape=bend;
+  for(let i=0;i<500;i++) {
+    const target=Math.max(0,Math.sin(i*.31));
+    reactive.raw.set([1,target]);
+    const before=reactive.bands[1]; reactive._finish();
+    const after=reactive.bands[1];
+    assert.ok(Number.isFinite(after) && after>=Math.min(before,target)-1e-6 && after<=Math.max(before,target)+1e-6,'retargeting is bounded without overshoot');
+  }
+}
 for (const value of Object.values(original)) if (typeof value==='string') assert.ok(!/NaN|Infinity/.test(value));
 // Compare shared graph helpers against the pre-change analyzer through actual
 // spectra, normalization, EQ, high boost and smoothing. Audio must stay exact.

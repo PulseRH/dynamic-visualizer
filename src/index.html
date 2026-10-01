@@ -175,13 +175,13 @@
         <input type="range" id="energyResponse" min="0.25" max="4" step="0.05" />
         <span class="val"></span>
       </label>
-      <svg id="energyGraph" class="response-graph" viewBox="0 0 300 140" role="img" aria-label="Overall audio level versus motion strength for active bands">
-        <path d="M42 20V106H284" class="graph-axis" />
+      <svg id="energyGraph" class="response-graph" viewBox="0 0 300 160" role="img" aria-label="Overall loudness versus audio motion scale">
+        <path d="M60 20V116H284" class="graph-axis" />
         <path id="energyLine" class="graph-line" />
-        <circle cx="42" cy="106" r="3" fill="currentColor" />
-        <g class="graph-label"><text x="42" y="12">Motion strength</text><text x="5" y="25">100%</text><text x="14" y="109">0%</text><text x="42" y="122">No input</text><text x="284" y="122" text-anchor="end">Full reference</text><text x="163" y="137" text-anchor="middle">Overall audio level</text></g>
+        <circle id="energyOrigin" cx="60" cy="116" r="3" fill="currentColor" />
+        <g class="graph-label"><text transform="translate(12 68) rotate(-90)" text-anchor="middle">Motion scale</text><text x="52" y="25" text-anchor="end">100%</text><text x="52" y="119" text-anchor="end">0%</text><text x="60" y="132">No input</text><text x="284" y="132" text-anchor="end">Full reference</text><text x="172" y="151" text-anchor="middle">Overall loudness</text></g>
       </svg>
-      <p class="hint">Motion strength for active bands, based on overall audio level relative to your calibration. Quiet movement sets the minimum while sound is present. No input gives no new audio movement; easing can briefly hold the previous motion.</p>
+      <p class="hint">Scales audio motion using overall loudness relative to your calibration. This is a multiplier, not a movement measurement: its quiet minimum cannot create motion when band input is zero.</p>
       <label class="slider-row"><span class="lbl">Band gain<span class="q" data-tip="Multiplies peak-relative band levels before the noise floor and band contrast. Does not change the captured audio or calibrated overall audio level."></span></span>
         <input type="range" id="sensGain" min="0.2" max="3" step="0.05" />
         <span class="val"></span>
@@ -194,12 +194,12 @@
         <input type="range" id="sensCurve" min="0.5" max="4" step="0.05" />
         <span class="val"></span>
       </label>
-      <svg id="responseGraph" class="response-graph" viewBox="0 0 300 140" role="img" aria-label="Peak-relative band level versus band drive, before easing">
-        <rect id="noiseFloorShade" x="42" y="20" width="0" height="86" fill="currentColor" opacity="0.12" />
-        <path d="M42 20V106H284" class="graph-axis" />
+      <svg id="responseGraph" class="response-graph" viewBox="0 0 300 160" role="img" aria-label="Peak-relative band input versus band response, with noise cutoff">
+        <rect id="noiseFloorShade" x="60" y="20" width="0" height="96" fill="currentColor" opacity="0.12" />
+        <path d="M60 20V116H284" class="graph-axis" />
         <path id="noiseFloorLine" class="graph-guide" />
         <path id="responseLine" class="graph-line" />
-        <g class="graph-label"><text x="42" y="12">Band drive · before easing</text><text x="5" y="25">100%</text><text x="14" y="109">0%</text><text x="42" y="122">No input</text><text x="284" y="122" text-anchor="end">Peak reference</text><text x="163" y="137" text-anchor="middle">Peak-relative band level</text></g>
+        <g class="graph-label"><text id="noiseFloorLabel" x="284" y="12" text-anchor="end">Noise cutoff</text><text transform="translate(12 68) rotate(-90)" text-anchor="middle">Band response</text><text x="52" y="25" text-anchor="end">100%</text><text x="52" y="119" text-anchor="end">0%</text><text x="60" y="132">No input</text><text x="284" y="132" text-anchor="end">Peak reference</text><text x="172" y="151" text-anchor="middle">Band input / peak reference</text></g>
       </svg>
       <p class="hint">This is a level mapping, not a timeline. Shading marks the noise floor after Band gain. Band drive is then eased and multiplied by overall motion strength; depth and motion layers also affect visible movement.</p>
       <button id="calibrateEnergy" class="btn full" type="button">Calibrate full energy · 10 seconds</button>
@@ -233,10 +233,10 @@
           <input type="range" id="highBoost" min="0" max="3" step="0.05" />
           <span class="val"></span>
         </label>
-        <svg id="frequencyGraph" class="response-graph" viewBox="0 0 300 140" role="img" aria-label="Frequency weighting from hearing curve, tilt EQ and high boost">
-          <path d="M42 20V106H284" class="graph-axis" /><path id="frequencyZero" class="graph-guide" />
+        <svg id="frequencyGraph" class="response-graph" viewBox="0 0 300 160" role="img" aria-label="Frequency weighting from hearing curve, tilt EQ and high boost">
+          <path d="M60 20V116H284" class="graph-axis" /><path id="frequencyZero" class="graph-guide" />
           <path id="frequencyLine" class="graph-line" /><path id="highBoostLine" class="graph-line graph-dashed" />
-          <g class="graph-label"><text x="42" y="12">Frequency weighting · dB</text><text id="frequencyMax" x="3" y="25"></text><text id="frequencyZeroLabel" x="14">0</text><text id="frequencyMin" x="3" y="109"></text><text x="42" y="122">30 Hz</text><text x="284" y="122" text-anchor="end">16 kHz</text><text x="163" y="137" text-anchor="middle">Frequency · logarithmic</text></g>
+          <g class="graph-label"><text transform="translate(12 68) rotate(-90)" text-anchor="middle">Weighting (dB)</text><text id="frequencyMax" x="52" y="25" text-anchor="end"></text><text id="frequencyZeroLabel" x="52" text-anchor="end">0</text><text id="frequencyMin" x="52" y="119" text-anchor="end"></text><text x="60" y="132">30 Hz</text><text x="284" y="132" text-anchor="end">16 kHz</text><text x="172" y="151" text-anchor="middle">Frequency · logarithmic</text></g>
         </svg>
         <p class="hint">Solid: Hearing curve + Tilt EQ before peak normalisation. Dashed: High boost after normalisation. These are weighting factors, not predicted motion or measured hearing. Example uses 48 kHz audio.</p>
         <label class="slider-row"><span class="lbl">Ease in<span class="q" data-tip="Attack stickiness: how slowly bands rise with sound. 0 = fastest, 1 = slow."></span></span>
@@ -247,11 +247,18 @@
           <input type="range" id="stickyOut" min="0" max="1" step="0.05" />
           <span class="val"></span>
         </label>
-        <svg id="easingGraph" class="response-graph" viewBox="0 0 300 140" role="img" aria-label="Ease in and ease out response to a sound starting and stopping over time">
-          <path d="M42 20V106H284" class="graph-axis" /><path id="easingInput" class="graph-guide" /><path id="easingLine" class="graph-line" />
-          <g class="graph-label"><text x="42" y="12">Band drive</text><text x="5" y="25">100%</text><text x="14" y="109">0%</text><text x="42" y="122">0 s</text><text x="284" y="122" text-anchor="end">3 s</text><text x="163" y="137" text-anchor="middle">Time</text></g>
+        <label class="slider-row"><span class="lbl">Ease in curve<span class="q" data-tip="Bends the rise: negative starts faster and finishes gently; positive starts slowly and catches up later. Zero keeps the original easing. Ease in still sets its speed."></span></span>
+          <input type="range" id="easeInShape" min="-1" max="1" step="0.05" /><span class="val"></span>
+        </label>
+        <label class="slider-row"><span class="lbl">Ease out curve<span class="q" data-tip="Bends the fall: negative drops faster at first and finishes gently; positive holds at first, then drops later. Zero keeps the original easing. Ease out still sets its speed."></span></span>
+          <input type="range" id="easeOutShape" min="-1" max="1" step="0.05" /><span class="val"></span>
+        </label>
+        <p class="hint">Curve bend: − faster start · 0 original · + slower start.</p>
+        <svg id="easingGraph" class="response-graph" viewBox="0 0 300 160" role="img" aria-label="Separate ease in rising curve and ease out falling curve over time">
+          <path d="M60 20V116H284" class="graph-axis" /><path id="easingInLine" class="graph-line" /><path id="easingOutLine" class="graph-line graph-dashed" />
+          <g class="graph-label"><text transform="translate(12 68) rotate(-90)" text-anchor="middle">Band response</text><text x="52" y="25" text-anchor="end">100%</text><text x="52" y="119" text-anchor="end">0%</text><text x="60" y="132">0 s</text><text x="284" y="132" text-anchor="end">1 s</text><text x="172" y="151" text-anchor="middle">Time since level change</text></g>
         </svg>
-        <p class="hint">Dashed: a sound starts, then stops. Solid: the band eases up and down. Shown at the normal 33 ms analysis interval; 0 is fastest, not completely instant.</p>
+        <p class="hint">Solid rising curve: Ease in after sound starts. Dashed falling curve: Ease out after sound stops. Each slider changes its own curve. First second shown at the normal 33 ms analysis interval.</p>
       </details>
     </section>
 

@@ -1,8 +1,8 @@
 import { movementResponse } from './response.js';
-import { BandAnalyzer, bandResponse, easingRates } from './bands.js';
+import { BandAnalyzer, bandResponse, easingRates, easeBand } from './bands.js';
 
-const xAt = x => 42 + x * 242;
-const yAt = y => 106 - y * 86;
+const xAt = x => 60 + x * 224;
+const yAt = y => 116 - y * 96;
 const path = points => points.map(([x,y],i) => `${i ? 'L' : 'M'}${x.toFixed(2)},${y.toFixed(2)}`).join(' ');
 
 // Static illustrations: regenerate on relevant setting changes only.
@@ -27,19 +27,19 @@ export function responsePlots(s) {
   const max = Math.max(12, Math.ceil(Math.max(...weights, ...highs) / 12) * 12);
   const fy = db => yAt((db - min) / (max - min));
   const fx = i => xAt(Math.max(0, Math.min(1, Math.log(((lo[i] + hi[i]) / 2) * 24000 / 1024 / 30) / Math.log(16000 / 30))));
-  const eased = [];
+  const rise = [], fall = [];
   const {up,down} = easingRates(s.stickyIn,s.stickyOut);
-  let level = 0;
-  for (let i = 0; i <= 90; i++) {
-    const target = i >= 15 && i < 45 ? 1 : 0;
-    level += (target-level) * (target > level ? up : down);
-    eased.push([xAt(i/90),yAt(level)]);
+  let rising = 0, falling = 1;
+  for (let i = 0; i <= 30; i++) {
+    if (i) { rising = easeBand(rising,1,up,s.easeInShape || 0,1); falling = easeBand(falling,0,down,s.easeOutShape || 0,1); }
+    rise.push([xAt(i/30),yAt(rising)]);
+    fall.push([xAt(i/30),yAt(falling)]);
   }
   return {
-    energy: path(energy), band: path(band), threshold: Math.min(1,s.sensFloor / s.sensGain),
+    energy: path(energy), energyOriginY: yAt(movementResponse(0,s.quietMovement,s.energyResponse)), band: path(band), threshold: Math.min(1,s.sensFloor / s.sensGain),
     frequencyWeights: weights, frequency: path(weights.map((w,i) => [fx(i),fy(w)])),
     highBoost: path(highs.map((w,i) => [fx(i),fy(w)])),
-    frequencyZero: `M42 ${fy(0)}H284`, zeroY: fy(0), min, max,
-    easing: path(eased), easingInput: `M42 106H${xAt(15/90)}V20H${xAt(45/90)}V106H284`,
+    frequencyZero: `M60 ${fy(0)}H284`, zeroY: fy(0), min, max,
+    easingIn: path(rise), easingOut: path(fall),
   };
 }
