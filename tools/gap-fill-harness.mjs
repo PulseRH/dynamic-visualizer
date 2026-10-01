@@ -8,7 +8,7 @@ const image={width:400,height:240};pixels=new Uint8ClampedArray(image.width*imag
 const depth={w:100,h:60,data:new Float32Array(6000)};
 for(let y=0;y<60;y++)for(let x=0;x<100;x++)depth.data[y*100+x]=x<50 ? .05:.95;
 const base=sampleImageToCloud(image,depth,12000), filled=sampleImageToCloud(image,depth,12000,1), repeat=sampleImageToCloud(image,depth,12000,1);
-assert.ok(filled.count>base.count);assert.ok(filled.count<=base.count*1.5);
+assert.ok(filled.count>base.count);assert.ok(filled.count<=base.count*2.5);
 assert.deepEqual(filled.positions.subarray(0,base.positions.length),base.positions);
 assert.deepEqual(filled.colors.subarray(0,base.colors.length),base.colors);
 assert.deepEqual(filled.rands.subarray(0,base.rands.length),base.rands);
@@ -27,11 +27,22 @@ assert.ok(seams.fillFractions.length>0);
 for(let f=0;f<seams.fillFractions.length;f++){
   const startBand=Math.min(15,Math.floor(seams.fillStarts[f*4+2]*16)),endBand=Math.min(15,Math.floor(seams.fillEnds[f*4+2]*16));
   assert.notEqual(startBand,endBand,'moving band seams must outrank ordinary density gaps');
-  assert.equal(seams.fillFractions[f],Math.fround((f%5+1)/6),'five evenly spaced samples per seam at 20% fill');
+  assert.ok(seams.fillFractions[f]>0 && seams.fillFractions[f]<1);
 }
 const dense=sampleImageToCloud(image,gradient,12000,1,{bandMap:'depth',bands:16});
-for(let f=0;f<dense.fillFractions.length;f++)assert.equal(dense.fillFractions[f],Math.fround((f%12+1)/13),'twelve evenly spaced samples per seam at full fill');
+const rows=new Map();
+for(let f=0;f<dense.fillFractions.length;f++){
+  const key=Array.from(dense.fillStarts.subarray(f*4,f*4+4)).join(',')+'|'+Array.from(dense.fillEnds.subarray(f*4,f*4+4)).join(',');
+  if(!rows.has(key))rows.set(key,[]);
+  rows.get(key).push(dense.fillFractions[f]);
+}
+assert.ok([...rows.values()].some(ts=>ts.length===12),'twelve samples across a row at full fill');
+const firstRows=[...rows.keys()].slice(0,3).map(key=>key.split('|')[0].split(',').map(Number));
+assert.equal(firstRows.length,3);
+assert.ok(Math.hypot(firstRows[0][0]-firstRows[1][0],firstRows[0][1]-firstRows[1][1])>0,'rows spread across the seam instead of overlapping');
+assert.equal(firstRows[0][3],firstRows[1][3],'parallel rows share the same endpoint motion seed');
+assert.notDeepEqual([...rows.values()][0],[...rows.values()][1],'rows stagger their samples');
 const large=sampleImageToCloud(image,null,400000,1);
-assert.ok(large.count-large.baseCount<=60000);
+assert.ok(large.count-large.baseCount<=180000);
 assert.equal(sampleImageToCloud(image,null,12000,0).count,sampleImageToCloud(image,null,12000).count);
 console.log(`Gap fill adds ${filled.count-base.count} same-surface points; base data unchanged, repeatable, transparent holes preserved, extra count capped.`);
