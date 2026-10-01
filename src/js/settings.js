@@ -35,6 +35,8 @@ const DEFAULTS = {
   overscan: 1.0,           // legacy manual crop, superseded by screen coverage
   overscanAuto: true,      // legacy auto-crop flag
   keepScreenCovered: true, // saved key: dynamically fill the screen
+  fillStrength: .6,       // relaxed framing allows small edge glimpses
+  framingSmoothing: .6,   // smooth framing corrections in both directions
   hideBackdrop: false,     // black background while particles are on screen
   flybyExit: false,        // idle exit: points rush the camera instead of a clean fade
   cursorRipple: true,      // particles swell around the mouse cursor

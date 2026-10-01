@@ -560,8 +560,10 @@ export class VisualScene {
     // Saved key retained: dynamically centre and fill the screen while
     // preserving full parallax instead of limiting camera travel.
     this.keepScreenCovered = !!s.keepScreenCovered;
+    this.fillStrength = s.fillStrength ?? .6;
+    this.framingSmoothing = s.framingSmoothing ?? .6;
     this.overscan = 1;
-    if (!this.keepScreenCovered && this.dynamicFraming) this.dynamicFraming.zoom = null;
+    if ((!this.keepScreenCovered || this.fillStrength===0) && this.dynamicFraming) this.dynamicFraming.zoom = null;
     this.hideBackdrop = !!s.hideBackdrop;
     this.cursorRipple = !!s.cursorRipple;
     this.uniforms.uExitPush.value = s.flybyExit ? 0.4 : 0;
@@ -724,8 +726,8 @@ export class VisualScene {
     );
     this.camera.position.z = this.camBaseZ;
     this.camera.lookAt(0, 0, 0.1);
-    if (this.keepScreenCovered && this.dynamicFraming && this.uniforms.uVis.value > 0) {
-      this.dynamicFraming.update(this.camera, this.camBaseZ, this.uniforms, this.bandData, dt);
+    if (this.keepScreenCovered && this.fillStrength>0 && this.dynamicFraming && this.uniforms.uVis.value > 0) {
+      this.dynamicFraming.update(this.camera, this.camBaseZ, this.uniforms, this.bandData, dt, this.fillStrength, this.framingSmoothing);
       this.uniforms.uCamZ.value = this.camera.position.z;
       this.uniforms.uSize.value = (this.pointSizeSetting || 1) * hPx * (this.spacingWorld || 1 / 300)
         * this.camera.zoom / (2 * tanHalf * this.camera.position.z);

@@ -223,6 +223,8 @@ export class UI {
     slider('musicParallax', 'musicParallax', (v) => v.toFixed(2));
     slider('quietMovement', 'quietMovement', (v) => `${Math.round(v * 100)}%`);
     slider('energyResponse', 'energyResponse', (v) => v.toFixed(2));
+    slider('fillStrength','fillStrength',v=>`${Math.round(v*100)}%`);
+    slider('framingSmoothing','framingSmoothing',v=>`${(.25+1.75*v*v).toFixed(2)} s`);
     $('calibrateEnergy').onclick = () => this.cb.onCalibrateEnergy();
 
     $('autoQuality').onchange = (e) => set({ autoQuality: e.target.checked });
@@ -515,6 +517,11 @@ export class UI {
       }
     }
     $('keepScreenCovered').checked = !!get('keepScreenCovered');
+    $('framingControls').hidden=!get('keepScreenCovered');
+    setSlider('fillStrength',get('fillStrength'));
+    $('fillStrength').parentElement.querySelector('.val').textContent=`${Math.round(get('fillStrength')*100)}%`;
+    setSlider('framingSmoothing',get('framingSmoothing'));
+    $('framingSmoothing').parentElement.querySelector('.val').textContent=`${(.25+1.75*get('framingSmoothing')**2).toFixed(2)} s`;
 
     $('autoQuality').checked = get('autoQuality');
     $('previewPaused').checked = !!get('previewPaused');

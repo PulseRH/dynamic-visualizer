@@ -166,7 +166,11 @@
         <input type="range" id="musicParallax" min="0" max="1" step="0.05" />
         <span class="val"></span>
       </label>
-      <label class="check-row"><input type="checkbox" id="keepScreenCovered" /> Keep screen filled<span class="q" data-tip="Dynamically centres the image and uses only enough zoom to keep its outer edges outside the screen during parallax and audio motion. Some cropping is needed to fill the screen. Off uses the normal fixed image fit. Tracks a small cached set of border points, regardless of particle count."></span></label>
+      <label class="check-row"><input type="checkbox" id="keepScreenCovered" /> Keep screen filled<span class="q" data-tip="Adjusts framing to reduce exposed edges during motion. Fill strength controls how strictly it follows the image; Framing smoothing calms its correction. Softer settings can reveal small edges. Off uses fixed image fit. Uses the same cached border samples regardless of particle count."></span></label>
+      <div id="framingControls">
+        <label class="slider-row"><span class="lbl">Fill strength<span class="q" data-tip="0% = fixed framing; lower values make subtler zoom and centring corrections. 100% follows the full fill target. Relaxed settings may show edges. For the original strict behaviour, use 100% with minimum smoothing."></span></span><input type="range" id="fillStrength" min="0" max="1" step="0.01" /><span class="val"></span></label>
+        <label class="slider-row"><span class="lbl">Framing smoothing<span class="q" data-tip="How gradually framing catches up. Higher makes zoom and centring calmer, with temporary edge exposure on fast changes. Minimum smoothing at full strength restores immediate edge protection. Does not change the audio response."></span></span><input type="range" id="framingSmoothing" min="0" max="1" step="0.01" /><span class="val"></span></label>
+      </div>
       <label class="slider-row"><span class="lbl">Quiet movement<span class="q" data-tip="Minimum audio motion strength for quiet music, relative to full energy. Bands still shape movement; silence still fades out."></span></span>
         <input type="range" id="quietMovement" min="0" max="1" step="0.05" />
         <span class="val"></span>

@@ -33,7 +33,9 @@ export class DynamicFraming {
     this.bounds = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
   }
 
-  update(camera, baseZ, u, data, dt) {
+  update(camera, baseZ, u, data, dt, strength=1, smoothing=0) {
+    strength=clamp(strength,0,1); smoothing=clamp(smoothing,0,1);
+    const strict=strength===1 && smoothing===0;
     const samples = this.samples, points = this.positions;
     let peak = 0;
     for (let b = 0; b < u.uBandCount.value; b++) peak = Math.max(peak, data[b * 4] / 255);
@@ -68,20 +70,37 @@ export class DynamicFraming {
     if (!(right > left && top > bottom)) return;
     this.bounds.minX = left; this.bounds.maxX = right;
     this.bounds.minY = bottom; this.bounds.maxY = top;
-    const follow = 1 - Math.exp(-Math.max(0, dt) / .25);
+    const follow = 1 - Math.exp(-Math.max(0, dt) / (.25+1.75*smoothing*smoothing));
     const cx = (left + right) / 2, cy = (bottom + top) / 2;
     if (this.zoom === null) { this.centerX = cx; this.centerY = cy; }
     else { this.centerX += (cx - this.centerX) * follow; this.centerY += (cy - this.centerY) * follow; }
-    this.centerX = clamp(this.centerX, left + (right - left) * .1, right - (right - left) * .1);
-    this.centerY = clamp(this.centerY, bottom + (top - bottom) * .1, top - (top - bottom) * .1);
-    const room = Math.min(this.centerX - left, right - this.centerX, this.centerY - bottom, top - this.centerY);
+    if(strict) {
+      this.centerX = clamp(this.centerX, left + (right - left) * .1, right - (right - left) * .1);
+      this.centerY = clamp(this.centerY, bottom + (top - bottom) * .1, top - (top - bottom) * .1);
+    }
+    // Soft framing measures the ideal centre, rather than zooming harder to
+    // compensate for a centre that is still catching up after a sudden beat.
+    const room = strict ? Math.min(this.centerX-left,right-this.centerX,this.centerY-bottom,top-this.centerY)
+      : Math.min((right-left)/2,(top-bottom)/2);
     const target = 1.025 / Math.max(room, .001);
     // Cover immediately when an edge approaches; ease out as space returns.
-    this.zoom = this.zoom === null || target > this.zoom ? target : this.zoom + (target - this.zoom) * follow;
+    if(strict) {
+      this.zoom = this.zoom === null || target > this.zoom ? target : this.zoom + (target - this.zoom) * follow;
+      this.softScale=null;
+    } else {
+      // Compensate for safety camera distance immediately, then ease only the
+      // framing correction. Safety moves must not look like extra audio zoom.
+      const distanceScale=camera.position.z/baseZ;
+      const targetScale=1+strength*(target/distanceScale-1);
+      if(this.zoom===null) this.softScale=targetScale;
+      else if(this.softScale==null) this.softScale=this.zoom/distanceScale;
+      this.softScale+=(targetScale-this.softScale)*follow;
+      this.zoom=this.softScale*distanceScale;
+    }
     camera.zoom = this.zoom;
     camera.updateProjectionMatrix();
-    camera.projectionMatrix.elements[8] = this.centerX * this.zoom;
-    camera.projectionMatrix.elements[9] = this.centerY * this.zoom;
+    camera.projectionMatrix.elements[8] = this.centerX * this.zoom * strength;
+    camera.projectionMatrix.elements[9] = this.centerY * this.zoom * strength;
     camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
   }
 }

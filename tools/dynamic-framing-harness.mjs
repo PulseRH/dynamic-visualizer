@@ -57,3 +57,25 @@ still.update(camera, baseZ, u, data, 1 / 40);
 assert.ok(Math.abs(camera.zoom - 1.025) < .001, `resting image adds only edge margin: ${camera.zoom}`);
 assert.ok(Math.abs(still.centerX) < .001 && Math.abs(still.centerY) < .001);
 console.log('PASS: flat image keeps centred cover fit with only 2.5% edge margin.');
+
+function framingMotion(strength,smoothing) {
+  const tracker=new DynamicFraming(cloud), cam=new PerspectiveCamera(45,16/9,.01,100);
+  let lastScale=null,lastX=null,totalZoom=0,totalPan=0;
+  for(let step=0;step<240;step++) {
+    u.uBandMap.value=Math.floor(step/60);u.uInvert.value=step%2;
+    u.uWaveTime.value=step*.19;u.uXYTime.value=step*.13;
+    for(let b=0;b<32;b++) data[b*4]=Math.round(255*(.5+.5*Math.sin(step*.7+b*1.3)));
+    cam.position.set(Math.sin(step*.2)*.25,Math.cos(step*.17)*.2,1.2);
+    tracker.update(cam,1.2,u,data,1/40,strength,smoothing);
+    const scale=cam.zoom/(cam.position.z/1.2), pan=cam.projectionMatrix.elements[8]/cam.zoom;
+    assert.ok(Number.isFinite(scale) && scale>0 && Number.isFinite(pan));
+    if(lastScale!==null) {totalZoom+=Math.abs(scale-lastScale);totalPan+=Math.abs(pan-lastX);}
+    lastScale=scale;lastX=pan;
+  }
+  return {totalZoom,totalPan};
+}
+const strict=framingMotion(1,0), relaxed=framingMotion(.6,.6), smoother=framingMotion(.6,1);
+assert.ok(relaxed.totalZoom<strict.totalZoom*.7,'relaxed framing reduces reactive zoom variation');
+assert.ok(relaxed.totalPan<strict.totalPan*.7,'relaxed framing reduces reactive centring variation');
+assert.ok(smoother.totalZoom<relaxed.totalZoom && smoother.totalPan<relaxed.totalPan,'more smoothing calms both zoom and centring');
+console.log(`PASS: softer framing reduces zoom variation ${(100*(1-relaxed.totalZoom/strict.totalZoom)).toFixed(0)}%, centring variation ${(100*(1-relaxed.totalPan/strict.totalPan)).toFixed(0)}%; stronger smoothing reduces both further.`);
