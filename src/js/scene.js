@@ -47,6 +47,7 @@ const VERT = /* glsl */ `
     attribute vec4 aFillStart;
     attribute vec4 aFillEnd;
     attribute float aFillT;
+    uniform float uFillBrightness;
   #endif
 
   varying vec3 vColor;
@@ -229,7 +230,7 @@ const VERT = /* glsl */ `
       vec3 pos = mix(first, last, aFillT);
       gl_Position = projectionMatrix * (modelViewMatrix * vec4(pos, 1.0));
       gl_PointSize = mix(firstSize, lastSize, aFillT);
-      vColor = mix(firstColour, lastColour, aFillT);
+      vColor = mix(firstColour, lastColour, aFillT) * uFillBrightness;
       vAmp = mix(firstAmp, lastAmp, aFillT);
     #else
       vec3 pos; float amp, size;
@@ -327,6 +328,7 @@ export class VisualScene {
       uExtraLayers: { value: new THREE.Vector4() },
       uBandMap: { value: 1 },
       uDepthShading: { value: 0 },
+      uFillBrightness: { value: .35 },
       uBandDistribution: { value: 1 },
       uBandCount: { value: 64 },
       uInvert: { value: 0 },
@@ -593,6 +595,10 @@ export class VisualScene {
     this.uniforms.uIntensity.value = s.intensity;
     this.uniforms.uDepthScale.value = s.depthScale;
     this.uniforms.uDepthShading.value = Math.max(0,Math.min(1,s.depthShading || 0));
+    // Hold approximate light per bridge steady as rows/samples increase.
+    this.uniforms.uFillBrightness.value = Math.max(0,Math.min(1,s.gapFillBrightness ?? .35))
+      * Math.min(1,12/Math.max(3,s.gapFillDensity ?? 12))
+      * Math.min(1,3/Math.max(1,s.gapFillRows ?? 3));
     this.uniforms.uLayers.value.set(s.motionWave, s.motionRipple, s.motionBands, s.motionDrift);
     this.uniforms.uExtraLayers.value.set(s.motionSwirl, s.motionBreathe, s.motionSweep, s.motionBandShake);
     this.uniforms.uBandMap.value = BAND_MAPS[s.bandMap] ?? 0;

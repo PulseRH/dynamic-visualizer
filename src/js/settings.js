@@ -4,6 +4,10 @@ const DEFAULTS = {
   depthMode: 'auto',       // 'auto' | 'onnx' (small) | 'onnx-base' | 'flat'
   depthScale: 0.35,
   gapFill: 0,              // bounded same-surface infill, generated during cloud rebuild
+  gapFillDensity: 12,      // samples along each bridge row
+  gapFillRows: 3,
+  gapFillSpread: .8,       // total row width in original point spacings
+  gapFillBrightness: .35,  // independent additive fill brightness
   depthShading: 0,         // dim distant surfaces while retaining foreground highlights
   pointCount: 160000,
   pointSize: 1.0,

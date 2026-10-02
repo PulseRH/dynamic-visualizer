@@ -101,8 +101,9 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
     const pointBudget=Math.floor(Math.min(baseCount*1.5,180000)*fill);
     // More fill increases both the number of bridges and their density.
     // Ordinary point sizes are retained even when animated bands pull apart.
-    const samplesPerEdge=3+Math.round(fill*9);
-    const fillRows=3;
+    const samplesPerEdge=Math.max(3,Math.min(24,Math.round(mapping.gapFillDensity ?? 12)));
+    const fillRows=Math.max(1,Math.min(7,Math.round(mapping.gapFillRows ?? 3)));
+    const spread=Math.max(.2,Math.min(2,mapping.gapFillSpread ?? .8));
     const budget=Math.min(candidates,Math.floor(pointBudget/(samplesPerEdge*fillRows)));
     let threshold=255,above=0;
     while(threshold>0 && above+histogram[threshold]<budget){above+=histogram[threshold];threshold--;}
@@ -124,12 +125,12 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
       for(let row=0;row<fillRows;row++){
         // Spread neighbouring rows perpendicular to the bridge. Stagger the
         // samples so the fill reads as a surface rather than aligned strings.
-        const offset=(row-1)*.4*cell/H;
+        const offset=(fillRows===1 ? 0:row/(fillRows-1)-.5)*spread*cell/H;
         const ox=-dy/length*offset,oy=dx/length*offset;
         const ax=positions[ai]+ox,ay=positions[ai+1]+oy,bx=positions[bi]+ox,by=positions[bi+1]+oy;
         if(!validEndpoint(ax,ay,positions[ai+2])||!validEndpoint(bx,by,positions[bi+2]))continue;
         for(let sample=1;sample<=samplesPerEdge;sample++){
-          const t=(sample+(row===1 ? 0:(rand()-.5)*.6))/(samplesPerEdge+1);
+          const t=(sample+(rand()-.5)*.6)/(samplesPerEdge+1);
           const x=ax*(1-t)+bx*t,y=ay*(1-t)+by*t,u=x/aspect+.5,v=.5-y;
           const sx=Math.min(W-1,Math.max(0,Math.floor(u*W))),sy=Math.min(H-1,Math.max(0,Math.floor(v*H))),i=(sy*W+sx)*4,p=used*3;
           const near=depth ? sampleGrid(depth,u,v):.5;

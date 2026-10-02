@@ -185,6 +185,10 @@ export class UI {
     };
     slider('depthScale', 'depthScale', (v) => v.toFixed(2));
     slider('gapFill','gapFill',v=>`${Math.round(v*100)}%`);
+    slider('gapFillDensity','gapFillDensity',v=>String(Math.round(v)));
+    slider('gapFillRows','gapFillRows',v=>String(Math.round(v)));
+    slider('gapFillSpread','gapFillSpread',v=>`${Number(v).toFixed(2)}×`);
+    slider('gapFillBrightness','gapFillBrightness',v=>`${Math.round(v*100)}%`);
     slider('depthShading','depthShading',v=>`${Math.round(v*100)}%`);
     slider('pointCount', 'pointCount', (v) => `${Math.round(v / 1000)}k`);
     slider('pointSize', 'pointSize', (v) => v.toFixed(1));
@@ -420,9 +424,13 @@ export class UI {
       }
     };
     setSlider('depthScale', get('depthScale'));
-    for(const key of ['gapFill','depthShading']){
+    for(const key of ['gapFill','depthShading','gapFillBrightness']){
       setSlider(key,get(key));
       $(key).parentElement.querySelector('.val').textContent=`${Math.round(get(key)*100)}%`;
+    }
+    for(const key of ['gapFillDensity','gapFillRows','gapFillSpread']){
+      setSlider(key,get(key));
+      $(key).parentElement.querySelector('.val').textContent=key==='gapFillSpread' ? `${Number(get(key)).toFixed(2)}×`:String(Math.round(get(key)));
     }
     setSlider('pointCount', get('pointCount'));
     setSlider('pointSize', get('pointSize'));

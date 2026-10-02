@@ -37,9 +37,14 @@ try{
   if(width===.02){if(!pixels.some((v,i)=>i%4!==3&&v>0))throw new Error('Size comparison rendered no point');narrow.set(pixels);}
   else if(!pixels.every((v,i)=>v===narrow[i]))throw new Error('Wider seam enlarged or changed the fill point');
  }
+ scene.uniforms.uFillBrightness.value=0;
+ scene.renderer.render(scene.scene,scene.camera);gl.readPixels(0,0,400,300,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
+ if(pixels.some((v,i)=>i%4!==3 && v!==0))throw new Error('Zero fill brightness did not suppress hotspots');
+ scene.applySettings({...getAll(),gapFillBrightness:.4,gapFillDensity:24,gapFillRows:6});
+ if(Math.abs(scene.uniforms.uFillBrightness.value-.1)>1e-6)throw new Error('Fill density brightness compensation failed');
  scene.setCloud({count:2,aspect:4/3,positions:new Float32Array([...start.slice(0,3),...end.slice(0,3)]),colors:new Float32Array(6).fill(.3),rands:new Float32Array([.2,.8])});
  if(scene.fillPoints)throw new Error('Fill geometry retained after disabling');
- document.querySelector('#result').textContent='PASS: GPU fill follows both endpoints across mappings and stacked motion; opening seams does not enlarge points; geometry removed when off.';
+ document.querySelector('#result').textContent='PASS: GPU fill follows both endpoints; gaps do not enlarge points; fill brightness and density compensation work; geometry removed when off.';
  scene.renderer.dispose();
 }catch(e){document.querySelector('#result').textContent='FAIL: '+e.stack;}
 </script>

@@ -44,5 +44,11 @@ assert.equal(firstRows[0][3],firstRows[1][3],'parallel rows share the same endpo
 assert.notDeepEqual([...rows.values()][0],[...rows.values()][1],'rows stagger their samples');
 const large=sampleImageToCloud(image,null,400000,1);
 assert.ok(large.count-large.baseCount<=180000);
+for(const gapFillRows of [1,7])for(const gapFillDensity of [3,24])for(const gapFillSpread of [.2,2]){
+  const tuned=sampleImageToCloud(image,gradient,12000,1,{bandMap:'depth',bands:16,gapFillRows,gapFillDensity,gapFillSpread});
+  assert.ok(tuned.count>tuned.baseCount && tuned.count<=tuned.baseCount*2.5);
+  assert.equal(tuned.fillStarts.length,(tuned.count-tuned.baseCount)*4);
+  for(let f=0;f<tuned.fillFractions.length;f++)assert.ok(tuned.fillFractions[f]>0 && tuned.fillFractions[f]<1);
+}
 assert.equal(sampleImageToCloud(image,null,12000,0).count,sampleImageToCloud(image,null,12000).count);
 console.log(`Gap fill adds ${filled.count-base.count} same-surface points; base data unchanged, repeatable, transparent holes preserved, extra count capped.`);
