@@ -21,6 +21,7 @@ export function depthModelUrl(mode) {
 // Weak keys let old images and their depth grids be reclaimed after a switch.
 const resultCache = new WeakMap(); // bitmap -> Map<mode:modelUrl, {data,w,h}>
 const imageIds = new WeakMap();
+export const depthImageIdentity = bitmap => imageIds.get(bitmap);
 const DEPTH_CACHE = 'dv-depth-results-v1';
 
 // Content identity also handles a wallpaper file overwritten at the same path.

@@ -36,6 +36,17 @@ a few percent CPU and holds a steady frame rate without spinning fans.
   - AI models are fetched only when selected, cached in the browser Cache API,
     and fall back to the heuristic if unavailable. The depth worker exits after
     each image; model choice does not change animation workload.
+- **Hidden background** (optional, under Depth): local MI-GAN inpainting
+  reconstructs a separate background behind foreground depth edges. Reveals
+  particles as parallax or audio motion exposes them, including with static
+  Depth strength at zero. Best with AI depth. It prepares narrow strips once
+  per wallpaper, caches results by image content and depth map, and releases
+  the AI worker afterward. The model downloads once (~27 MB, MIT weights);
+  inference uses one CPU worker and never runs in the animation loop. Adds
+  one particle draw call, capped at 40k extra points or 20% of Count. Off has
+  no extra geometry; zero Hidden brightness skips its drawing. It invents
+  plausible hidden content; large openings and imperfect depth masks remain
+  limitations. Wallpaper windows reuse the preview's completed asset.
 - **Audio sources**
   - **System loopback** — visualize whatever the OS is playing
     (Windows: WASAPI loopback via Electron desktop capture; macOS works too).

@@ -195,6 +195,8 @@ export class UI {
     slider('gapFillAdaptive','gapFillAdaptive',v=>`${Math.round(v*100)}%`);
     slider('gapFillDepthLimit','gapFillDepthLimit',v=>`${Math.round(v*100)}%`);
     slider('depthShading','depthShading',v=>`${Math.round(v*100)}%`);
+    $('occludedBackground').onchange=e=>set({occludedBackground:e.target.checked});
+    slider('reconstructionBrightness','reconstructionBrightness',v=>`${Math.round(v*100)}%`);
     slider('pointCount', 'pointCount', (v) => `${Math.round(v / 1000)}k`);
     slider('pointSize', 'pointSize', (v) => v.toFixed(1));
     slider('glow', 'glow', (v) => v.toFixed(2));
@@ -397,6 +399,7 @@ export class UI {
   }
 
   _syncAll() {
+    $('occludedBackground').checked=!!get('occludedBackground');
     this._applyAccent();
     $('matchImageAccent').checked = !!get('matchImageAccent');
     const syncSeg = (id, v) => {
@@ -433,7 +436,7 @@ export class UI {
     };
     setSlider('depthScale', get('depthScale'));
     $('gapFillOnlyOpen').checked=get('gapFillOnlyOpen')!==false;
-    for(const key of ['depthShape','gapFill','depthShading','gapFillBrightness','gapFillDepthLimit','gapFillAdaptive']){
+    for(const key of ['depthShape','gapFill','depthShading','gapFillBrightness','gapFillDepthLimit','gapFillAdaptive','reconstructionBrightness']){
       setSlider(key,get(key));
       $(key).parentElement.querySelector('.val').textContent=`${Math.round(get(key)*100)}%`;
     }
@@ -650,6 +653,7 @@ export class UI {
   }
 
   setAbout(text) { $('aboutInfo').textContent = text; }
+  setReconstructionStatus(text) { $('reconstructionStatus').textContent=text; }
 
   get settings() { return getAll(); }
 }

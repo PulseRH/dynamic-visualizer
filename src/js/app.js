@@ -10,6 +10,7 @@ import { AudioActivity } from './audio-activity.js';
 import { makeProceduralImage } from './sampler.js';
 import { buildCloud } from './cloud-builder.js';
 import { estimateDepth, depthModelUrl, identifyDepthImage } from './depth.js';
+import { reconstructBackground } from './reconstruction.js';
 import { copySpectrumBands } from './spectrum-relay.js';
 import { UI } from './ui.js';
 import { bridge, platform } from './bridge.js';
@@ -29,6 +30,7 @@ let cycleElapsed = 0;
 let relayedDepth = null;      // depth grid received from the preview window
 let awaitingRelay = false;
 let lastDepthGrid = null;     // this window's last computed grid (preview: for re-sends)
+let activeReconstructionAbort = null;
 let gameMode = false;    // true: a game/app owns the screen — pause rendering
 let previewVisible = false; // native visibility; document.hidden stays false in Electron
 let rebuildToken = 0;
@@ -154,6 +156,7 @@ async function handleImagePick({ kind, file, url, cycling = false }) {
         await loadFromUrl(saved.url);
       } else {
         const bitmap = await createImageBitmap(file);
+        await identifyDepthImage(bitmap,file);
         set({ imageUrl: null });
         setMainImage(bitmap, URL.createObjectURL(file));
       }
@@ -200,10 +203,14 @@ async function rebuildCloud() {
   if (!currentImage) return;
   const token = ++rebuildToken;
   activeDepthAbort?.abort();
+  activeReconstructionAbort?.abort();
+  activeReconstructionAbort=null;
   activeDepthAbort = null;
   const depthMode = get('depthMode');
   const imageKey = currentImageUrl || 'procedural';
   const aiModelUrl = depthModelUrl(depthMode);
+  const wantReconstruction=get('occludedBackground') && depthMode!=='flat';
+  let reconstruction=null;
 
   let depth = null;
   if (depthMode !== 'flat') {
@@ -238,19 +245,50 @@ async function rebuildCloud() {
         depth = await estimateDepth(currentImage, 'auto');
       }
       if (activeDepthAbort === controller) activeDepthAbort = null;
-      // share the grid so wallpaper windows never need the AI runtime
-      if (depth && !isWallpaperWindow) {
-        lastDepthGrid = { key: imageKey, mode: depthMode, data: depth.data, w: depth.w, h: depth.h };
-        bridge.sendDepthGrid(lastDepthGrid);
-      }
     }
   }
   if (token !== rebuildToken) return; // superseded
+
+  if(wantReconstruction && depth){
+    if(isWallpaperWindow){
+      if(relayedDepth?.key===imageKey && relayedDepth.mode===depthMode && relayedDepth.reconstructionReady){
+        reconstruction=relayedDepth.reconstruction;
+      }else{
+        awaitingRelay=true;bridge.requestDepthGrid();
+        // A completed payload includes a null result on errors/no edges, so
+        // wallpaper windows never run AI or wait forever for failed inference.
+        return;
+      }
+    }else{
+      const controller=new AbortController();activeReconstructionAbort=controller;
+      ui.setReconstructionStatus('Preparing hidden background…');
+      try{
+        reconstruction=await reconstructBackground(currentImage,depth,status=>{if(token===rebuildToken)ui.setReconstructionStatus(status);},controller.signal);
+        if(token!==rebuildToken)return;
+        ui.setReconstructionStatus(reconstruction ? 'Hidden background ready':'No distinct foreground edges found');
+      }catch(err){
+        if(controller.signal.aborted||token!==rebuildToken)return;
+        console.warn('Hidden background failed',err);
+        ui.setReconstructionStatus(`Hidden background unavailable: ${err.message}. Toggle off/on to retry.`);
+      }finally{if(activeReconstructionAbort===controller)activeReconstructionAbort=null;}
+    }
+  }else if(!isWallpaperWindow){
+    ui.setReconstructionStatus(get('occludedBackground') ? 'Choose a depth mode to reconstruct foreground edges':'');
+  }
+  if(token!==rebuildToken)return;
+  // Relay the completed asset once, including to multiple monitors. Only
+  // the preview prepares it; no model is loaded in wallpaper windows.
+  if(depth && !isWallpaperWindow){
+    lastDepthGrid={key:imageKey,mode:depthMode,data:depth.data,w:depth.w,h:depth.h,
+      reconstructionReady:!!wantReconstruction,reconstruction};
+    bridge.sendDepthGrid(lastDepthGrid);
+  }
 
   const cloud = await buildCloud(currentImage, depth, get('pointCount'),get('gapFill'),{
     bandMap:get('bandMap'),bandDistribution:get('bandDistribution'),bands:get('bands'),invertBands:get('invertBands'),
     gapFillDensity:get('gapFillDensity'),gapFillRows:get('gapFillRows'),gapFillSpread:get('gapFillSpread'),
     gapFillDepthLimit:get('gapFillDepthLimit'),
+    reconstruction,
   });
   if (token !== rebuildToken) return;
   const previousImage=displayedImage;
@@ -297,7 +335,8 @@ if (isWallpaperWindow) {
   // window never loads the AI runtime
   bridge.onDepthGrid((payload) => {
     if (!payload || !payload.data) return;
-    relayedDepth = { key: payload.key, mode: payload.mode, data: new Float32Array(payload.data), w: payload.w, h: payload.h };
+    relayedDepth = { key: payload.key, mode: payload.mode, data: new Float32Array(payload.data), w: payload.w, h: payload.h,
+      reconstructionReady:payload.reconstructionReady,reconstruction:payload.reconstruction };
     if (awaitingRelay && payload.mode === get('depthMode') && payload.key === (currentImageUrl || 'procedural')) {
       awaitingRelay = false;
       clearTimeout(countTimer);
@@ -361,6 +400,7 @@ async function switchAudio(mode, opts = {}) {
 // setting (glow, intensity, modes, …) applies live to the scene
 let lastCount = get('pointCount');
 let lastGapFill = get('gapFill');
+let lastReconstruction=get('occludedBackground');
 let lastDepthMode = get('depthMode');
 let lastBands = get('bands');
 let lastSyncedImageUrl = get('imageUrl');
@@ -412,9 +452,10 @@ onChange((all, patch) => {
       }
     }, 350);
   }
-  if (get('pointCount') !== lastCount || get('depthMode') !== lastDepthMode || get('gapFill') !== lastGapFill) {
+  if (get('pointCount') !== lastCount || get('depthMode') !== lastDepthMode || get('gapFill') !== lastGapFill || get('occludedBackground')!==lastReconstruction) {
     lastCount = get('pointCount');
     lastGapFill=get('gapFill');
+    lastReconstruction=get('occludedBackground');
     lastDepthMode = get('depthMode');
     clearTimeout(countTimer);
     countTimer = setTimeout(() => rebuildCloud(), 350);

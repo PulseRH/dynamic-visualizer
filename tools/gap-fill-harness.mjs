@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-const source=await readFile(new URL('../src/js/sampler.js',import.meta.url),'utf8');
+const occlusion=await readFile(new URL('../src/js/occlusion.js',import.meta.url),'utf8');
+const source=(await readFile(new URL('../src/js/sampler.js',import.meta.url),'utf8')).replace("'./occlusion.js'",JSON.stringify(`data:text/javascript;base64,${Buffer.from(occlusion).toString('base64')}`));
 const {sampleImageToCloud}=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 let pixels;
 globalThis.OffscreenCanvas=class {getContext(){return {drawImage(){},getImageData(){return {data:pixels};}};}};

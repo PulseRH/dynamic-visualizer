@@ -46,6 +46,12 @@ const VERT = /* glsl */ `
 
   attribute vec3 aColor;
   attribute float aRand;
+  #ifdef OCCLUDED_BACKGROUND
+    attribute vec4 aOccluder;
+    attribute vec2 aOutward;
+    uniform float uReconstructionBrightness;
+    uniform float uFillSpacing;
+  #endif
   #ifdef GAP_FILL
     attribute vec4 aFillStart;
     attribute vec4 aFillEnd;
@@ -238,7 +244,27 @@ const VERT = /* glsl */ `
     }
   }
   void main() {
-    #ifdef GAP_FILL
+    #ifdef OCCLUDED_BACKGROUND
+      vec3 pos, edge, unusedColour;float amp,size,unusedAmp,unusedSize;
+      evaluatePoint(position,aRand,aColor,pos,vColor,amp,size);
+      evaluatePoint(aOccluder.xyz,aOccluder.w,aColor,edge,unusedColour,unusedAmp,unusedSize);
+      vec4 hiddenClip=projectionMatrix*(modelViewMatrix*vec4(pos,1.0));
+      vec4 edgeClip=projectionMatrix*(modelViewMatrix*vec4(edge,1.0));
+      vec4 axisClip=projectionMatrix*(modelViewMatrix*vec4(edge+vec3(aOutward*uFillSpacing,0.0),1.0));
+      float reveal=0.0;
+      if(min(min(hiddenClip.w,edgeClip.w),axisClip.w)>0.0){
+        vec2 metric=vec2(projectionMatrix[1][1]/projectionMatrix[0][0],1.0);
+        vec2 normal=(axisClip.xy/axisClip.w-edgeClip.xy/edgeClip.w)*metric;
+        float spacing=max(length(normal),0.000001);
+        float uncovered=dot((hiddenClip.xy/hiddenClip.w-edgeClip.xy/edgeClip.w)*metric,normal/spacing);
+        // Behind the object remains invisible. Feather the exposed boundary
+        // by one original point spacing to avoid an additive bright outline.
+        reveal=smoothstep(spacing*.35,spacing*1.35,uncovered);
+      }
+      gl_Position=hiddenClip;gl_PointSize=size;vAmp=amp;
+      vColor*=reveal*uReconstructionBrightness;
+      if(reveal==0.0){gl_Position=vec4(2.0,2.0,2.0,1.0);gl_PointSize=0.0;}
+    #elif defined(GAP_FILL)
       vec3 first, last, firstColour, lastColour;
       float firstAmp, lastAmp, firstSize, lastSize;
       evaluatePoint(aFillStart.xyz, aFillStart.w, aColor, first, firstColour, firstAmp, firstSize);
@@ -397,6 +423,7 @@ export class VisualScene {
       uBandMap: { value: 1 },
       uDepthShading: { value: 0 },
       uFillBrightness: { value: .35 },
+      uReconstructionBrightness: { value: .7 },
       uFillOnlyOpen: { value: 1 },
       uFillAdaptive: { value: 1 },
       uFillSamples: { value: 12 },
@@ -520,6 +547,7 @@ export class VisualScene {
 
   /** rebuild geometry from sampled cloud arrays */
   setCloud(cloud) {
+    if(this.reconstructionPoints){this.scene.remove(this.reconstructionPoints);this.reconstructionPoints.geometry.dispose();this.reconstructionPoints=null;}
     if(this.fillPoints){this.scene.remove(this.fillPoints);this.fillPoints.geometry.dispose();this.fillPoints=null;}
     if (this.points) {
       this.scene.remove(this.points);
@@ -540,6 +568,14 @@ export class VisualScene {
     this.points = new THREE.Points(geo, this.material);
     this.points.frustumCulled = false;
     this.scene.add(this.points);
+    const hidden=cloud.reconstruction;
+    if(hidden?.rands.length){
+      this.reconstructionMaterial ||= new THREE.ShaderMaterial({uniforms:this.uniforms,defines:{OCCLUDED_BACKGROUND:1},vertexShader:VERT,fragmentShader:FRAG,blending:THREE.AdditiveBlending,depthTest:false,depthWrite:false,transparent:true});
+      const geometry=new THREE.BufferGeometry();
+      for(const [name,key,size] of [['position','positions',3],['aColor','colors',3],['aRand','rands',1],['aOccluder','occluders',4],['aOutward','normals',2]])geometry.setAttribute(name,new THREE.BufferAttribute(hidden[key],size));
+      this.reconstructionPoints=new THREE.Points(geometry,this.reconstructionMaterial);
+      this.reconstructionPoints.frustumCulled=false;this.scene.add(this.reconstructionPoints);
+    }
     if(cloud.fillFractions?.length){
       this.fillMaterial ||= new THREE.ShaderMaterial({uniforms:this.uniforms,defines:{GAP_FILL:1},vertexShader:VERT,fragmentShader:FRAG,blending:THREE.AdditiveBlending,depthTest:false,depthWrite:false,transparent:true});
       const fill=new THREE.BufferGeometry();
@@ -575,6 +611,7 @@ export class VisualScene {
     this.uniforms.uVis.value = v;
     if(this.points) this.points.visible=v>0;
     if(this.fillPoints) this.fillPoints.visible=v>0;
+    if(this.reconstructionPoints)this.reconstructionPoints.visible=v>0 && this.reconstructionEnabled && this.uniforms.uReconstructionBrightness.value>0;
     if (this.backdrop && !this.backdrop.isDestroyed) {
       const base = this.hideBackdrop ? 0 : this.backdropBaseDim;
       const target = base + (1 - base) * (1 - v);
@@ -669,6 +706,9 @@ export class VisualScene {
     this.uniforms.uDepthScale.value = s.depthScale;
     this.uniforms.uDepthShape.value = Math.max(0,Math.min(1,s.depthShape ?? 0));
     this.uniforms.uDepthShading.value = Math.max(0,Math.min(1,s.depthShading || 0));
+    this.uniforms.uReconstructionBrightness.value=Math.max(0,Math.min(1,s.reconstructionBrightness ?? .7));
+    this.reconstructionEnabled=!!s.occludedBackground;
+    if(this.reconstructionPoints)this.reconstructionPoints.visible=this.uniforms.uVis.value>0 && this.reconstructionEnabled && this.uniforms.uReconstructionBrightness.value>0;
     // Hold approximate light per bridge steady as rows/samples increase.
     this.uniforms.uFillBrightness.value = Math.max(0,Math.min(1,s.gapFillBrightness ?? .35))
       * Math.min(1,12/Math.max(3,s.gapFillDensity ?? 12))

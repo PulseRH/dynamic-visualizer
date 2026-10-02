@@ -68,6 +68,8 @@ const DEFAULTS = {
   parallax: 0.8,
   musicParallax: 0,        // camera sway driven by the music itself (0 = off)
   audioCurvature: 0,      // signed audio-driven bowl curvature; no static depth needed
+  occludedBackground: false, // cached AI hidden background, behind depth edges
+  reconstructionBrightness: .7,
   curvatureSource: 'input', // 'input' or original slower 'bands' response
   dollyZoom: 0,           // audio camera approach with compensating field of view
   quietMovement: 0.6,      // minimum audio motion multiplier, before the silence fade

@@ -1,0 +1,34 @@
+<!doctype html><meta charset="utf-8"><canvas id="gl" width="256" height="256"></canvas><pre id="result">RUNNING</pre>
+<script type="module">
+import {VisualScene} from '../src/js/scene.js';
+import {getAll} from '../src/js/settings.js';
+try{
+ const scene=new VisualScene(document.getElementById('gl'));
+ const cloud={aspect:1,count:1,baseCount:1,positions:new Float32Array([0,0,.5]),colors:new Float32Array([0,0,0]),rands:new Float32Array([.5]),
+  reconstruction:{positions:new Float32Array([-.04,0,.15]),colors:new Float32Array([1,.2,.1]),rands:new Float32Array([.5]),occluders:new Float32Array([0,0,.9,.5]),normals:new Float32Array([1,0])}};
+ scene.setCloud(cloud);scene.applySettings({...getAll(),occludedBackground:true,reconstructionBrightness:1,depthScale:0,depthShape:0,audioCurvature:0,dollyZoom:0,boost:0,sizePulse:0,intensity:0,hideBackdrop:true,depthShading:0});
+ scene.points.visible=false;scene.renderer.setSize(256,256);scene.uniforms.uSize.value=4;scene.uniforms.uFillSpacing.value=.008;
+ const gl=scene.renderer.getContext(),pixels=new Uint8Array(256*256*4);
+ const draw=(x,depth,y=0)=>{scene.camera.position.set(x,y,2);scene.camera.lookAt(0,0,0);scene.camera.updateMatrixWorld();scene.uniforms.uDepthScale.value=depth;scene.renderer.render(scene.scene,scene.camera);gl.readPixels(0,0,256,256,gl.RGBA,gl.UNSIGNED_BYTE,pixels);let light=0;for(let i=0;i<pixels.length;i+=4)light+=pixels[i];if(gl.getError())throw Error('WebGL error');return light;};
+ if(draw(0,0)!==0)throw Error('Hidden layer changed the flat/resting image');
+ const exposed=draw(.8,.8);if(exposed<=0)throw Error('Parallax failed to reveal background');
+ if(draw(-.8,.8)!==0)throw Error('Wrong side of foreground revealed');
+ const geometry=scene.reconstructionPoints.geometry;
+ geometry.attributes.position.array.set([0,-.04,.15]);geometry.attributes.position.needsUpdate=true;
+ geometry.attributes.aOutward.array.set([0,1]);geometry.attributes.aOutward.needsUpdate=true;
+ if(draw(0,.8,.8)<=0||draw(0,.8,-.8)!==0)throw Error('Horizontal boundary reveal did not match vertical boundary');
+ geometry.attributes.position.array.set([.24,0,.15]);geometry.attributes.position.needsUpdate=true;
+ geometry.attributes.aOccluder.array.set([.2,0,.9,.5]);geometry.attributes.aOccluder.needsUpdate=true;
+ geometry.attributes.aOutward.array.set([-1,0]);geometry.attributes.aOutward.needsUpdate=true;
+ scene.applySettings({...getAll(),bands:4,bandMap:'depth',bandDistribution:0,invertBands:false,occludedBackground:true,reconstructionBrightness:1,depthScale:0,depthShape:0,boost:0,sizePulse:0,intensity:8,depthMove:1,xyMove:0,centeredMotion:false});
+ scene.uniforms.uLayers.value.set(0,0,0,0);scene.uniforms.uExtraLayers.value.set(0,0,0,0);scene.uniforms.uDyn.value=1;
+ scene.bandData.fill(0);scene.bandData[12]=255;scene.bandTex.needsUpdate=true;
+ if(draw(0,0)<=0)throw Error('Audio depth movement did not reveal background at Depth strength zero');
+ scene.setIdleVis(0);if(scene.reconstructionPoints.visible)throw Error('Idle still submits hidden points');scene.setIdleVis(1);if(!scene.reconstructionPoints.visible)throw Error('Audio resume did not restore hidden points');
+ scene.applySettings({...getAll(),occludedBackground:false});if(scene.reconstructionPoints.visible)throw Error('Off did not skip drawing');
+ scene.applySettings({...getAll(),occludedBackground:true,reconstructionBrightness:0});if(scene.reconstructionPoints.visible)throw Error('Zero brightness still draws');
+ let disposed=false;scene.reconstructionPoints.geometry.addEventListener('dispose',()=>disposed=true);scene.setCloud({...cloud,reconstruction:null});
+ if(scene.reconstructionPoints||!disposed)throw Error('Hidden geometry was not released');
+ document.getElementById('result').textContent='PASS: hidden at rest, correct-side reveal for both edge orientations, audio-only depth, idle/off/zero skip drawing, geometry cleanup and no WebGL errors.';
+}catch(err){document.getElementById('result').textContent='FAIL: '+(err.stack||err);}
+</script>
