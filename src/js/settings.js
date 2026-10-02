@@ -9,8 +9,7 @@ const DEFAULTS = {
   gapFillSpread: .8,       // total row width in original point spacings
   gapFillBrightness: .35,  // independent additive fill brightness
   gapFillOnlyOpen: true,   // hide extra seam density when neighbours sit together
-  gapFillAdaptive: true,   // reveal more of the reserved pool as screen gaps widen
-  gapFillWidthResponse: .5, // extra visible points per original spacing of opening
+  gapFillAdaptive: 1,      // 0 constant fill -> 1 strict matching to opening width
   gapFillDepthLimit: .06,  // maximum nearness difference allowed across a bridge
   depthShading: 0,         // dim distant surfaces while retaining foreground highlights
   pointCount: 160000,
@@ -102,6 +101,8 @@ function load() {
 
 function migrateSaved(saved) {
   const migrated = { ...migrateMotion(saved) };
+  if(typeof migrated.gapFillAdaptive==='boolean')migrated.gapFillAdaptive=Number(migrated.gapFillAdaptive);
+  if(Number.isFinite(migrated.gapFillAdaptive))migrated.gapFillAdaptive=Math.max(0,Math.min(1,migrated.gapFillAdaptive));
   if (migrated.swirlRangeVersion !== 1) {
     if (Number.isFinite(migrated.motionSwirl)) {
       migrated.motionSwirl = Math.max(0, Math.min(1, migrated.motionSwirl / 0.28));

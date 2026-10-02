@@ -70,7 +70,7 @@ try{
  for(const y of [-.12,-.04,.04,.12]){starts.push(.165,y,.5,.2);ends.push(.168,y,.5,.8);positions.push(.1665,y,.5);}
  scene.setCloud({count:6,baseCount:2,aspect:4/3,positions:new Float32Array(positions),colors:new Float32Array(18).fill(.3),rands:new Float32Array([.2,.8,0,.25,.5,.75]),fillStarts:new Float32Array(starts),fillEnds:new Float32Array(ends),fillFractions:new Float32Array(4).fill(.5)});
  scene.points.visible=false;scene.uniforms.uFillAdaptive.value=1;scene.uniforms.uFillSamples.value=4;scene.uniforms.uZMove.value=0;scene.uniforms.uFillBrightness.value=1;scene.uniforms.uSize.value=2;
- scene.uniforms.uFillSpacing.value=.003;scene.uniforms.uFillWidthResponse.value=.5;
+ scene.uniforms.uFillSpacing.value=.003;
  for(let band=0;band<scene.bandCount;band++)scene.bandData[band*4]=band===40 ? 255:0;
  let bestTime=0,bestDistance=0;scene.uniforms.uIntensity.value=1.5;
  for(let time=0;time<40;time++){
@@ -104,11 +104,9 @@ try{
  const compensatedLight=drawWeight();scene.uniforms.uFillAdaptive.value=0;
  const fullLight=drawWeight();scene.uniforms.uFillAdaptive.value=1;
  if(!(compensatedLight>0 && compensatedLight<fullLight))throw new Error('Narrow-gap highlight compensation failed');
- scene.uniforms.uFillWidthResponse.value=2;
- let fastCount=0;
- for(let rank=0;rank<3;rank++){scene.fillPoints.geometry.setDrawRange(rank,1);if(drawWeight()>0)fastCount++;}
- if(fastCount<=moderateCount)throw new Error('Width response did not change the visible count');
- scene.uniforms.uFillWidthResponse.value=.5;scene.uniforms.uFillSpacing.value=.1;
+ scene.uniforms.uFillAdaptive.value=.5;const blendedLight=drawWeight();scene.uniforms.uFillAdaptive.value=1;
+ if(!(compensatedLight<blendedLight && blendedLight<fullLight))throw new Error('Match strength did not blend narrow-gap suppression');
+ scene.uniforms.uFillSpacing.value=.1;
  for(let rank=0;rank<3;rank++){scene.fillPoints.geometry.setDrawRange(rank,1);if(drawWeight()>0)throw new Error('Nearly coincident neighbours overrode normal spacing');}
  scene.setCloud({count:2,aspect:4/3,positions:new Float32Array([...start.slice(0,3),...end.slice(0,3)]),colors:new Float32Array(6).fill(.3),rands:new Float32Array([.2,.8])});
  if(scene.fillPoints)throw new Error('Fill geometry retained after disabling');

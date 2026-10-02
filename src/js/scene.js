@@ -52,7 +52,6 @@ const VERT = /* glsl */ `
     uniform float uFillAdaptive;
     uniform float uFillSamples;
     uniform float uFillSpacing;
-    uniform float uFillWidthResponse;
   #endif
 
   varying vec3 vColor;
@@ -235,7 +234,7 @@ const VERT = /* glsl */ `
       vec3 pos = mix(first, last, aFillT);
       float opening = 1.0;
       float fillLight = 1.0;
-      if (uFillOnlyOpen > 0.5 || uFillAdaptive > 0.5) {
+      if (uFillOnlyOpen > 0.5 || uFillAdaptive > 0.0) {
         // Measure extra screen separation, with the resting pair translated
         // to the animated midpoint. Shared movement/camera zoom therefore
         // cannot turn a closed seam into a bright contour.
@@ -258,18 +257,22 @@ const VERT = /* glsl */ `
           float referenceGap = max(restingGap, projectionMatrix[1][1] * uFillSpacing / centreW);
           float extraSpacing = max(0.0, (currentGap - restingGap) / max(referenceGap, 0.000001));
           if (uFillOnlyOpen > 0.5) opening = smoothstep(0.15, 0.85, extraSpacing);
-          if (uFillAdaptive > 0.5) {
+          if (uFillAdaptive > 0.0) {
             // The pool is built once. Reveal a progressive, distributed subset
             // with one-point fades rather than drawing a full row in tiny gaps.
             // One initial coverage point, then a tunable ramp. Reserve the
             // full pool for wide openings even with a low maximum count.
             float coverage = smoothstep(0.15, 0.85, extraSpacing);
-            float visibleSamples = min(uFillSamples, coverage + extraSpacing * uFillWidthResponse);
+            float visibleSamples = min(uFillSamples, coverage + extraSpacing * 0.5);
             float rank = aRand * uFillSamples;
-            opening *= smoothstep(rank, rank + 1.0, visibleSamples);
+            // Strength blends the entire adaptive effect, including a wider
+            // onset for narrow seams, rather than just changing point density.
+            float narrowGate = smoothstep(0.5, 2.5, extraSpacing);
+            float matched = smoothstep(rank, rank + 1.0, visibleSamples) * narrowGate;
+            opening *= mix(1.0, matched, uFillAdaptive);
             // Share the light over the available space rather than adding
             // full brightness from several points to a narrow seam.
-            fillLight = min(1.0, extraSpacing / max(visibleSamples, 1.0));
+            fillLight = mix(1.0, min(1.0, extraSpacing / max(visibleSamples, 1.0)), uFillAdaptive);
           }
         }
       }
@@ -382,7 +385,6 @@ export class VisualScene {
       uFillAdaptive: { value: 1 },
       uFillSamples: { value: 12 },
       uFillSpacing: { value: 1 / 300 },
-      uFillWidthResponse: { value: .5 },
       uBandDistribution: { value: 1 },
       uBandCount: { value: 64 },
       uInvert: { value: 0 },
@@ -655,9 +657,8 @@ export class VisualScene {
       * Math.min(1,12/Math.max(3,s.gapFillDensity ?? 12))
       * Math.min(1,3/Math.max(1,s.gapFillRows ?? 3));
     this.uniforms.uFillOnlyOpen.value = s.gapFillOnlyOpen === false ? 0 : 1;
-    this.uniforms.uFillAdaptive.value = s.gapFillAdaptive === false ? 0 : 1;
+    this.uniforms.uFillAdaptive.value = Math.max(0,Math.min(1,Number(s.gapFillAdaptive ?? 1)));
     this.uniforms.uFillSamples.value = Math.max(3,Math.min(24,s.gapFillDensity ?? 12));
-    this.uniforms.uFillWidthResponse.value = Math.max(.25,Math.min(2,s.gapFillWidthResponse ?? .5));
     this.uniforms.uLayers.value.set(s.motionWave, s.motionRipple, s.motionBands, s.motionDrift);
     this.uniforms.uExtraLayers.value.set(s.motionSwirl, s.motionBreathe, s.motionSweep, s.motionBandShake);
     this.uniforms.uBandMap.value = BAND_MAPS[s.bandMap] ?? 0;
