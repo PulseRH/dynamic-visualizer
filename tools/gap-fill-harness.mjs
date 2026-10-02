@@ -51,4 +51,22 @@ for(const gapFillRows of [1,7])for(const gapFillDensity of [3,24])for(const gapF
   for(let f=0;f<tuned.fillFractions.length;f++)assert.ok(tuned.fillFractions[f]>0 && tuned.fillFractions[f]<1);
 }
 assert.equal(sampleImageToCloud(image,null,12000,0).count,sampleImageToCloud(image,null,12000).count);
+const horizontalGradient={w:400,h:240,data:Float32Array.from({length:400*240},(_,i)=>Math.floor(i/400)/239)};
+const verticalSeams=sampleImageToCloud(image,gradient,12000,1,{bands:16});
+const horizontalSeams=sampleImageToCloud(image,horizontalGradient,12000,1,{bands:16});
+const extra=cloud=>cloud.count-cloud.baseCount;
+assert.ok(Math.min(extra(verticalSeams),extra(horizontalSeams))/Math.max(extra(verticalSeams),extra(horizontalSeams))>.85,'vertical/horizontal coverage should be comparable');
+let diagonal=false;
+for(let f=0;f<verticalSeams.fillFractions.length;f++){
+  const dx=Math.abs(verticalSeams.fillEnds[f*4]-verticalSeams.fillStarts[f*4]);
+  const dy=Math.abs(verticalSeams.fillEnds[f*4+1]-verticalSeams.fillStarts[f*4+1]);
+  if(dx>0 && dy>0)diagonal=true;
+  assert.ok(verticalSeams.rands[verticalSeams.baseCount+f]>=0 && verticalSeams.rands[verticalSeams.baseCount+f]<1,'adaptive ranks stay inside pool');
+}
+assert.ok(diagonal);
+const step={w:400,h:240,data:Float32Array.from({length:400*240},(_,i)=>i%400<200 ? .45:.55)};
+const guarded=sampleImageToCloud(image,step,12000,1,{bands:16,gapFillDepthLimit:.06});
+const relaxed=sampleImageToCloud(image,step,12000,1,{bands:16,gapFillDepthLimit:.15});
+const crossing=cloud=>Array.from(cloud.fillFractions).filter((_,f)=>cloud.fillStarts[f*4+2]!==cloud.fillEnds[f*4+2]).length;
+assert.equal(crossing(guarded),0);assert.ok(crossing(relaxed)>0,'depth limit makes formerly rejected seams available');
 console.log(`Gap fill adds ${filled.count-base.count} same-surface points; base data unchanged, repeatable, transparent holes preserved, extra count capped.`);

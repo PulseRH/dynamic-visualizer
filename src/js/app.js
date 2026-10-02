@@ -250,6 +250,7 @@ async function rebuildCloud() {
   const cloud = await buildCloud(currentImage, depth, get('pointCount'),get('gapFill'),{
     bandMap:get('bandMap'),bandDistribution:get('bandDistribution'),bands:get('bands'),invertBands:get('invertBands'),
     gapFillDensity:get('gapFillDensity'),gapFillRows:get('gapFillRows'),gapFillSpread:get('gapFillSpread'),
+    gapFillDepthLimit:get('gapFillDepthLimit'),
   });
   if (token !== rebuildToken) return;
   const previousImage=displayedImage;
@@ -418,7 +419,7 @@ onChange((all, patch) => {
     clearTimeout(countTimer);
     countTimer = setTimeout(() => rebuildCloud(), 350);
   }
-  else if(get('gapFill')>0 && ['bands','bandMap','bandDistribution','invertBands','gapFillDensity','gapFillRows','gapFillSpread'].some(key=>key in patch)){
+  else if(get('gapFill')>0 && ['bands','bandMap','bandDistribution','invertBands','gapFillDensity','gapFillRows','gapFillSpread','gapFillDepthLimit'].some(key=>key in patch)){
     clearTimeout(countTimer);countTimer=setTimeout(()=>rebuildCloud(),350);
   }
 });

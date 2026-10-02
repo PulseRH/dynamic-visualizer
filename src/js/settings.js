@@ -9,6 +9,8 @@ const DEFAULTS = {
   gapFillSpread: .8,       // total row width in original point spacings
   gapFillBrightness: .35,  // independent additive fill brightness
   gapFillOnlyOpen: true,   // hide extra seam density when neighbours sit together
+  gapFillAdaptive: true,   // reveal more of the reserved pool as screen gaps widen
+  gapFillDepthLimit: .06,  // maximum nearness difference allowed across a bridge
   depthShading: 0,         // dim distant surfaces while retaining foreground highlights
   pointCount: 160000,
   pointSize: 1.0,

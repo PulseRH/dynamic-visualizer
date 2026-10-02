@@ -190,6 +190,8 @@ export class UI {
     slider('gapFillSpread','gapFillSpread',v=>`${Number(v).toFixed(2)}×`);
     slider('gapFillBrightness','gapFillBrightness',v=>`${Math.round(v*100)}%`);
     $('gapFillOnlyOpen').onchange=e=>set({gapFillOnlyOpen:e.target.checked});
+    $('gapFillAdaptive').onchange=e=>set({gapFillAdaptive:e.target.checked});
+    slider('gapFillDepthLimit','gapFillDepthLimit',v=>`${Math.round(v*100)}%`);
     slider('depthShading','depthShading',v=>`${Math.round(v*100)}%`);
     slider('pointCount', 'pointCount', (v) => `${Math.round(v / 1000)}k`);
     slider('pointSize', 'pointSize', (v) => v.toFixed(1));
@@ -426,7 +428,8 @@ export class UI {
     };
     setSlider('depthScale', get('depthScale'));
     $('gapFillOnlyOpen').checked=get('gapFillOnlyOpen')!==false;
-    for(const key of ['gapFill','depthShading','gapFillBrightness']){
+    $('gapFillAdaptive').checked=get('gapFillAdaptive')!==false;
+    for(const key of ['gapFill','depthShading','gapFillBrightness','gapFillDepthLimit']){
       setSlider(key,get(key));
       $(key).parentElement.querySelector('.val').textContent=`${Math.round(get(key)*100)}%`;
     }

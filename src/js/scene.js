@@ -49,6 +49,8 @@ const VERT = /* glsl */ `
     attribute float aFillT;
     uniform float uFillBrightness;
     uniform float uFillOnlyOpen;
+    uniform float uFillAdaptive;
+    uniform float uFillSamples;
   #endif
 
   varying vec3 vColor;
@@ -230,7 +232,7 @@ const VERT = /* glsl */ `
       evaluatePoint(aFillEnd.xyz, aFillEnd.w, aColor, last, lastColour, lastAmp, lastSize);
       vec3 pos = mix(first, last, aFillT);
       float opening = 1.0;
-      if (uFillOnlyOpen > 0.5) {
+      if (uFillOnlyOpen > 0.5 || uFillAdaptive > 0.5) {
         // Measure extra screen separation, with the resting pair translated
         // to the animated midpoint. Shared movement/camera zoom therefore
         // cannot turn a closed seam into a bright contour.
@@ -247,7 +249,15 @@ const VERT = /* glsl */ `
           vec2 metric = vec2(projectionMatrix[1][1] / projectionMatrix[0][0], 1.0);
           float currentGap = length((lastClip.xy / lastClip.w - firstClip.xy / firstClip.w) * metric);
           float restingGap = length((restLast.xy / restLast.w - restFirst.xy / restFirst.w) * metric);
-          opening = smoothstep(0.15, 0.85, (currentGap - restingGap) / max(restingGap, 0.000001));
+          float extraSpacing = max(0.0, (currentGap - restingGap) / max(restingGap, 0.000001));
+          if (uFillOnlyOpen > 0.5) opening = smoothstep(0.15, 0.85, extraSpacing);
+          if (uFillAdaptive > 0.5) {
+            // The pool is built once. Reveal a progressive, distributed subset
+            // with one-point fades rather than drawing a full row in tiny gaps.
+            float visibleSamples = min(uFillSamples, extraSpacing * uFillSamples / 12.0);
+            float rank = aRand * uFillSamples;
+            opening *= smoothstep(rank, rank + 1.0, visibleSamples);
+          }
         }
       }
       gl_Position = projectionMatrix * (modelViewMatrix * vec4(pos, 1.0));
@@ -356,6 +366,8 @@ export class VisualScene {
       uDepthShading: { value: 0 },
       uFillBrightness: { value: .35 },
       uFillOnlyOpen: { value: 1 },
+      uFillAdaptive: { value: 1 },
+      uFillSamples: { value: 12 },
       uBandDistribution: { value: 1 },
       uBandCount: { value: 64 },
       uInvert: { value: 0 },
@@ -627,6 +639,8 @@ export class VisualScene {
       * Math.min(1,12/Math.max(3,s.gapFillDensity ?? 12))
       * Math.min(1,3/Math.max(1,s.gapFillRows ?? 3));
     this.uniforms.uFillOnlyOpen.value = s.gapFillOnlyOpen === false ? 0 : 1;
+    this.uniforms.uFillAdaptive.value = s.gapFillAdaptive === false ? 0 : 1;
+    this.uniforms.uFillSamples.value = Math.max(3,Math.min(24,s.gapFillDensity ?? 12));
     this.uniforms.uLayers.value.set(s.motionWave, s.motionRipple, s.motionBands, s.motionDrift);
     this.uniforms.uExtraLayers.value.set(s.motionSwirl, s.motionBreathe, s.motionSweep, s.motionBandShake);
     this.uniforms.uBandMap.value = BAND_MAPS[s.bandMap] ?? 0;

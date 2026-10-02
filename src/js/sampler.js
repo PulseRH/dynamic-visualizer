@@ -16,6 +16,7 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
   const rows = Math.max(1, Math.floor(H / cell));
   const n = cols * rows;
   const fill=Math.max(0,Math.min(1,Number.isFinite(gapFill) ? gapFill:0));
+  const depthLimit=Math.max(.01,Math.min(.3,mapping.gapFillDepthLimit ?? .06));
   const extraCapacity=Math.floor(Math.min(n*1.5,180000)*fill);
   const capacity=n+extraCapacity;
   const grid=extraCapacity ? new Int32Array(n).fill(-1):null;
@@ -72,30 +73,31 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
   if(grid && baseCount>1){
     // Rank neighbour gaps with a small histogram, rather than sorting hundreds
     // of thousands of JS objects. Temporary arrays live only in the worker.
-    const keys=new Int32Array(n*2), scores=new Uint8Array(n*2), histogram=new Uint32Array(256);
+    const keys=new Int32Array(n*4), scores=new Uint8Array(n*4), histogram=new Uint32Array(256);
+    const neighbours=[1,cols,cols+1,cols-1];
     const spacing2=(cell/H)**2;
     let candidates=0;
     for(let slot=0;slot<n;slot++){
       const a=grid[slot];if(a<0)continue;
-      for(let axis=0;axis<2;axis++){
-        if(axis===0 ? slot%cols===cols-1 : slot+cols>=n)continue;
-        const b=grid[slot+(axis===0 ? 1:cols)];if(b<0)continue;
+      for(let axis=0;axis<4;axis++){
+        if((axis!==0 && slot+cols>=n) || ((axis===0||axis===2) && slot%cols===cols-1) || (axis===3 && slot%cols===0))continue;
+        const b=grid[slot+neighbours[axis]];if(b<0)continue;
         const ai=a*3,bi=b*3;
-        if(Math.abs(positions[ai+2]-positions[bi+2])>.06)continue;
+        if(Math.abs(positions[ai+2]-positions[bi+2])>depthLimit)continue;
         const x=(positions[ai]+positions[bi])*.5, y=(positions[ai+1]+positions[bi+1])*.5;
         const u=x/aspect+.5,v=.5-y;
         const midNear=depth ? sampleGrid(depth,u,v):.5;
-        if(Math.abs(midNear-positions[ai+2])>.06 || Math.abs(midNear-positions[bi+2])>.06)continue;
+        if(Math.abs(midNear-positions[ai+2])>depthLimit || Math.abs(midNear-positions[bi+2])>depthLimit)continue;
         const sx=Math.min(W-1,Math.max(0,Math.floor(u*W))),sy=Math.min(H-1,Math.max(0,Math.floor(v*H)));
         if(px[(sy*W+sx)*4+3]<24)continue;
         const distance2=(positions[ai]-positions[bi])**2+(positions[ai+1]-positions[bi+1])**2;
-        const ratio=distance2/spacing2;
+        const ratio=distance2/(spacing2*(axis>=2 ? 2:1));
         const seam=bandAt(a)!==bandAt(b);
         if(!seam && ratio<=1)continue;
         // Band seams take precedence over density gaps. Unlike ordinary
         // particles, the generated points will interpolate both endpoints.
         const score=seam ? 192+Math.min(63,Math.floor(ratio*12)):Math.min(127,Math.floor((ratio-1)*32));
-        keys[candidates]=slot*2+axis;scores[candidates]=score;histogram[score]++;candidates++;
+        keys[candidates]=slot*4+axis;scores[candidates]=score;histogram[score]++;candidates++;
       }
     }
     const pointBudget=Math.floor(Math.min(baseCount*1.5,180000)*fill);
@@ -104,20 +106,37 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
     const samplesPerEdge=Math.max(3,Math.min(24,Math.round(mapping.gapFillDensity ?? 12)));
     const fillRows=Math.max(1,Math.min(7,Math.round(mapping.gapFillRows ?? 3)));
     const spread=Math.max(.2,Math.min(2,mapping.gapFillSpread ?? .8));
+    // Reveal central points first, then fill the widest remaining intervals.
+    // This progressive order spreads even a small active count across a row.
+    const sampleOrder=[],selected=[0,samplesPerEdge+1];
+    while(sampleOrder.length<samplesPerEdge){
+      let best=0,bestDistance=-1;
+      for(let i=1;i<=samplesPerEdge;i++){
+        const distance=Math.min(...selected.map(j=>Math.abs(i-j)));
+        if(distance>bestDistance){best=i;bestDistance=distance;}
+      }
+      sampleOrder.push(best);selected.push(best);
+    }
     const budget=Math.min(candidates,Math.floor(pointBudget/(samplesPerEdge*fillRows)));
     let threshold=255,above=0;
     while(threshold>0 && above+histogram[threshold]<budget){above+=histogram[threshold];threshold--;}
-    let ties=budget-above;
+    const ties=budget-above;
+    let tieSeen=0,tieSelected=0;
     const validEndpoint=(x,y,near)=>{
       const u=x/aspect+.5,v=.5-y;
       if(u<0||u>=1||v<0||v>=1)return false;
-      return px[(Math.floor(v*H)*W+Math.floor(u*W))*4+3]>=24 && (!depth||Math.abs(sampleGrid(depth,u,v)-near)<=.06);
+      return px[(Math.floor(v*H)*W+Math.floor(u*W))*4+3]>=24 && (!depth||Math.abs(sampleGrid(depth,u,v)-near)<=depthLimit);
     };
     let edges=0;
     for(let c=0;c<candidates && edges<budget;c++){
-      if(scores[c]<threshold || (scores[c]===threshold && ties--<=0))continue;
-      const slot=keys[c]>>1, axis=keys[c]&1;
-      const ai=grid[slot]*3,bi=grid[slot+(axis===0 ? 1:cols)]*3;
+      if(scores[c]<threshold)continue;
+      if(scores[c]===threshold){
+        const target=Math.floor(++tieSeen*ties/histogram[threshold]);
+        if(target===tieSelected)continue;
+        tieSelected=target;
+      }
+      const slot=keys[c]>>2, axis=keys[c]&3;
+      const ai=grid[slot]*3,bi=grid[slot+neighbours[axis]]*3;
       edges++;
       const dx=positions[bi]-positions[ai],dy=positions[bi+1]-positions[ai+1];
       const length=Math.hypot(dx,dy);
@@ -130,17 +149,17 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
         const ax=positions[ai]+ox,ay=positions[ai+1]+oy,bx=positions[bi]+ox,by=positions[bi+1]+oy;
         if(!validEndpoint(ax,ay,positions[ai+2])||!validEndpoint(bx,by,positions[bi+2]))continue;
         for(let sample=1;sample<=samplesPerEdge;sample++){
-          const t=(sample+(rand()-.5)*.6)/(samplesPerEdge+1);
+          const t=(sampleOrder[sample-1]+(rand()-.5)*.6)/(samplesPerEdge+1);
           const x=ax*(1-t)+bx*t,y=ay*(1-t)+by*t,u=x/aspect+.5,v=.5-y;
           const sx=Math.min(W-1,Math.max(0,Math.floor(u*W))),sy=Math.min(H-1,Math.max(0,Math.floor(v*H))),i=(sy*W+sx)*4,p=used*3;
           const near=depth ? sampleGrid(depth,u,v):.5;
-          if(px[i+3]<24 || Math.abs(near-positions[ai+2])>.06 || Math.abs(near-positions[bi+2])>.06)continue;
+          if(px[i+3]<24 || Math.abs(near-positions[ai+2])>depthLimit || Math.abs(near-positions[bi+2])>depthLimit)continue;
           positions[p]=x;positions[p+1]=y;positions[p+2]=near;
           colors[p]=px[i]/255;colors[p+1]=px[i+1]/255;colors[p+2]=px[i+2]/255;
           const f=used-baseCount;
           fillStarts.set([ax,ay,positions[ai+2],rands[ai/3]],f*4);
           fillEnds.set([bx,by,positions[bi+2],rands[bi/3]],f*4);
-          fillFractions[f]=t;rands[used]=rand();used++;
+          fillFractions[f]=t;rands[used]=(sample-1)/samplesPerEdge;used++;
         }
       }
     }
