@@ -53,6 +53,7 @@ try{
  scene.uniforms.uFillAdaptive.value=0;
  scene.setCloud({count:3,baseCount:2,aspect:4/3,positions:new Float32Array([.15,.05,.5,.17,.05,.5,.16,.05,.5]),colors:new Float32Array(9).fill(.3),rands:new Float32Array([.2,.8,.5]),fillStarts:new Float32Array([.15,.05,.5,.2]),fillEnds:new Float32Array([.17,.05,.5,.8]),fillFractions:new Float32Array([.5])});
  scene.points.visible=false;
+ scene.uniforms.uFillSpacing.value=.02;
  const drawWeight=()=>{scene.bandTex.needsUpdate=true;scene.renderer.render(scene.scene,scene.camera);gl.readPixels(0,0,400,300,gl.RGBA,gl.UNSIGNED_BYTE,pixels);return pixels.reduce((sum,v,i)=>sum+(i%4===3 ? 0:v),0);};
  for(const level of [0,128,255]){
   for(let band=0;band<scene.bandCount;band++)scene.bandData[band*4]=level;
@@ -69,6 +70,7 @@ try{
  for(const y of [-.12,-.04,.04,.12]){starts.push(.165,y,.5,.2);ends.push(.168,y,.5,.8);positions.push(.1665,y,.5);}
  scene.setCloud({count:6,baseCount:2,aspect:4/3,positions:new Float32Array(positions),colors:new Float32Array(18).fill(.3),rands:new Float32Array([.2,.8,0,.25,.5,.75]),fillStarts:new Float32Array(starts),fillEnds:new Float32Array(ends),fillFractions:new Float32Array(4).fill(.5)});
  scene.points.visible=false;scene.uniforms.uFillAdaptive.value=1;scene.uniforms.uFillSamples.value=4;scene.uniforms.uZMove.value=0;scene.uniforms.uFillBrightness.value=1;scene.uniforms.uSize.value=2;
+ scene.uniforms.uFillSpacing.value=.003;scene.uniforms.uFillWidthResponse.value=.5;
  for(let band=0;band<scene.bandCount;band++)scene.bandData[band*4]=band===40 ? 255:0;
  let bestTime=0,bestDistance=0;scene.uniforms.uIntensity.value=1.5;
  for(let time=0;time<40;time++){
@@ -97,7 +99,17 @@ try{
  if(!moderateStrength)throw new Error('Could not generate moderate opening');
  let moderateCount=0;
  for(let rank=0;rank<3;rank++){scene.fillPoints.geometry.setDrawRange(rank,1);if(drawWeight()>0)moderateCount++;}
- if(moderateCount!==3)throw new Error('Low-density moderate gaps lost coverage: '+moderateCount);
+ if(moderateCount===0 || moderateCount===3)throw new Error('Moderate gaps need useful coverage without saturating: '+moderateCount);
+ scene.fillPoints.geometry.setDrawRange(0,1);
+ const compensatedLight=drawWeight();scene.uniforms.uFillAdaptive.value=0;
+ const fullLight=drawWeight();scene.uniforms.uFillAdaptive.value=1;
+ if(!(compensatedLight>0 && compensatedLight<fullLight))throw new Error('Narrow-gap highlight compensation failed');
+ scene.uniforms.uFillWidthResponse.value=2;
+ let fastCount=0;
+ for(let rank=0;rank<3;rank++){scene.fillPoints.geometry.setDrawRange(rank,1);if(drawWeight()>0)fastCount++;}
+ if(fastCount<=moderateCount)throw new Error('Width response did not change the visible count');
+ scene.uniforms.uFillWidthResponse.value=.5;scene.uniforms.uFillSpacing.value=.1;
+ for(let rank=0;rank<3;rank++){scene.fillPoints.geometry.setDrawRange(rank,1);if(drawWeight()>0)throw new Error('Nearly coincident neighbours overrode normal spacing');}
  scene.setCloud({count:2,aspect:4/3,positions:new Float32Array([...start.slice(0,3),...end.slice(0,3)]),colors:new Float32Array(6).fill(.3),rands:new Float32Array([.2,.8])});
  if(scene.fillPoints)throw new Error('Fill geometry retained after disabling');
  document.querySelector('#result').textContent='PASS: width-adaptive counts '+counts+'; closed/shared-motion seams have no outline; endpoint motion, size, brightness and cleanup work.';

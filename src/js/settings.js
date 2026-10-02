@@ -10,6 +10,7 @@ const DEFAULTS = {
   gapFillBrightness: .35,  // independent additive fill brightness
   gapFillOnlyOpen: true,   // hide extra seam density when neighbours sit together
   gapFillAdaptive: true,   // reveal more of the reserved pool as screen gaps widen
+  gapFillWidthResponse: .5, // extra visible points per original spacing of opening
   gapFillDepthLimit: .06,  // maximum nearness difference allowed across a bridge
   depthShading: 0,         // dim distant surfaces while retaining foreground highlights
   pointCount: 160000,

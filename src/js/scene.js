@@ -51,6 +51,8 @@ const VERT = /* glsl */ `
     uniform float uFillOnlyOpen;
     uniform float uFillAdaptive;
     uniform float uFillSamples;
+    uniform float uFillSpacing;
+    uniform float uFillWidthResponse;
   #endif
 
   varying vec3 vColor;
@@ -232,6 +234,7 @@ const VERT = /* glsl */ `
       evaluatePoint(aFillEnd.xyz, aFillEnd.w, aColor, last, lastColour, lastAmp, lastSize);
       vec3 pos = mix(first, last, aFillT);
       float opening = 1.0;
+      float fillLight = 1.0;
       if (uFillOnlyOpen > 0.5 || uFillAdaptive > 0.5) {
         // Measure extra screen separation, with the resting pair translated
         // to the animated midpoint. Shared movement/camera zoom therefore
@@ -249,24 +252,30 @@ const VERT = /* glsl */ `
           vec2 metric = vec2(projectionMatrix[1][1] / projectionMatrix[0][0], 1.0);
           float currentGap = length((lastClip.xy / lastClip.w - firstClip.xy / firstClip.w) * metric);
           float restingGap = length((restLast.xy / restLast.w - restFirst.xy / restFirst.w) * metric);
-          float extraSpacing = max(0.0, (currentGap - restingGap) / max(restingGap, 0.000001));
+          // Jitter can put endpoints almost on top of each other. Use at
+          // least one original grid spacing so tiny gaps cannot saturate.
+          float centreW = (restFirst.w + restLast.w) * 0.5;
+          float referenceGap = max(restingGap, projectionMatrix[1][1] * uFillSpacing / centreW);
+          float extraSpacing = max(0.0, (currentGap - restingGap) / max(referenceGap, 0.000001));
           if (uFillOnlyOpen > 0.5) opening = smoothstep(0.15, 0.85, extraSpacing);
           if (uFillAdaptive > 0.5) {
             // The pool is built once. Reveal a progressive, distributed subset
             // with one-point fades rather than drawing a full row in tiny gaps.
-            // Density is a ceiling, not a divisor: low ceilings must not make
-            // usable gaps almost empty. Fade in a small coverage floor, then
-            // add roughly one point per extra original spacing.
-            float coverage = 2.0 * smoothstep(0.15, 0.85, extraSpacing);
-            float visibleSamples = min(uFillSamples, extraSpacing + coverage);
+            // One initial coverage point, then a tunable ramp. Reserve the
+            // full pool for wide openings even with a low maximum count.
+            float coverage = smoothstep(0.15, 0.85, extraSpacing);
+            float visibleSamples = min(uFillSamples, coverage + extraSpacing * uFillWidthResponse);
             float rank = aRand * uFillSamples;
             opening *= smoothstep(rank, rank + 1.0, visibleSamples);
+            // Share the light over the available space rather than adding
+            // full brightness from several points to a narrow seam.
+            fillLight = min(1.0, extraSpacing / max(visibleSamples, 1.0));
           }
         }
       }
       gl_Position = projectionMatrix * (modelViewMatrix * vec4(pos, 1.0));
       gl_PointSize = mix(firstSize, lastSize, aFillT);
-      vColor = mix(firstColour, lastColour, aFillT) * uFillBrightness * opening;
+      vColor = mix(firstColour, lastColour, aFillT) * uFillBrightness * opening * fillLight;
       vAmp = mix(firstAmp, lastAmp, aFillT);
       if (opening == 0.0) {
         gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
@@ -372,6 +381,8 @@ export class VisualScene {
       uFillOnlyOpen: { value: 1 },
       uFillAdaptive: { value: 1 },
       uFillSamples: { value: 12 },
+      uFillSpacing: { value: 1 / 300 },
+      uFillWidthResponse: { value: .5 },
       uBandDistribution: { value: 1 },
       uBandCount: { value: 64 },
       uInvert: { value: 0 },
@@ -526,6 +537,7 @@ export class VisualScene {
     // world spacing between points -> density-aware pixel size for the shader
     const rows = Math.max(1, Math.round(Math.sqrt((cloud.baseCount ?? cloud.count) / cloud.aspect)));
     this.spacingWorld = 1 / rows;
+    this.uniforms.uFillSpacing.value = this.spacingWorld;
     this._fitCamera();
     this._layoutBackdrop();
   }
@@ -645,6 +657,7 @@ export class VisualScene {
     this.uniforms.uFillOnlyOpen.value = s.gapFillOnlyOpen === false ? 0 : 1;
     this.uniforms.uFillAdaptive.value = s.gapFillAdaptive === false ? 0 : 1;
     this.uniforms.uFillSamples.value = Math.max(3,Math.min(24,s.gapFillDensity ?? 12));
+    this.uniforms.uFillWidthResponse.value = Math.max(.25,Math.min(2,s.gapFillWidthResponse ?? .5));
     this.uniforms.uLayers.value.set(s.motionWave, s.motionRipple, s.motionBands, s.motionDrift);
     this.uniforms.uExtraLayers.value.set(s.motionSwirl, s.motionBreathe, s.motionSweep, s.motionBandShake);
     this.uniforms.uBandMap.value = BAND_MAPS[s.bandMap] ?? 0;
