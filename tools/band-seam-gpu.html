@@ -78,12 +78,26 @@ try{
  }
  scene.uniforms.uXYTime.value=bestTime;
  const counts=[];
- for(const strength of [0,.1,.3,1.5]){
+ for(const strength of [0,.015,.06,1.5]){
   scene.uniforms.uIntensity.value=strength;let count=0;
   for(let rank=0;rank<4;rank++){scene.fillPoints.geometry.setDrawRange(rank,1);if(drawWeight()>0)count++;}
   counts.push(count);
  }
  if(counts[0]!==0 || counts[3]!==4 || counts[1]>=counts[3] || counts.some((v,i)=>i>0&&v<counts[i-1]))throw new Error('Width-adaptive count failed: '+counts);
+ // A low maximum must not divide away coverage in moderately open seams.
+ scene.uniforms.uFillSamples.value=3;
+ scene.fillPoints.geometry.attributes.aRand.array.set([0,1/3,2/3,.99]);
+ scene.fillPoints.geometry.attributes.aRand.needsUpdate=true;
+ let moderateStrength=0;
+ for(let strength=.01;strength<.5;strength+=.005){
+  scene.uniforms.uIntensity.value=strength;
+  animatedSample(.165,0,.5,.2,scene.uniforms,scene.bandData,a,0);animatedSample(.168,0,.5,.8,scene.uniforms,scene.bandData,b,0);
+  if(Math.hypot(a[0]-b[0],a[1]-b[1])/.003-1>=1){moderateStrength=strength;break;}
+ }
+ if(!moderateStrength)throw new Error('Could not generate moderate opening');
+ let moderateCount=0;
+ for(let rank=0;rank<3;rank++){scene.fillPoints.geometry.setDrawRange(rank,1);if(drawWeight()>0)moderateCount++;}
+ if(moderateCount!==3)throw new Error('Low-density moderate gaps lost coverage: '+moderateCount);
  scene.setCloud({count:2,aspect:4/3,positions:new Float32Array([...start.slice(0,3),...end.slice(0,3)]),colors:new Float32Array(6).fill(.3),rands:new Float32Array([.2,.8])});
  if(scene.fillPoints)throw new Error('Fill geometry retained after disabling');
  document.querySelector('#result').textContent='PASS: width-adaptive counts '+counts+'; closed/shared-motion seams have no outline; endpoint motion, size, brightness and cleanup work.';

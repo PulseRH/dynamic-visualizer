@@ -254,7 +254,11 @@ const VERT = /* glsl */ `
           if (uFillAdaptive > 0.5) {
             // The pool is built once. Reveal a progressive, distributed subset
             // with one-point fades rather than drawing a full row in tiny gaps.
-            float visibleSamples = min(uFillSamples, extraSpacing * uFillSamples / 12.0);
+            // Density is a ceiling, not a divisor: low ceilings must not make
+            // usable gaps almost empty. Fade in a small coverage floor, then
+            // add roughly one point per extra original spacing.
+            float coverage = 2.0 * smoothstep(0.15, 0.85, extraSpacing);
+            float visibleSamples = min(uFillSamples, extraSpacing + coverage);
             float rank = aRand * uFillSamples;
             opening *= smoothstep(rank, rank + 1.0, visibleSamples);
           }
