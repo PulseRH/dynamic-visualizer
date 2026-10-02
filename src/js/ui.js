@@ -184,6 +184,7 @@ export class UI {
       };
     };
     slider('depthScale', 'depthScale', (v) => v.toFixed(2));
+    slider('depthShape','depthShape',v=>`${Math.round(v*100)}%`);
     slider('gapFill','gapFill',v=>`${Math.round(v*100)}%`);
     slider('gapFillDensity','gapFillDensity',v=>String(Math.round(v)));
     slider('gapFillRows','gapFillRows',v=>String(Math.round(v)));
@@ -428,7 +429,7 @@ export class UI {
     };
     setSlider('depthScale', get('depthScale'));
     $('gapFillOnlyOpen').checked=get('gapFillOnlyOpen')!==false;
-    for(const key of ['gapFill','depthShading','gapFillBrightness','gapFillDepthLimit','gapFillAdaptive']){
+    for(const key of ['depthShape','gapFill','depthShading','gapFillBrightness','gapFillDepthLimit','gapFillAdaptive']){
       setSlider(key,get(key));
       $(key).parentElement.querySelector('.val').textContent=`${Math.round(get(key)*100)}%`;
     }

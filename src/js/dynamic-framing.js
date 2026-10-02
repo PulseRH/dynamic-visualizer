@@ -1,4 +1,4 @@
-import { animatedSample } from './framing-motion.js';
+import { animatedSample, shapedDepth } from './framing-motion.js';
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
 // Select the outermost point in each narrow border strip once per image.
@@ -40,7 +40,7 @@ export class DynamicFraming {
     let peak = 0;
     for (let b = 0; b < u.uBandCount.value; b++) peak = Math.max(peak, data[b * 4] / 255);
     // Keep every depth layer in front of the camera; zoom restores screen size.
-    const maxZ = this.maxNear * u.uDepthScale.value
+    const maxZ = shapedDepth(this.maxNear,u.uDepthShape?.value ?? 0) * u.uDepthScale.value
       + peak * u.uIntensity.value * u.uDyn.value * u.uZMove.value * .11 * 1.85 + u.uCursor.value.z * .1;
     const exposure = Math.abs(camera.position.x) * (this.aspect / 2 + Math.abs(camera.position.x))
       + Math.abs(camera.position.y) * (.5 + Math.abs(camera.position.y));

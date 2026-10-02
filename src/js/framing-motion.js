@@ -1,4 +1,5 @@
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+export const shapedDepth=(near,amount=0)=>near+amount*near*(near-1);
 // A CPU copy of the positional vertex operations, evaluated on <=1024 samples
 // only. It uses the exact uploaded band levels and the shader's phase clocks.
 export function animatedSample(x, y, near, rand, u, data, out, offset) {
@@ -21,7 +22,7 @@ export function animatedSample(x, y, near, rand, u, data, out, offset) {
   const direct = 1 + (amp * 2 - 1.8) * u.uCentered.value;
   const depthRange = (0.35 + 0.65 * near) * (1 - u.uEqualDepthMovement.value) + u.uEqualDepthMovement.value;
   const drive = amp * u.uIntensity.value * u.uDyn.value;
-  let z = near * u.uDepthScale.value + (direct + style / Math.max(1, total) * 0.65) * drive * u.uZMove.value * 0.11 * depthRange;
+  let z = shapedDepth(near,u.uDepthShape?.value ?? 0) * u.uDepthScale.value + (direct + style / Math.max(1, total) * 0.65) * drive * u.uZMove.value * 0.11 * depthRange;
   let px = x + Math.sin(xyTime * 3.1 + rand * 40) * drive * u.uXYMove.value * 0.006;
   let py = y + Math.cos(xyTime * 2.6 + rand * 30) * drive * u.uXYMove.value * 0.006;
   const layerDrive = amp * Math.min(u.uIntensity.value * u.uDyn.value, 1.5);

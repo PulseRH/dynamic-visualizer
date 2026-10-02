@@ -12,6 +12,7 @@ const VERT = /* glsl */ `
   uniform float uEnergy;
   uniform float uIntensity;
   uniform float uDepthScale;
+  uniform float uDepthShape;
   uniform float uDepthShading;
   uniform float uAspect;
   uniform float uSize;
@@ -56,6 +57,10 @@ const VERT = /* glsl */ `
 
   varying vec3 vColor;
   varying float vAmp;
+
+  float shapedDepth(float near) {
+    return near + uDepthShape * near * (near - 1.0);
+  }
 
   void evaluatePoint(vec3 pointPosition, float pointRand, vec3 pointColor, out vec3 pos, out vec3 colourOut, out float ampOut, out float pointSize) {
     float near = pointPosition.z;                 // 0..1, 1 = closest to viewer
@@ -116,7 +121,7 @@ const VERT = /* glsl */ `
     float depthRange = mix(0.35 + 0.65 * near, 1.0, uEqualDepthMovement);
     float disp = w * amp * uIntensity * uZMove * 0.11 * depthRange * uDyn;
 
-    pos = vec3(pointPosition.xy, near * uDepthScale + disp);
+    pos = vec3(pointPosition.xy, shapedDepth(near) * uDepthScale + disp);
     pos.xy += vec2(sin(uXYTime * 3.1 + pointRand * 40.0), cos(uXYTime * 2.6 + pointRand * 30.0))
             * amp * 0.006 * uIntensity * uXYMove * uDyn;
     // Explicit layers have their own amounts; XY move controls the original
@@ -239,7 +244,7 @@ const VERT = /* glsl */ `
         // to the animated midpoint. Shared movement/camera zoom therefore
         // cannot turn a closed seam into a bright contour.
         vec3 restDelta = vec3(aFillEnd.xy - aFillStart.xy,
-                             (aFillEnd.z - aFillStart.z) * uDepthScale);
+                             (shapedDepth(aFillEnd.z) - shapedDepth(aFillStart.z)) * uDepthScale);
         vec3 centre = (first + last) * 0.5;
         vec4 firstClip = projectionMatrix * (modelViewMatrix * vec4(first, 1.0));
         vec4 lastClip = projectionMatrix * (modelViewMatrix * vec4(last, 1.0));
@@ -373,6 +378,7 @@ export class VisualScene {
       uEnergy: { value: 0 },
       uIntensity: { value: 1 },
       uDepthScale: { value: 0.35 },
+      uDepthShape: { value: 0 },
       uAspect: { value: 1 },
       uSize: { value: 2 },
       uCamZ: { value: 1.4 },
@@ -651,6 +657,7 @@ export class VisualScene {
     this.uniforms.uHueEnabled.value = hueReaction !== 0 || hueCycle > 0 ? 1 : 0;
     this.uniforms.uIntensity.value = s.intensity;
     this.uniforms.uDepthScale.value = s.depthScale;
+    this.uniforms.uDepthShape.value = Math.max(0,Math.min(1,s.depthShape ?? 0));
     this.uniforms.uDepthShading.value = Math.max(0,Math.min(1,s.depthShading || 0));
     // Hold approximate light per bridge steady as rows/samples increase.
     this.uniforms.uFillBrightness.value = Math.max(0,Math.min(1,s.gapFillBrightness ?? .35))

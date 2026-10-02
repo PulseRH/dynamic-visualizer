@@ -67,6 +67,7 @@
         <input type="range" id="depthScale" min="0" max="1.5" step="0.01" />
         <span class="val"></span>
       </label>
+      <label class="slider-row"><span class="lbl">Depth shape<span class="q" data-tip="Compress background depth spacing and spread foreground depth spacing for more pronounced parallax. 0% preserves the original depth; 100% gives the strongest shaping. Keeps nearest/farthest depth and frequency assignments unchanged. Requires Depth strength above zero. Updates on the GPU without resampling or rerunning AI."></span></span><input type="range" id="depthShape" min="0" max="1" step="0.01" /><span class="val"></span></label>
       <label class="slider-row"><span class="lbl">Gap fill<span class="q" data-tip="Fill moving band seams with points that interpolate both neighbours' motion and light. Prioritises band boundaries on the same surface, then wider density gaps. Adds normal-sized points across seams. Controls the extra-point budget; use Fill tuning to adjust rows, spacing and brightness. Avoids sharp depth boundaries and transparent holes. Generated only during cloud rebuilds; capped at 150% extra points or 180k, whichever is smaller. Performance warning: extra rows increase GPU work and memory; high fill can reduce frame rate. Adds drawing cost and cannot reconstruct hidden objects."></span></span><input type="range" id="gapFill" min="0" max="1" step="0.01" /><span class="val"></span></label>
       <details class="fold">
         <summary>Fill tuning</summary>
