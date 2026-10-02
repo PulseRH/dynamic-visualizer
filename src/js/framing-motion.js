@@ -1,5 +1,6 @@
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 export const shapedDepth=(near,amount=0)=>near+amount*near*(near-1);
+export const curvatureDepth=(x,y,aspect,amount=0)=>amount*((x/aspect)**2+y*y);
 // A CPU copy of the positional vertex operations, evaluated on <=1024 samples
 // only. It uses the exact uploaded band levels and the shader's phase clocks.
 export function animatedSample(x, y, near, rand, u, data, out, offset) {
@@ -43,6 +44,7 @@ export function animatedSample(x, y, near, rand, u, data, out, offset) {
   const ripple = Math.exp(-((px - cursor.x) ** 2 + (py - cursor.y) ** 2) * 4) * cursor.z;
   z += ripple * 0.1;
   px += (px - cursor.x) * ripple * 0.05; py += (py - cursor.y) * ripple * 0.05;
+  z += curvatureDepth(x,y,aspect,u.uCurvature?.value ?? 0);
   // Ignore the intentional fly-by exit: framing must not chase that effect.
   out[offset] = px; out[offset + 1] = py; out[offset + 2] = z;
 }

@@ -231,6 +231,8 @@ export class UI {
     slider('xyMove', 'xyMove', (v) => v.toFixed(2));
     slider('parallax', 'parallax', (v) => v.toFixed(2));
     slider('musicParallax', 'musicParallax', (v) => v.toFixed(2));
+    slider('audioCurvature','audioCurvature',v=>`${Math.round(v*100)}%`);
+    slider('dollyZoom','dollyZoom',v=>`${Math.round(v*100)}%`);
     slider('quietMovement', 'quietMovement', (v) => `${Math.round(v * 100)}%`);
     slider('energyResponse', 'energyResponse', (v) => v.toFixed(2));
     slider('fillStrength','fillStrength',v=>`${Math.round(v*100)}%`);
@@ -486,6 +488,9 @@ export class UI {
     setSlider('xyMove', get('xyMove'));
     setSlider('parallax', get('parallax'));
     setSlider('musicParallax', get('musicParallax'));
+    for(const key of ['audioCurvature','dollyZoom']){
+      setSlider(key,get(key));$(key).parentElement.querySelector('.val').textContent=`${Math.round(get(key)*100)}%`;
+    }
     setSlider('quietMovement', get('quietMovement'));
     $('quietMovement').parentElement.querySelector('.val').textContent = `${Math.round(get('quietMovement') * 100)}%`;
     setSlider('energyResponse', get('energyResponse'));

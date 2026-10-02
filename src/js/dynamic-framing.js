@@ -41,7 +41,8 @@ export class DynamicFraming {
     for (let b = 0; b < u.uBandCount.value; b++) peak = Math.max(peak, data[b * 4] / 255);
     // Keep every depth layer in front of the camera; zoom restores screen size.
     const maxZ = shapedDepth(this.maxNear,u.uDepthShape?.value ?? 0) * u.uDepthScale.value
-      + peak * u.uIntensity.value * u.uDyn.value * u.uZMove.value * .11 * 1.85 + u.uCursor.value.z * .1;
+      + peak * u.uIntensity.value * u.uDyn.value * u.uZMove.value * .11 * 1.85 + u.uCursor.value.z * .1
+      + Math.max(0,u.uCurvature?.value ?? 0)*.5;
     const exposure = Math.abs(camera.position.x) * (this.aspect / 2 + Math.abs(camera.position.x))
       + Math.abs(camera.position.y) * (.5 + Math.abs(camera.position.y));
     camera.position.z = Math.max(baseZ, maxZ + .4 + Math.sqrt(exposure));

@@ -67,6 +67,8 @@ const DEFAULTS = {
   motionSpeed: 1.0,        // base tempo of wave/shimmer motion (0 = music-driven only)
   parallax: 0.8,
   musicParallax: 0,        // camera sway driven by the music itself (0 = off)
+  audioCurvature: 0,      // signed audio-driven bowl curvature; no static depth needed
+  dollyZoom: 0,           // audio camera approach with compensating field of view
   quietMovement: 0.6,      // minimum audio motion multiplier, before the silence fade
   energyResponse: 1,       // loudness response exponent: gentle < 1, dramatic > 1
   loudReference: 0.25,      // fixed RMS reference; explicit calibration replaces it

@@ -13,6 +13,7 @@ const VERT = /* glsl */ `
   uniform float uIntensity;
   uniform float uDepthScale;
   uniform float uDepthShape;
+  uniform float uCurvature;
   uniform float uDepthShading;
   uniform float uAspect;
   uniform float uSize;
@@ -60,6 +61,10 @@ const VERT = /* glsl */ `
 
   float shapedDepth(float near) {
     return near + uDepthShape * near * (near - 1.0);
+  }
+  float curvatureDepth(vec2 point) {
+    vec2 uv = point / vec2(uAspect, 1.0);
+    return uCurvature * dot(uv, uv);
   }
 
   void evaluatePoint(vec3 pointPosition, float pointRand, vec3 pointColor, out vec3 pos, out vec3 colourOut, out float ampOut, out float pointSize) {
@@ -180,6 +185,7 @@ const VERT = /* glsl */ `
     float ripple = exp(-cd * cd * 4.0) * uCursor.z;
     pos.z += ripple * 0.1;
     pos.xy += (pos.xy - uCursor.xy) * ripple * 0.05;
+    pos.z += curvatureDepth(pointPosition.xy);
 
     vec4 mv = modelViewMatrix * vec4(pos, 1.0);
 
@@ -244,7 +250,8 @@ const VERT = /* glsl */ `
         // to the animated midpoint. Shared movement/camera zoom therefore
         // cannot turn a closed seam into a bright contour.
         vec3 restDelta = vec3(aFillEnd.xy - aFillStart.xy,
-                             (shapedDepth(aFillEnd.z) - shapedDepth(aFillStart.z)) * uDepthScale);
+                             (shapedDepth(aFillEnd.z) - shapedDepth(aFillStart.z)) * uDepthScale
+                             + curvatureDepth(aFillEnd.xy) - curvatureDepth(aFillStart.xy));
         vec3 centre = (first + last) * 0.5;
         vec4 firstClip = projectionMatrix * (modelViewMatrix * vec4(first, 1.0));
         vec4 lastClip = projectionMatrix * (modelViewMatrix * vec4(last, 1.0));
@@ -353,6 +360,7 @@ export class VisualScene {
 
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(50, 1, 0.05, 40);
+    this.baseFov = 50;
     this.camBaseZ = 1.9;
     this.camera.position.set(0, 0, this.camBaseZ);
 
@@ -379,6 +387,7 @@ export class VisualScene {
       uIntensity: { value: 1 },
       uDepthScale: { value: 0.35 },
       uDepthShape: { value: 0 },
+      uCurvature: { value: 0 },
       uAspect: { value: 1 },
       uSize: { value: 2 },
       uCamZ: { value: 1.4 },
@@ -451,7 +460,7 @@ export class VisualScene {
 
   _fitCamera() {
     // Base wallpaper cover fit. Dynamic framing tracks uneven animated edges.
-    const halfH = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
+    const halfH = Math.tan(THREE.MathUtils.degToRad(this.baseFov / 2));
     const dH = 0.5 / halfH;                                       // height just fills
     const dW = (this.cloudAspect / 2) / (halfH * this.camera.aspect); // width just fills
     this.camBaseZ = Math.min(dH, dW);
@@ -693,6 +702,9 @@ export class VisualScene {
     this.speedVol = s.speedVol;
     this.motionSpeed = s.motionSpeed;
     this.musicParallax = s.musicParallax || 0;
+    this.audioCurvature = Math.max(-1,Math.min(1,s.audioCurvature || 0));
+    this.uniforms.uCurvature.value=this.audioCurvature*(this.lensDrive || 0)*.65;
+    this.dollyZoom = Math.max(0,Math.min(1,s.dollyZoom || 0));
     this.quietMovement = s.quietMovement;
     this.energyResponse = s.energyResponse;
     this.uniforms.uCentered.value = s.centeredMotion ? 1 : 0;
@@ -774,7 +786,7 @@ export class VisualScene {
     // point size in pixels when the cloud is at rest distance:
     //   pointSize=1.0 means a point's diameter equals the point spacing
     const hPx = this.renderer.domElement.height; // drawing-buffer pixels
-    const tanHalf = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
+    const tanHalf = Math.tan(THREE.MathUtils.degToRad(this.baseFov / 2));
     this.uniforms.uSize.value =
       (this.pointSizeSetting || 1) * hPx * (this.spacingWorld || 1 / 300)
       / (2 * tanHalf * this.camBaseZ);
@@ -798,6 +810,12 @@ export class VisualScene {
     this.loudEma += (loud - this.loudEma) * Math.min(1, dt * 0.5);
     const mamp = movementResponse(this.loudEma, this.quietMovement, this.energyResponse);
     this.uniforms.uDyn.value = mamp;
+    if(this.audioCurvature || this.dollyZoom){
+      const target=Math.max(0,Math.min(1,(Number.isFinite(analyzer.energy) ? analyzer.energy:0)*mamp));
+      const current=this.lensDrive ?? 0;
+      this.lensDrive=current+(target-current)*(1-Math.exp(-dt/(target>current ? .18:.45)));
+    }else this.lensDrive=0;
+    this.uniforms.uCurvature.value=this.audioCurvature*(this.lensDrive || 0)*.65;
     if (mp > 0) {
       let raw = (lowN && highN) ? (lowSum / lowN - highSum / highN) : 0;
       if (!Number.isFinite(raw)) raw = 0;
@@ -841,22 +859,31 @@ export class VisualScene {
     this._prevNy = this.pointer.ty;
     this.cursorStrength = Math.min(1, (this.cursorStrength ?? 0) * Math.exp(-dt / 0.3) + spd * 0.12);
     const rippleOn = this.cursorRipple ? 1 : 0;
-    const halfH = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) * this.camBaseZ;
+    const halfH = tanHalf * this.camBaseZ;
     this.uniforms.uCursor.value.set(
       this.pointer.x * halfH * this.camera.aspect * 2,
       -this.pointer.y * halfH * 2,
       this.cursorStrength * rippleOn,
     );
-    this.camera.position.z = this.camBaseZ;
+    const lensScale=1-this.dollyZoom*(this.lensDrive || 0)*.18;
+    const lensBaseZ=this.camBaseZ*lensScale;
+    const lensFov= this.dollyZoom ? THREE.MathUtils.radToDeg(2*Math.atan(tanHalf/lensScale)):this.baseFov;
+    if(this.camera.fov!==lensFov){this.camera.fov=lensFov;this.camera.updateProjectionMatrix();}
+    this.camera.position.z = lensBaseZ;
     this.camera.lookAt(0, 0, 0.1);
     if (this.keepScreenCovered && this.fillStrength>0 && this.dynamicFraming && this.uniforms.uVis.value > 0) {
-      this.dynamicFraming.update(this.camera, this.camBaseZ, this.uniforms, this.bandData, dt, this.fillStrength, this.framingSmoothing);
+      this.dynamicFraming.update(this.camera, lensBaseZ, this.uniforms, this.bandData, dt, this.fillStrength, this.framingSmoothing);
       this.uniforms.uCamZ.value = this.camera.position.z;
       this.uniforms.uSize.value = (this.pointSizeSetting || 1) * hPx * (this.spacingWorld || 1 / 300)
-        * this.camera.zoom / (2 * tanHalf * this.camera.position.z);
+        * this.camera.zoom / (2 * Math.tan(THREE.MathUtils.degToRad(lensFov/2)) * this.camera.position.z);
     } else if (this.camera.zoom !== 1 || this.camera.projectionMatrix.elements[8] !== 0 || this.camera.projectionMatrix.elements[9] !== 0) {
       this.camera.zoom = 1;
       this.camera.updateProjectionMatrix();
+    }
+    if(this.dollyZoom && !(this.keepScreenCovered && this.fillStrength>0 && this.dynamicFraming && this.uniforms.uVis.value>0)){
+      this.uniforms.uCamZ.value=this.camera.position.z;
+      this.uniforms.uSize.value=(this.pointSizeSetting || 1)*hPx*(this.spacingWorld || 1/300)
+        /(2*Math.tan(THREE.MathUtils.degToRad(lensFov/2))*this.camera.position.z);
     }
 
     this.renderer.render(this.scene, this.camera);

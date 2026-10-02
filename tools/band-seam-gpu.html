@@ -15,6 +15,7 @@ try{
  for(const shape of [0,.5,1])for(const map of ['depth','horizontal','vertical','radial'])for(const invert of [false,true]){
   scene.applySettings({...getAll(),depthShape:shape,bands:64,bandMap:map,invertBands:invert,depthScale:.35,depthShading:0,hueReaction:0,hueCycle:0,glow:1,boost:0,motionWave:.5,motionSwirl:.8,motionBreathe:.5,motionBandShake:1,xyMove:1,depthMove:2,intensity:2,centeredMotion:true,equalDepthMovement:true});
   scene.uniforms.uFillOnlyOpen.value=0;scene.uniforms.uFillAdaptive.value=0;scene.points.visible=false;
+  scene.uniforms.uCurvature.value=(shape-.5)*1.3;
   scene.uniforms.uWaveTime.value=1.3;scene.uniforms.uXYTime.value=.8;scene.uniforms.uSize.value=3;scene.uniforms.uCamZ.value=1.9;
   scene.uniforms.uCursor.value.set(.1,-.1,.5);
   for(let band=0;band<scene.bandCount;band++)scene.bandData[band*4]=band%2 ? 255:0;

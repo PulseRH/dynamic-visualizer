@@ -14,7 +14,7 @@ const framing = new DynamicFraming(cloud);
 const u = Object.fromEntries(Object.entries({ uAspect: 1.8, uBandCount: 32, uBandMap: 0, uInvert: 0,
   uLayers: { x: .7, y: .6, z: .5, w: .4 }, uExtraLayers: { x: 1, y: 1, z: .5, w: 1 },
   uWaveTime: 0, uXYTime: 0, uCentered: 1, uEqualDepthMovement: 1, uIntensity: 1.5, uDyn: 1,
-  uDepthScale: .9, uDepthShape:0, uZMove: 2, uXYMove: 2, uCursor: { x: -.4, y: .2, z: 1 }
+  uDepthScale: .9, uDepthShape:0, uCurvature:0, uZMove: 2, uXYMove: 2, uCursor: { x: -.4, y: .2, z: 1 }
 }).map(([k, value]) => [k, { value }]));
 const data = new Uint8Array(32 * 4);
 const camera = new PerspectiveCamera(45, 16 / 9, .01, 100);
@@ -24,6 +24,7 @@ for (let step = 0; step < 120; step++) {
   u.uBandMap.value = Math.floor(step / 30);
   u.uInvert.value = step % 2;
   u.uDepthShape.value=(step%3)/2;
+  u.uCurvature.value=(step%3-1)*.65;
   u.uWaveTime.value = step * .19; u.uXYTime.value = step * .13;
   for (let b = 0; b < 32; b++) data[b * 4] = Math.round(255 * (.5 + .5 * Math.sin(step * .7 + b * 1.3)));
   camera.position.set(Math.sin(step * .2) * .25, Math.cos(step * .17) * .2, 1.2);
@@ -44,6 +45,7 @@ for (let step = 0; step < 120; step++) {
 assert.ok(leastCover > 1, `every original border stays outside the screen: ${leastCover}`);
 console.log(`PASS: asymmetric depth, four band mappings, combined layers, 120 frames; least edge coverage ${leastCover.toFixed(3)}`);
 const started = performance.now();
+u.uCurvature.value=0;
 for (let i = 0; i < 2000; i++) framing.update(camera, 1.2, u, data, 1 / 40);
 console.log(`Cached framing cost (32 bands): ${((performance.now() - started) / 2000).toFixed(3)} ms/frame`);
 // A flat image at rest should need only the small edge safety margin.

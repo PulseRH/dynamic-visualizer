@@ -2,7 +2,7 @@
 <script type="module">
 import {VisualScene} from '../src/js/scene.js';
 import {getAll} from '../src/js/settings.js';
-import {shapedDepth} from '../src/js/framing-motion.js';
+import {shapedDepth,curvatureDepth} from '../src/js/framing-motion.js';
 import * as THREE from '../src/vendor/three.module.js';
 try{
  const scene=new VisualScene(document.querySelector('canvas'));
@@ -10,13 +10,14 @@ try{
  const positions=new Float32Array([-.25,0,.2,0,0,.5,.25,0,.8]);
  scene.setCloud({count:3,aspect:4/3,positions,colors:new Float32Array(9).fill(.4),rands:new Float32Array([.2,.5,.8])});
  const geometry=scene.points.geometry,gl=scene.renderer.getContext(),pixels=new Uint8Array(400*300*4);
- for(const amount of [0,.5,1]){
+ for(const curve of [-.65,0,.65])for(const amount of [0,.5,1]){
   scene.applySettings({...getAll(),depthShape:amount,depthScale:.35,intensity:0,depthShading:0,hueReaction:0,hueCycle:0,glow:1,boost:0,sizePulse:0});
   scene.uniforms.uCursor.value.set(0,0,0);scene.uniforms.uSize.value=3;
+  scene.uniforms.uCurvature.value=curve;
   scene.camera.position.x=.2;scene.camera.position.y=-.1;scene.camera.lookAt(0,0,.1);scene.camera.updateMatrixWorld();
   for(let point=0;point<3;point++){
    geometry.setDrawRange(point,1);scene.renderer.render(scene.scene,scene.camera);gl.readPixels(0,0,400,300,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
-   const p=point*3,target=new THREE.Vector3(positions[p],positions[p+1],shapedDepth(positions[p+2],amount)*.35).project(scene.camera);
+   const p=point*3,target=new THREE.Vector3(positions[p],positions[p+1],shapedDepth(positions[p+2],amount)*.35+curvatureDepth(positions[p],positions[p+1],4/3,curve)).project(scene.camera);
    let weight=0,xsum=0,ysum=0;
    for(let y=0;y<300;y++)for(let x=0;x<400;x++){const i=(y*400+x)*4,w=pixels[i]+pixels[i+1]+pixels[i+2];weight+=w;xsum+=(x+.5)*w;ysum+=(y+.5)*w;}
    if(!weight||Math.hypot(xsum/weight-(target.x*.5+.5)*400,ysum/weight-(target.y*.5+.5)*300)>1)throw Error('CPU/GPU shaped depth differs');
@@ -24,6 +25,6 @@ try{
   if(scene.points.geometry!==geometry)throw Error('Depth shape rebuilt the cloud');
  }
  if(gl.getError()!==gl.NO_ERROR)throw Error('WebGL error');
- scene.renderer.dispose();document.getElementById('result').textContent='PASS: GPU depth shaping matches CPU at three depths and strengths with parallax; no cloud rebuild.';
+ scene.renderer.dispose();document.getElementById('result').textContent='PASS: GPU depth shaping and signed curvature match CPU with parallax; no cloud rebuild.';
 }catch(e){document.getElementById('result').textContent='FAIL: '+e.stack;}
 </script>
