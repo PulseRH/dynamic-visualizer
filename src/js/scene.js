@@ -4,6 +4,7 @@
 
 import * as THREE from '../vendor/three.module.js';
 import { movementResponse } from './response.js';
+import { bandResponse } from './bands.js';
 import { buildHueLookup, buildHueAngleLookup, HueAccentTracker, HueCycleTracker } from './hue.js';
 import { backdropTextureSize } from './backdrop-size.js';
 import { DynamicFraming } from './dynamic-framing.js';
@@ -705,6 +706,8 @@ export class VisualScene {
     this.audioCurvature = Math.max(-1,Math.min(1,s.audioCurvature || 0));
     this.uniforms.uCurvature.value=this.audioCurvature*(this.lensDrive || 0)*.65;
     this.dollyZoom = Math.max(0,Math.min(1,s.dollyZoom || 0));
+    this.lensInputGain = s.sensGain ?? 1;
+    this.lensNoiseFloor = s.sensFloor ?? 0;
     this.quietMovement = s.quietMovement;
     this.energyResponse = s.energyResponse;
     this.uniforms.uCentered.value = s.centeredMotion ? 1 : 0;
@@ -811,9 +814,12 @@ export class VisualScene {
     const mamp = movementResponse(this.loudEma, this.quietMovement, this.energyResponse);
     this.uniforms.uDyn.value = mamp;
     if(this.audioCurvature || this.dollyZoom){
-      const target=Math.max(0,Math.min(1,(Number.isFinite(analyzer.energy) ? analyzer.energy:0)*mamp));
+      // Global lens motion follows calibrated input loudness, not normalized
+      // spectrum averages or the quiet-song motion multiplier. Use the input
+      // gain/floor but not the contrast curve between individual bands.
+      const target=bandResponse(loud,this.lensInputGain,this.lensNoiseFloor,1);
       const current=this.lensDrive ?? 0;
-      this.lensDrive=current+(target-current)*(1-Math.exp(-dt/(target>current ? .18:.45)));
+      this.lensDrive=current+(target-current)*(1-Math.exp(-dt/(target>current ? .08:.18)));
     }else this.lensDrive=0;
     this.uniforms.uCurvature.value=this.audioCurvature*(this.lensDrive || 0)*.65;
     if (mp > 0) {
@@ -865,14 +871,16 @@ export class VisualScene {
       -this.pointer.y * halfH * 2,
       this.cursorStrength * rippleOn,
     );
-    const lensScale=1-this.dollyZoom*(this.lensDrive || 0)*.18;
+    // Retreat from the safe position instead of approaching into framing's
+    // safety clamp. Compensating FOV preserves the reference-plane size.
+    const lensScale=1+this.dollyZoom*(this.lensDrive || 0)*.55;
     const lensBaseZ=this.camBaseZ*lensScale;
     const lensFov= this.dollyZoom ? THREE.MathUtils.radToDeg(2*Math.atan(tanHalf/lensScale)):this.baseFov;
     if(this.camera.fov!==lensFov){this.camera.fov=lensFov;this.camera.updateProjectionMatrix();}
     this.camera.position.z = lensBaseZ;
     this.camera.lookAt(0, 0, 0.1);
     if (this.keepScreenCovered && this.fillStrength>0 && this.dynamicFraming && this.uniforms.uVis.value > 0) {
-      this.dynamicFraming.update(this.camera, lensBaseZ, this.uniforms, this.bandData, dt, this.fillStrength, this.framingSmoothing);
+      this.dynamicFraming.update(this.camera, this.camBaseZ, this.uniforms, this.bandData, dt, this.fillStrength, this.framingSmoothing,lensScale);
       this.uniforms.uCamZ.value = this.camera.position.z;
       this.uniforms.uSize.value = (this.pointSizeSetting || 1) * hPx * (this.spacingWorld || 1 / 300)
         * this.camera.zoom / (2 * Math.tan(THREE.MathUtils.degToRad(lensFov/2)) * this.camera.position.z);

@@ -33,7 +33,7 @@ export class DynamicFraming {
     this.bounds = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
   }
 
-  update(camera, baseZ, u, data, dt, strength=1, smoothing=0) {
+  update(camera, baseZ, u, data, dt, strength=1, smoothing=0,lensScale=1) {
     strength=clamp(strength,0,1); smoothing=clamp(smoothing,0,1);
     const strict=strength===1 && smoothing===0;
     const samples = this.samples, points = this.positions;
@@ -45,7 +45,7 @@ export class DynamicFraming {
       + Math.max(0,u.uCurvature?.value ?? 0)*.5;
     const exposure = Math.abs(camera.position.x) * (this.aspect / 2 + Math.abs(camera.position.x))
       + Math.abs(camera.position.y) * (.5 + Math.abs(camera.position.y));
-    camera.position.z = Math.max(baseZ, maxZ + .4 + Math.sqrt(exposure));
+    camera.position.z = Math.max(baseZ, maxZ + .4 + Math.sqrt(exposure))*lensScale;
     camera.zoom = 1;
     camera.updateProjectionMatrix();
     camera.lookAt(0, 0, .1);
@@ -91,7 +91,7 @@ export class DynamicFraming {
     } else {
       // Compensate for safety camera distance immediately, then ease only the
       // framing correction. Safety moves must not look like extra audio zoom.
-      const distanceScale=camera.position.z/baseZ;
+      const distanceScale=camera.position.z/(baseZ*lensScale);
       const targetScale=1+strength*(target/distanceScale-1);
       if(this.zoom===null) this.softScale=targetScale;
       else if(this.softScale==null) this.softScale=this.zoom/distanceScale;

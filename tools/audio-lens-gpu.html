@@ -10,30 +10,44 @@ try{
  for(let y=0;y<13;y++)for(let x=0;x<21;x++){positions.push((x/20-.5)*4/3,y/12-.5,x/20);rands.push(.5);}
  scene.setCloud({count:rands.length,aspect:4/3,positions:new Float32Array(positions),colors:new Float32Array(positions.length).fill(.3),rands:new Float32Array(rands)});
  const settings={...getAll(),depthScale:0,audioCurvature:0,dollyZoom:0,keepScreenCovered:false,intensity:1,depthMove:0,xyMove:0,quietMovement:1,energyResponse:1,cursorRipple:false,musicParallax:0,motionWave:0,motionRipple:0,motionBands:0,motionDrift:0,motionSwirl:0,motionBreathe:0,motionSweep:0,motionBandShake:0,hueReaction:0,hueCycle:0};
- const analyzer={bands:new Float32Array(64).fill(1),energy:1,loud:1};
+ const analyzer={bands:new Float32Array(64).fill(1),energy:0,loud:1};
  const tick=(frames=80)=>{for(let i=0;i<frames;i++){scene.lastNow=performance.now()-50;scene.render(analyzer,0);}};
  scene.applySettings(settings);tick(1);
  const geometry=scene.points.geometry,baseZ=scene.camBaseZ,baseFov=scene.camera.fov;
  const original=new THREE.Vector3(.4,.2,0).project(scene.camera);
  scene.applySettings({...settings,dollyZoom:1});tick();
  const flat=new THREE.Vector3(.4,.2,0).project(scene.camera);
- if(scene.camera.position.z>=baseZ*.9||scene.camera.fov<=baseFov||Math.hypot(flat.x-original.x,flat.y-original.y)>1e-5)throw Error('Dolly did not preserve flat reference framing');
+ if(scene.camera.position.z<=baseZ*1.4||scene.camera.fov>=baseFov||Math.hypot(flat.x-original.x,flat.y-original.y)>1e-5)throw Error('Dolly did not preserve flat reference framing');
  const moving=new THREE.Vector3(.4,.2,.11).project(scene.camera);
  scene.applySettings({...settings,glow:1.5,dollyZoom:1});
  if(scene.camBaseZ!==baseZ)throw Error('Settings change fed dynamic FOV back into base fit');
  scene.applySettings(settings);tick(1);
  const ordinary=new THREE.Vector3(.4,.2,.11).project(scene.camera);
  if(Math.hypot(moving.x-ordinary.x,moving.y-ordinary.y)<.001)throw Error('Dolly changed no relative depth perspective');
+ const strongMotion={...settings,keepScreenCovered:true,fillStrength:1,framingSmoothing:0,intensity:2.5,depthMove:3};
+ scene.applySettings(strongMotion);tick(1);
+ const safeZ=scene.camera.position.z;
+ const depthRatio=()=>new THREE.Vector3(.4,.2,.72).project(scene.camera).x/new THREE.Vector3(.4,.2,.39).project(scene.camera).x;
+ const oldRatio=depthRatio();scene.applySettings({...strongMotion,dollyZoom:1});tick();
+ if(scene.camera.position.z<safeZ*1.4||Math.abs(depthRatio()-oldRatio)<.03)throw Error('Screen filling cancelled strong-motion dolly perspective');
+ scene.applySettings({...settings,audioCurvature:1,dollyZoom:1,sensGain:1,sensFloor:.2});
+ analyzer.loud=.1;analyzer.energy=1;tick(80);
+ if(scene.lensDrive>.0001)throw Error('Input noise floor did not gate lens effects');
+ analyzer.loud=.3;scene.applySettings({...settings,audioCurvature:1,dollyZoom:1,sensGain:2,sensFloor:.2});tick();
+ if(Math.abs(scene.lensDrive-.5)>.001)throw Error('Input gain did not drive both lens effects directly');
+ scene.applySettings({...settings,audioCurvature:1,dollyZoom:1,sensGain:1,sensFloor:.2});tick();
+ if(Math.abs(scene.lensDrive-.125)>.001)throw Error('Calibrated input response incorrectly depended on band energy');
+ analyzer.loud=1;analyzer.energy=0;
  for(const sign of [-1,1]){
   scene.applySettings({...settings,audioCurvature:sign,dollyZoom:.5,keepScreenCovered:true});tick();
   if(Math.sign(scene.uniforms.uCurvature.value)!==sign||Math.abs(scene.uniforms.uCurvature.value)<.5)throw Error('Audio curvature failed with zero static depth');
   if(scene.camera.position.z<=.325+.4 && sign>0)throw Error('Curved edge camera safety missing');
  }
- analyzer.energy=0;analyzer.bands.fill(0);tick(200);
+ analyzer.energy=0;analyzer.loud=0;analyzer.bands.fill(0);tick(200);
  if(Math.abs(scene.uniforms.uCurvature.value)>.0001||Math.abs(scene.camera.fov-baseFov)>.01)throw Error('Lens effects did not settle in silence');
  scene.applySettings(settings);tick(1);
  if(scene.camera.fov!==baseFov||scene.uniforms.uCurvature.value!==0||scene.points.geometry!==geometry)throw Error('Off did not restore neutral state without rebuilding');
  if(scene.renderer.getContext().getError()!==scene.renderer.getContext().NO_ERROR)throw Error('WebGL error');
- scene.renderer.dispose();document.getElementById('result').textContent='PASS: zero-depth audio curvature in both directions; dolly preserves flat framing but changes depth perspective; safety, silence settling and neutral restoration work without rebuilds.';
+ scene.renderer.dispose();document.getElementById('result').textContent='PASS: input loudness/gain/floor drive both effects; dolly works with strong audio motion and strict screen fill; signed curvature, silence and neutral restoration work without rebuilds.';
 }catch(e){document.getElementById('result').textContent='FAIL: '+e.stack;}
 </script>
