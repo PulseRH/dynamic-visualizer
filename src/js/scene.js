@@ -704,7 +704,8 @@ export class VisualScene {
     this.motionSpeed = s.motionSpeed;
     this.musicParallax = s.musicParallax || 0;
     this.audioCurvature = Math.max(-1,Math.min(1,s.audioCurvature || 0));
-    this.uniforms.uCurvature.value=this.audioCurvature*(this.lensDrive || 0)*.65;
+    this.curvatureSource=s.curvatureSource==='bands' ? 'bands':'input';
+    this.uniforms.uCurvature.value=this.audioCurvature*(this.curvatureDrive ?? this.lensDrive ?? 0)*.65;
     this.dollyZoom = Math.max(0,Math.min(1,s.dollyZoom || 0));
     this.lensInputGain = s.sensGain ?? 1;
     this.lensNoiseFloor = s.sensFloor ?? 0;
@@ -821,7 +822,12 @@ export class VisualScene {
       const current=this.lensDrive ?? 0;
       this.lensDrive=current+(target-current)*(1-Math.exp(-dt/(target>current ? .08:.18)));
     }else this.lensDrive=0;
-    this.uniforms.uCurvature.value=this.audioCurvature*(this.lensDrive || 0)*.65;
+    if(this.audioCurvature && this.curvatureSource==='bands'){
+      const target=Math.max(0,Math.min(1,(Number.isFinite(analyzer.energy) ? analyzer.energy:0)*mamp));
+      const current=this.curvatureDrive ?? 0;
+      this.curvatureDrive=current+(target-current)*(1-Math.exp(-dt/(target>current ? .18:.45)));
+    }else this.curvatureDrive=this.audioCurvature ? this.lensDrive:0;
+    this.uniforms.uCurvature.value=this.audioCurvature*(this.curvatureDrive || 0)*.65;
     if (mp > 0) {
       let raw = (lowN && highN) ? (lowSum / lowN - highSum / highN) : 0;
       if (!Number.isFinite(raw)) raw = 0;

@@ -160,6 +160,7 @@ export class UI {
     seg('easeInStyle','easeInStyle');
     seg('easeOutStyle','easeOutStyle');
     seg('bandMapSeg', 'bandMap');
+    seg('curvatureSourceSeg','curvatureSource');
     seg('fpsSeg', 'fpsCap', (v) => set({ fpsCap: Number(v) }));
     seg('audioSeg', 'audioSource', async (v) => {
       if (v === 'file') {
@@ -403,6 +404,7 @@ export class UI {
     };
     syncSeg('depthSeg', get('depthMode'));
     syncSeg('bandMapSeg', get('bandMap'));
+    syncSeg('curvatureSourceSeg',get('curvatureSource'));
     syncSeg('audioSeg', get('audioSource'));
     syncSeg('fpsSeg', get('fpsCap'));
 
