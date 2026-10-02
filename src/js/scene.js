@@ -48,6 +48,7 @@ const VERT = /* glsl */ `
     attribute vec4 aFillEnd;
     attribute float aFillT;
     uniform float uFillBrightness;
+    uniform float uFillOnlyOpen;
   #endif
 
   varying vec3 vColor;
@@ -228,10 +229,35 @@ const VERT = /* glsl */ `
       evaluatePoint(aFillStart.xyz, aFillStart.w, aColor, first, firstColour, firstAmp, firstSize);
       evaluatePoint(aFillEnd.xyz, aFillEnd.w, aColor, last, lastColour, lastAmp, lastSize);
       vec3 pos = mix(first, last, aFillT);
+      float opening = 1.0;
+      if (uFillOnlyOpen > 0.5) {
+        // Measure extra screen separation, with the resting pair translated
+        // to the animated midpoint. Shared movement/camera zoom therefore
+        // cannot turn a closed seam into a bright contour.
+        vec3 restDelta = vec3(aFillEnd.xy - aFillStart.xy,
+                             (aFillEnd.z - aFillStart.z) * uDepthScale);
+        vec3 centre = (first + last) * 0.5;
+        vec4 firstClip = projectionMatrix * (modelViewMatrix * vec4(first, 1.0));
+        vec4 lastClip = projectionMatrix * (modelViewMatrix * vec4(last, 1.0));
+        vec4 restFirst = projectionMatrix * (modelViewMatrix * vec4(centre - restDelta * 0.5, 1.0));
+        vec4 restLast = projectionMatrix * (modelViewMatrix * vec4(centre + restDelta * 0.5, 1.0));
+        if (min(min(firstClip.w,lastClip.w),min(restFirst.w,restLast.w)) <= 0.0) {
+          opening = 0.0;
+        } else {
+          vec2 metric = vec2(projectionMatrix[1][1] / projectionMatrix[0][0], 1.0);
+          float currentGap = length((lastClip.xy / lastClip.w - firstClip.xy / firstClip.w) * metric);
+          float restingGap = length((restLast.xy / restLast.w - restFirst.xy / restFirst.w) * metric);
+          opening = smoothstep(0.15, 0.85, (currentGap - restingGap) / max(restingGap, 0.000001));
+        }
+      }
       gl_Position = projectionMatrix * (modelViewMatrix * vec4(pos, 1.0));
       gl_PointSize = mix(firstSize, lastSize, aFillT);
-      vColor = mix(firstColour, lastColour, aFillT) * uFillBrightness;
+      vColor = mix(firstColour, lastColour, aFillT) * uFillBrightness * opening;
       vAmp = mix(firstAmp, lastAmp, aFillT);
+      if (opening == 0.0) {
+        gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+        gl_PointSize = 0.0;
+      }
     #else
       vec3 pos; float amp, size;
       evaluatePoint(position, aRand, aColor, pos, vColor, amp, size);
@@ -329,6 +355,7 @@ export class VisualScene {
       uBandMap: { value: 1 },
       uDepthShading: { value: 0 },
       uFillBrightness: { value: .35 },
+      uFillOnlyOpen: { value: 1 },
       uBandDistribution: { value: 1 },
       uBandCount: { value: 64 },
       uInvert: { value: 0 },
@@ -599,6 +626,7 @@ export class VisualScene {
     this.uniforms.uFillBrightness.value = Math.max(0,Math.min(1,s.gapFillBrightness ?? .35))
       * Math.min(1,12/Math.max(3,s.gapFillDensity ?? 12))
       * Math.min(1,3/Math.max(1,s.gapFillRows ?? 3));
+    this.uniforms.uFillOnlyOpen.value = s.gapFillOnlyOpen === false ? 0 : 1;
     this.uniforms.uLayers.value.set(s.motionWave, s.motionRipple, s.motionBands, s.motionDrift);
     this.uniforms.uExtraLayers.value.set(s.motionSwirl, s.motionBreathe, s.motionSweep, s.motionBandShake);
     this.uniforms.uBandMap.value = BAND_MAPS[s.bandMap] ?? 0;
