@@ -1,0 +1,46 @@
+<!doctype html><meta charset="utf-8"><canvas id="gl"></canvas><pre id="result">RUNNING</pre>
+<script type="module">
+import {VisualScene} from '../src/js/scene.js';
+import {getAll} from '../src/js/settings.js';
+import {prepareOcclusion} from '../src/js/occlusion.js';
+import {sampleImageToCloud} from '../src/js/sampler.js';
+import {buildCloud} from '../src/js/cloud-builder.js';
+try{
+ const scene=new VisualScene(document.getElementById('gl'));
+ scene.renderer.setSize(300,300,false);scene.camera.aspect=1;scene.camera.updateProjectionMatrix();
+ const base={...getAll(),occludedBackground:true,gapFillForegroundLimit:true,gapFillThickness:.6,gapFillOnlyOpen:false,gapFillAdaptive:0,gapFillBrightness:1,gapFillRows:3,gapFillDensity:12,depthScale:.4,intensity:0,depthMove:1,xyMove:0,sizePulse:0,boost:0,depthShading:0,hueReaction:0,hueCycle:0,audioCurvature:0,dollyZoom:0,centeredMotion:false,motionWave:0,motionRipple:0,motionBands:0,motionDrift:0,motionSwirl:0,motionBreathe:0,motionSweep:0,motionBandShake:0};
+ scene.applySettings(base);scene.uniforms.uSize.value=3;scene.uniforms.uCursor.value.set(0,0,0);
+ const positions=[-.12,0,.7,.12,0,.3],starts=[],ends=[],fractions=[.2,.4,.6,.8];
+ for(const [i,t] of fractions.entries()){const y=(i-1.5)*.08;positions.push(-.12+.24*t,y,.7-.4*t);starts.push(-.12,y,.7,.2);ends.push(.12,y,.3,.8);}
+ scene.setCloud({count:6,baseCount:2,aspect:1,positions:new Float32Array(positions),colors:new Float32Array(18).fill(.3),rands:new Float32Array([.2,.8,.1,.2,.3,.4]),fillStarts:new Float32Array(starts),fillEnds:new Float32Array(ends),fillFractions:new Float32Array(fractions),fillForeground:new Float32Array(4).fill(1)});
+ scene.points.visible=false;
+ const geometry=scene.fillPoints.geometry,gl=scene.renderer.getContext(),pixels=new Uint8Array(300*300*4);
+ const draw=()=>{scene.camera.updateMatrixWorld();scene.bandTex.needsUpdate=true;scene.renderer.render(scene.scene,scene.camera);gl.readPixels(0,0,300,300,gl.RGBA,gl.UNSIGNED_BYTE,pixels);if(gl.getError())throw Error('WebGL error');return pixels.some((v,i)=>i%4!==3&&v>0);};
+ const counts=()=>fractions.map((_,i)=>{geometry.setDrawRange(i,1);return Number(draw());});
+ scene.camera.position.set(0,0,2);scene.camera.lookAt(0,0,0);
+ if(counts().join()!=='1,1,0,0')throw Error('60% did not stop at the nearer foreground thickness: '+counts());
+ scene.camera.position.set(0,0,-2);scene.camera.lookAt(0,0,0);
+ if(counts().join()!=='0,0,1,1')throw Error('Thickness did not follow camera direction');
+ scene.camera.position.set(0,0,2);scene.camera.lookAt(0,0,0);
+ scene.applySettings({...base,depthScale:0,intensity:2,bands:4,bandMap:'depth',bandDistribution:0,invertBands:false});scene.uniforms.uDyn.value=1;
+ scene.bandData.fill(0);scene.bandData[4]=255;
+ if(counts().join()!=='0,0,1,1')throw Error('Thickness did not follow audio-driven surface reversal: '+counts());
+ scene.applySettings({...base,gapFillThickness:0});if(counts().some(Boolean))throw Error('Zero thickness retained foreground fill');
+ geometry.attributes.aFillForeground.array.fill(0);geometry.attributes.aFillForeground.needsUpdate=true;
+ if(counts().join()!=='1,1,1,1')throw Error('Background fill was shortened');
+ geometry.attributes.aFillForeground.array.fill(1);geometry.attributes.aFillForeground.needsUpdate=true;geometry.setDrawRange(0,4);
+ scene.applySettings({...base,gapFillForegroundLimit:false});draw();const neutral=pixels.slice();
+ scene.applySettings({...base,gapFillThickness:1});draw();if(!pixels.every((v,i)=>v===neutral[i]))throw Error('100% changed neutral output');
+ scene.applySettings({...base,occludedBackground:false});draw();if(!pixels.every((v,i)=>v===neutral[i]))throw Error('Disabled reconstruction affected fill');
+ if(scene.fillPoints.geometry!==geometry)throw Error('Live thickness settings rebuilt geometry');
+ const canvas=document.createElement('canvas');canvas.width=384;canvas.height=256;const ctx=canvas.getContext('2d');ctx.fillStyle='#a58176';ctx.fillRect(0,0,384,256);
+ const image=await createImageBitmap(canvas),depth={w:96,h:64,data:new Float32Array(96*64).fill(.15)};
+ for(let y=12;y<52;y++)for(let x=36;x<60;x++)depth.data[y*96+x]=.9;
+ const reconstruction=prepareOcclusion(depth,2.5);reconstruction.rgb=new Uint8Array(96*64*3).fill(100);delete reconstruction.mask;
+ const options={reconstruction,bands:16},direct=sampleImageToCloud(image,depth,40000,1,options),worker=await buildCloud(image,depth,40000,1,options);
+ for(const key of ['positions','colors','rands','fillStarts','fillEnds','fillFractions','fillForeground'])if(!direct[key].every((v,i)=>v===worker[key][i])||direct[key].length!==worker[key].length)throw Error('Worker mismatch '+key);
+ if(!worker.fillForeground.includes(0)||!worker.fillForeground.includes(1))throw Error('Worker lost foreground regions');
+ image.close();scene.renderer.dispose();
+ document.getElementById('result').textContent='PASS: 60% foreground cutoff, camera/audio reversals, background unchanged, 0/100/off behavior, live uniform without rebuild, worker parity and no WebGL errors.';
+}catch(error){document.getElementById('result').textContent='FAIL: '+(error.stack||error);}
+</script>

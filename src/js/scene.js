@@ -56,11 +56,13 @@ const VERT = /* glsl */ `
     attribute vec4 aFillStart;
     attribute vec4 aFillEnd;
     attribute float aFillT;
+    attribute float aFillForeground;
     uniform float uFillBrightness;
     uniform float uFillOnlyOpen;
     uniform float uFillAdaptive;
     uniform float uFillSamples;
     uniform float uFillSpacing;
+    uniform float uFillThickness;
   #endif
 
   varying vec3 vColor;
@@ -315,6 +317,15 @@ const VERT = /* glsl */ `
           }
         }
       }
+      if(uFillThickness<1.0 && aFillForeground>.5){
+        // Keep only the nearer portion of a foreground bridge. Both animated
+        // endpoints are already evaluated above; camera-space depth chooses
+        // the exposed face even when audio reverses their relative positions.
+        float viewDepth=dot(vec3(modelViewMatrix[0][2],modelViewMatrix[1][2],modelViewMatrix[2][2]),first-last);
+        float fromFront=viewDepth>=0.0 ? aFillT:1.0-aFillT;
+        float feather=min(uFillThickness,.5/max(uFillSamples,1.0));
+        opening*=uFillThickness<=0.0 ? 0.0:1.0-smoothstep(uFillThickness-feather,uFillThickness,fromFront);
+      }
       gl_Position = projectionMatrix * (modelViewMatrix * vec4(pos, 1.0));
       gl_PointSize = mix(firstSize, lastSize, aFillT);
       vColor = mix(firstColour, lastColour, aFillT) * uFillBrightness * opening * fillLight;
@@ -428,6 +439,7 @@ export class VisualScene {
       uFillAdaptive: { value: 1 },
       uFillSamples: { value: 12 },
       uFillSpacing: { value: 1 / 300 },
+      uFillThickness: { value: 1 },
       uBandDistribution: { value: 1 },
       uBandCount: { value: 64 },
       uInvert: { value: 0 },
@@ -578,6 +590,7 @@ export class VisualScene {
     }
     if(cloud.fillFractions?.length){
       this.fillMaterial ||= new THREE.ShaderMaterial({uniforms:this.uniforms,defines:{GAP_FILL:1},vertexShader:VERT,fragmentShader:FRAG,blending:THREE.AdditiveBlending,depthTest:false,depthWrite:false,transparent:true});
+      this.fillMaterial.defaultAttributeValues.aFillForeground=[0];
       const fill=new THREE.BufferGeometry();
       fill.setAttribute('position',new THREE.BufferAttribute(cloud.positions.subarray(baseCount*3),3));
       fill.setAttribute('aColor',new THREE.BufferAttribute(cloud.colors.subarray(baseCount*3),3));
@@ -585,6 +598,7 @@ export class VisualScene {
       fill.setAttribute('aFillStart',new THREE.BufferAttribute(cloud.fillStarts,4));
       fill.setAttribute('aFillEnd',new THREE.BufferAttribute(cloud.fillEnds,4));
       fill.setAttribute('aFillT',new THREE.BufferAttribute(cloud.fillFractions,1));
+      if(cloud.fillForeground)fill.setAttribute('aFillForeground',new THREE.BufferAttribute(cloud.fillForeground,1));
       this.fillPoints=new THREE.Points(fill,this.fillMaterial);this.fillPoints.frustumCulled=false;
       this.scene.add(this.fillPoints);
     }
@@ -716,6 +730,8 @@ export class VisualScene {
     this.uniforms.uFillOnlyOpen.value = s.gapFillOnlyOpen === false ? 0 : 1;
     this.uniforms.uFillAdaptive.value = Math.max(0,Math.min(1,Number(s.gapFillAdaptive ?? 1)));
     this.uniforms.uFillSamples.value = Math.max(3,Math.min(24,s.gapFillDensity ?? 12));
+    this.uniforms.uFillThickness.value=s.occludedBackground && s.gapFillForegroundLimit
+      ? Math.max(0,Math.min(1,s.gapFillThickness ?? .6)):1;
     this.uniforms.uLayers.value.set(s.motionWave, s.motionRipple, s.motionBands, s.motionDrift);
     this.uniforms.uExtraLayers.value.set(s.motionSwirl, s.motionBreathe, s.motionSweep, s.motionBandShake);
     this.uniforms.uBandMap.value = BAND_MAPS[s.bandMap] ?? 0;

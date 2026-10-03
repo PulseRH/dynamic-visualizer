@@ -29,6 +29,10 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
   const fillStarts=extraCapacity ? new Float32Array(extraCapacity*4):null;
   const fillEnds=extraCapacity ? new Float32Array(extraCapacity*4):null;
   const fillFractions=extraCapacity ? new Float32Array(extraCapacity):null;
+  // Reuse the reconstruction's foreground regions. One scalar per fill point
+  // lets thickness change live without another model, rebuild or draw pass.
+  const reconstruction=mapping.reconstruction;
+  const fillForeground=extraCapacity && reconstruction ? new Float32Array(extraCapacity):null;
   const bandAt=i=>{
     const x=positions[i*3]/aspect+.5,y=positions[i*3+1]+.5,near=positions[i*3+2];
     const mode=mapping.bandMap || 'depth';
@@ -162,6 +166,13 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
           fillStarts.set([ax,ay,positions[ai+2],rands[ai/3]],f*4);
           fillEnds.set([bx,by,positions[bi+2],rands[bi/3]],f*4);
           fillFractions[f]=t;rands[used]=(sample-1)/samplesPerEdge;used++;
+          if(fillForeground){
+            const index=Math.min(reconstruction.h-1,Math.floor(v*reconstruction.h))*reconstruction.w
+              +Math.min(reconstruction.w-1,Math.floor(u*reconstruction.w));
+            // Mirrors the foreground removed for AI, including lower-depth
+            // objects whose detected silhouette already has a hidden strip.
+            fillForeground[f]=near>.55 || (reconstruction.owner[index]>=0 && near>reconstruction.back[index]+.1) ? 1:0;
+          }
         }
       }
     }
@@ -177,6 +188,7 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
     fillStarts:fillStarts?.subarray(0,(used-baseCount)*4),
     fillEnds:fillEnds?.subarray(0,(used-baseCount)*4),
     fillFractions:fillFractions?.subarray(0,used-baseCount),
+    fillForeground:fillForeground?.subarray(0,used-baseCount),
     aspect,
   };
 }

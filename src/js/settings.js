@@ -72,6 +72,8 @@ const DEFAULTS = {
   reconstructionBrightness: .7,
   reconstructionPointLimit: 40000,
   reconstructionWidth: 1,
+  gapFillForegroundLimit: false, // use reconstructed foreground regions to limit added thickness
+  gapFillThickness: .6,    // retained portion of a foreground bridge, from its nearer surface
   curvatureSource: 'input', // 'input' or original slower 'bands' response
   dollyZoom: 0,           // audio camera approach with compensating field of view
   quietMovement: 0.6,      // minimum audio motion multiplier, before the silence fade

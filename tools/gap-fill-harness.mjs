@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 const occlusion=await readFile(new URL('../src/js/occlusion.js',import.meta.url),'utf8');
+const {prepareOcclusion}=await import(`data:text/javascript;base64,${Buffer.from(occlusion).toString('base64')}`);
 const source=(await readFile(new URL('../src/js/sampler.js',import.meta.url),'utf8')).replace("'./occlusion.js'",JSON.stringify(`data:text/javascript;base64,${Buffer.from(occlusion).toString('base64')}`));
 const {sampleImageToCloud}=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 let pixels;
@@ -15,6 +16,13 @@ assert.deepEqual(filled.colors.subarray(0,base.colors.length),base.colors);
 assert.deepEqual(filled.rands.subarray(0,base.rands.length),base.rands);
 assert.deepEqual(filled,repeat,'infill is deterministic');
 for(let i=base.count;i<filled.count;i++)assert.equal(filled.positions[i*3+2],Math.fround(filled.positions[i*3]<0 ? .05:.95),'infill must stay on its surface');
+const reconstruction=prepareOcclusion(depth,2.5);reconstruction.rgb=new Uint8Array(depth.w*depth.h*3).fill(100);delete reconstruction.mask;
+const classified=sampleImageToCloud(image,depth,12000,1,{reconstruction});
+for(const key of ['positions','colors','rands','fillStarts','fillEnds','fillFractions'])assert.deepEqual(classified[key],filled[key],'foreground classification must not alter existing geometry');
+assert.equal(classified.fillForeground.length,classified.fillFractions.length);
+assert.ok(classified.fillForeground.includes(0)&&classified.fillForeground.includes(1),'background and foreground must stay distinct');
+for(let f=0;f<classified.fillForeground.length;f++)assert.equal(classified.fillForeground[f],classified.positions[(classified.baseCount+f)*3+2]>.55 ? 1:0);
+assert.equal(filled.fillForeground,undefined,'ordinary gap fill must not reserve foreground metadata');
 for(let y=0;y<image.height;y++)for(let x=170;x<230;x++)pixels[(y*image.width+x)*4+3]=0;
 const transparent=sampleImageToCloud(image,null,12000,1);
 for(let i=0;i<transparent.count;i++){
