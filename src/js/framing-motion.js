@@ -8,9 +8,15 @@ export function animatedSample(x, y, near, rand, u, data, out, offset) {
   const map = u.uBandMap.value, n = u.uBandCount.value;
   let bt = map < 0.5 ? near : map < 1.5 ? clamp(Math.hypot(bx - 0.5, by - 0.5) * 1.25, 0, 1)
     : map < 2.5 ? 1 - by : bx;
-  if(map<.5) bt=Math.pow(clamp(near,0,1),u.uBandDistribution?.value ?? 1);
+  if(map<.5 && !(u.uSmartDepthBands?.value>.5)) bt=Math.pow(clamp(near,0,1),u.uBandDistribution?.value ?? 1);
   if (u.uInvert.value > 0.5) bt = 1 - bt;
-  const band = clamp(Math.floor(bt * n), 0, n - 1), amp = data[band * 4] / 255;
+  let band = clamp(Math.floor(bt * n), 0, n - 1);
+  if(map<.5 && u.uSmartDepthBands?.value>.5){
+    const lookup=u.uDepthBands.value.image.data;
+    band=lookup[Math.min(1023,Math.max(0,Math.floor(near*1024)))*4];
+    if(u.uInvert.value>.5)band=n-1-band;
+  }
+  const amp = data[band * 4] / 255;
   const l = u.uLayers.value, e = u.uExtraLayers.value;
   const time = u.uWaveTime.value, xyTime = u.uXYTime.value;
   let style = 0;

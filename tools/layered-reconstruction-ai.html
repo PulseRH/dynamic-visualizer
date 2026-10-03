@@ -1,0 +1,29 @@
+<!doctype html><meta charset="utf-8"><pre id="result">RUNNING</pre>
+<script type="module">
+import {reconstructBackground,packReconstruction,unpackReconstruction} from '../src/js/reconstruction.js';
+import {identifyDepthImage} from '../src/js/depth.js';
+import {planReconstructionLayers} from '../src/js/reconstruction-layers.js';
+const output=document.getElementById('result');
+try{
+ const canvas=document.createElement('canvas');canvas.width=384;canvas.height=256;const ctx=canvas.getContext('2d');
+ for(const [x,colour] of [[0,'#205ac0'],[120,'#30b840'],[240,'#eb2030']]){ctx.fillStyle=colour;ctx.fillRect(x,0,x===240 ? 144:120,256);}
+ const nonce=new Uint8Array(3);crypto.getRandomValues(nonce);ctx.fillStyle=`rgb(${nonce.join(',')})`;ctx.fillRect(0,0,1,1);
+ const blob=await new Promise(r=>canvas.toBlob(r)),bitmap=await createImageBitmap(blob);await identifyDepthImage(bitmap,blob);
+ const depth={w:128,h:86,data:new Float32Array(128*86)};
+ for(let y=0;y<86;y++)for(let x=0;x<128;x++)depth.data[y*128+x]=x<40 ? .1:x<80 ? .45:.9;
+ const statuses=[],start=performance.now();const result=await reconstructBackground(bitmap,depth,s=>{statuses.push(s);output.textContent='RUNNING '+s;});
+ if(!statuses.some(s=>s.includes('2 of 2')))throw Error('Distinct depth slices were not inferred separately');
+ const plan=planReconstructionLayers(depth,result),colour=[new Float64Array(3),new Float64Array(3)],counts=[0,0];
+ for(let y=8;y<78;y++)for(let x=0;x<128;x++){
+  const i=y*128+x;if(result.owner[i]<0)continue;const layer=plan.assignment[i];
+  if(result.distance[i]<3||result.distance[i]>12)continue;
+  counts[layer]++;for(let c=0;c<3;c++)colour[layer][c]+=result.rgb[i*3+c];
+ }
+ for(let l=0;l<2;l++){if(!counts[l])throw Error('Depth slice has no hidden geometry');for(let c=0;c<3;c++)colour[l][c]/=counts[l];}
+ if(colour[0][2]<=colour[0][1]||colour[1][1]<=colour[1][2])throw Error('Slice colours do not retain their own background context: '+JSON.stringify(colour.map(v=>Array.from(v))));
+ const restored=unpackReconstruction(packReconstruction(result));if(!restored.rgb.every((v,i)=>v===result.rgb[i]))throw Error('Cached layer composition differs');
+ if(await reconstructBackground(bitmap,depth)!==result)throw Error('Repeated call reran inference');
+ output.textContent=`PASS: two real MI-GAN depth slices ${(performance.now()-start).toFixed(0)} ms; far/middle context retained independently; mean RGB ${colour.map(v=>Array.from(v,Math.round).join('/')).join(', ')}; one compact cached point layer and memory reuse.`;
+ bitmap.close();
+}catch(error){output.textContent='FAIL: '+(error.stack||error);}
+</script>

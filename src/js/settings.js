@@ -73,6 +73,8 @@ const DEFAULTS = {
   reconstructionPointLimit: 40000,
   reconstructionWidth: 1,
   gapFillForegroundLimit: false, // automatic shell estimate near foreground outlines
+  wallFillPointLimit: 20000, // independently bounded side-wall points; zero disables
+  smartDepthBands: false, // snap audio cuts toward valleys in the image depth distribution
   gapFillThicknessBias: 1, // multiplier of the local estimate, not a gap percentage
   curvatureSource: 'input', // 'input' or original slower 'bands' response
   dollyZoom: 0,           // audio camera approach with compensating field of view

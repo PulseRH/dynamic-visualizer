@@ -5,7 +5,8 @@ const {prepareOcclusion}=await import(`data:text/javascript;base64,${Buffer.from
 const thicknessSource=await readFile(new URL('../src/js/fill-thickness.js',import.meta.url),'utf8');
 const {estimateFillThickness}=await import(`data:text/javascript;base64,${Buffer.from(thicknessSource).toString('base64')}`);
 const source=(await readFile(new URL('../src/js/sampler.js',import.meta.url),'utf8')).replace("'./occlusion.js'",JSON.stringify(`data:text/javascript;base64,${Buffer.from(occlusion).toString('base64')}`));
-const {sampleImageToCloud}=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+const rewritten=source.replace("'./wall-fill.js'",JSON.stringify(new URL('../src/js/wall-fill.js',import.meta.url).href)).replace("'./depth-bands.js'",JSON.stringify(new URL('../src/js/depth-bands.js',import.meta.url).href));
+const {sampleImageToCloud}=await import(`data:text/javascript;base64,${Buffer.from(rewritten).toString('base64')}`);
 let pixels;
 globalThis.OffscreenCanvas=class {getContext(){return {drawImage(){},getImageData(){return {data:pixels};}};}};
 const image={width:400,height:240};pixels=new Uint8ClampedArray(image.width*image.height*4).fill(255);

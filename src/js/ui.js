@@ -199,6 +199,8 @@ export class UI {
     slider('reconstructionBrightness','reconstructionBrightness',v=>`${Math.round(v*100)}%`);
     slider('reconstructionPointLimit','reconstructionPointLimit',v=>`${Math.round(v/1000)}k`);
     slider('reconstructionWidth','reconstructionWidth',v=>`${v.toFixed(2)}×`);
+    slider('wallFillPointLimit','wallFillPointLimit',v=>v===0 ? 'Off':`${Math.round(v/1000)}k`);
+    $('smartDepthBands').onchange=e=>set({smartDepthBands:e.target.checked});
     $('gapFillForegroundLimit').onchange=e=>set({gapFillForegroundLimit:e.target.checked});
     slider('gapFillThicknessBias','gapFillThicknessBias',v=>`${v.toFixed(2)}×`);
     slider('pointCount', 'pointCount', (v) => `${Math.round(v / 1000)}k`);
@@ -403,10 +405,11 @@ export class UI {
   }
 
   _syncAll() {
-    for(const [key,fmt] of [['reconstructionPointLimit',v=>`${Math.round(v/1000)}k`],['reconstructionWidth',v=>`${v.toFixed(2)}×`],['gapFillThicknessBias',v=>`${v.toFixed(2)}×`]]){
+    for(const [key,fmt] of [['wallFillPointLimit',v=>v===0 ? 'Off':`${Math.round(v/1000)}k`],['reconstructionPointLimit',v=>`${Math.round(v/1000)}k`],['reconstructionWidth',v=>`${v.toFixed(2)}×`],['gapFillThicknessBias',v=>`${v.toFixed(2)}×`]]){
       $(key).value=get(key);$(key).parentElement.querySelector('.val').textContent=fmt(get(key));
     }
     $('occludedBackground').checked=!!get('occludedBackground');
+    $('smartDepthBands').checked=!!get('smartDepthBands');
     $('gapFillForegroundLimit').checked=!!get('gapFillForegroundLimit');
     this._applyAccent();
     $('matchImageAccent').checked = !!get('matchImageAccent');
@@ -564,6 +567,7 @@ export class UI {
     const placement=get('bandDistribution');
     $('bandDistribution').parentElement.querySelector('.val').textContent=Math.abs(placement)<.005 ? 'Even' : `${Math.round(placement*100)}%`;
     $('bandDistributionRow').hidden=get('bandMap')!=='depth';
+    $('smartDepthBands').parentElement.hidden=get('bandMap')!=='depth';
     $('wallpaperCycle').checked=!!get('wallpaperCycle');
     $('cycleControls').hidden=!get('wallpaperCycle');
     setSlider('wallpaperCycleMinutes',get('wallpaperCycleMinutes'));

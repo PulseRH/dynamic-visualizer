@@ -1,7 +1,7 @@
 // Geometry preparation only. AI colours are generated separately, once per image.
 // A bounded strip behind each significant near/far edge stores its background
 // depth and the foreground boundary that must move away before it is revealed.
-export const OCCLUSION_VERSION = 3;
+export const OCCLUSION_VERSION = 4;
 export const OCCLUSION_WIDTH = 12; // pixels of the 256-wide depth grid (~5%)
 export const OCCLUSION_MAX_WIDTH = 2.5;
 

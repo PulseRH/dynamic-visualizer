@@ -3,6 +3,8 @@
 // z = nearness (0..1; the shader scales it and the audio drives displacement).
 
 import {sampleOcclusion} from './occlusion.js';
+import {sampleWalls} from './wall-fill.js';
+import {depthHistogram,depthBandLookup,DEPTH_BINS} from './depth-bands.js';
 
 export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) {
   const W = bitmap.width, H = bitmap.height;
@@ -33,9 +35,12 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
   // Bias changes live without another model, rebuild or draw pass.
   const reconstruction=mapping.reconstruction;
   const fillThickness=extraCapacity && reconstruction?.thickness ? new Float32Array(extraCapacity*2):null;
+  const histogram=depthHistogram(depth);
+  const lookup=mapping.smartDepthBands ? depthBandLookup(histogram,mapping.bands||64,mapping.bandDistribution||0):null;
   const bandAt=i=>{
     const x=positions[i*3]/aspect+.5,y=positions[i*3+1]+.5,near=positions[i*3+2];
     const mode=mapping.bandMap || 'depth';
+    if(mode==='depth'&&lookup){const band=lookup[Math.max(0,Math.min(DEPTH_BINS-1,Math.floor(near*DEPTH_BINS)))];return mapping.invertBands ? (mapping.bands||64)-1-band:band;}
     let t=mode==='depth' ? near**(4**(mapping.bandDistribution || 0)):mode==='radial' ? Math.min(1,Math.hypot(x-.5,y-.5)*1.25):mode==='vertical' ? 1-y:x;
     if(mapping.invertBands)t=1-t;
     return Math.max(0,Math.min((mapping.bands || 64)-1,Math.floor(t*(mapping.bands || 64))));
@@ -177,12 +182,18 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
     }
   }
 
+  const walls=sampleWalls(reconstruction,aspect,px,W,H,mapping.wallFillPointLimit||0);
+  let wallArea=0;
+  if(walls?.rands.length)for(let i=0;i<reconstruction.owner.length;i++)if(reconstruction.owner[i]===i)wallArea+=reconstruction.thickness[i]/reconstruction.h;
+  const wallLightScale=walls?.rands.length ? Math.min(1,wallArea*baseCount/aspect/walls.rands.length):1;
   return {
     positions: positions.subarray(0, used * 3),
     colors: colors.subarray(0, used * 3),
     rands: rands.subarray(0, used),
     count: used,
     baseCount,
+    depthHistogram:histogram,
+    walls,wallLightScale,
     reconstruction: mapping.reconstruction ? sampleOcclusion(mapping.reconstruction,aspect,baseCount,mapping):null,
     fillStarts:fillStarts?.subarray(0,(used-baseCount)*4),
     fillEnds:fillEnds?.subarray(0,(used-baseCount)*4),

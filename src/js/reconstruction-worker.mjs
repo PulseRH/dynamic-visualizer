@@ -1,5 +1,6 @@
 import {prepareOcclusion,OCCLUSION_MAX_WIDTH} from './occlusion.js';
 import {estimateFillThickness} from './fill-thickness.js';
+import {planReconstructionLayers} from './reconstruction-layers.js';
 
 // Official MI-GAN-512 pipeline, pinned to a content revision (MIT weights).
 const MODEL='https://huggingface.co/andraniksargsyan/migan/resolve/406830d0fa60666da0071c342ad2fbc8f30c5c64/migan_pipeline_v2.onnx';
@@ -32,17 +33,24 @@ self.onmessage=async ({data:{bitmap,depth}})=>{
     ctx.drawImage(bitmap,0,0,w,h);const pixels=ctx.getImageData(0,0,w,h).data;
     const image=new Uint8Array(w*h*3),mask=new Uint8Array(w*h);
     for(let y=0;y<h;y++)for(let x=0;x<w;x++){
-      const i=y*w+x,j=Math.min(depth.h-1,Math.floor(y/h*depth.h))*depth.w+Math.min(depth.w-1,Math.floor(x/w*depth.w));
-      for(let c=0;c<3;c++)image[c*w*h+i]=pixels[i*4+c];mask[i]=prepared.mask[j];
+      const i=y*w+x;
+      for(let c=0;c<3;c++)image[c*w*h+i]=pixels[i*4+c];
     }
-    self.postMessage({status:'Reconstructing behind foreground objects…'});
-    const output=await session.run({image:new ort.Tensor('uint8',image,[1,3,h,w]),mask:new ort.Tensor('uint8',mask,[1,1,h,w])});
-    const result=output[session.outputNames[0]],values=result.data;
-    if(values.length!==w*h*3)throw Error('Unexpected reconstruction dimensions');
+    const {layers,assignment}=planReconstructionLayers(depth,prepared);
     const rgb=new Uint8Array(depth.w*depth.h*3);
-    for(let y=0;y<depth.h;y++)for(let x=0;x<depth.w;x++){
-      const i=y*depth.w+x,j=Math.min(h-1,Math.floor((y+.5)/depth.h*h))*w+Math.min(w-1,Math.floor((x+.5)/depth.w*w));
-      for(let c=0;c<3;c++)rgb[i*3+c]=values[c*w*h+j];
+    for(let layer=0;layer<layers.length;layer++){
+      self.postMessage({status:`Reconstructing depth layer ${layer+1} of ${layers.length}…`});
+      for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+        const i=y*w+x,j=Math.min(depth.h-1,Math.floor(y/h*depth.h))*depth.w+Math.min(depth.w-1,Math.floor(x/w*depth.w));
+        mask[i]=alpha[j*4+3]<24 ? 255:layers[layer].mask[j];
+      }
+      const output=await session.run({image:new ort.Tensor('uint8',image,[1,3,h,w]),mask:new ort.Tensor('uint8',mask,[1,1,h,w])});
+      const result=output[session.outputNames[0]],values=result.data;
+      if(values.length!==w*h*3)throw Error('Unexpected reconstruction dimensions');
+      for(let y=0;y<depth.h;y++)for(let x=0;x<depth.w;x++){
+        const i=y*depth.w+x,j=Math.min(h-1,Math.floor((y+.5)/depth.h*h))*w+Math.min(w-1,Math.floor((x+.5)/depth.w*w));
+        if(assignment[i]===layer)for(let c=0;c<3;c++)rgb[i*3+c]=values[c*w*h+j];
+      }
     }
     delete prepared.mask;prepared.rgb=rgb;
     Object.assign(prepared,estimateFillThickness(depth,prepared));

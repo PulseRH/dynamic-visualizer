@@ -37,7 +37,8 @@ a few percent CPU and holds a steady frame rate without spinning fans.
     and fall back to the heuristic if unavailable. The depth worker exits after
     each image; model choice does not change animation workload.
 - **Hidden background** (optional, under Depth): local MI-GAN inpainting
-  reconstructs a separate background behind foreground depth edges. Reveals
+  reconstructs up to four hidden depth slices with separate masks, retaining
+  context appropriate to each depth instead of one shared distant background. Reveals
   particles as parallax or audio motion exposes them, including with static
   Depth strength at zero. Best with AI depth. It prepares narrow strips once
   per wallpaper, caches results by image content and depth map, and releases
@@ -50,6 +51,20 @@ a few percent CPU and holds a steady frame rate without spinning fans.
   no extra geometry; zero Hidden brightness skips its drawing. It invents
   plausible hidden content; large openings and imperfect depth masks remain
   limitations. Wallpaper windows reuse the preview's completed asset.
+- **Auto thickness**: short side walls originate at foreground depth outlines;
+  nearby Gap fill ends at the estimated shell distance rather than fading
+  across the entire opening. Interior seams retain their fill. **Thickness
+  bias** changes the endpoint live. **Wall points** is an independent 0–200k
+  budget (20k default), with density-compensated light and one optional draw
+  call. Zero points, disabled Auto thickness, silence or zero Fill brightness
+  skips wall drawing. Sliders never rerun AI. Thickness remains a visual
+  estimate from relative depth and image width, not recovered object geometry.
+- **Follow depth surfaces** (Depth band mapping): snap audio-band boundaries
+  toward valleys in the wallpaper's depth distribution while retaining band
+  count, frequency order and placement bias. A small lookup shared by the GPU,
+  Gap fill and screen framing keeps their assignments consistent. This is a
+  depth heuristic, not semantic segmentation; sloping objects can span bands.
+  AI reconstruction slices are independent of audio band count.
 - **Audio sources**
   - **System loopback** — visualize whatever the OS is playing
     (Windows: WASAPI loopback via Electron desktop capture; macOS works too).

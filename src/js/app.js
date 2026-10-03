@@ -285,10 +285,10 @@ async function rebuildCloud() {
   }
 
   const cloud = await buildCloud(currentImage, depth, get('pointCount'),get('gapFill'),{
-    bandMap:get('bandMap'),bandDistribution:get('bandDistribution'),bands:get('bands'),invertBands:get('invertBands'),
+    bandMap:get('bandMap'),bandDistribution:get('bandDistribution'),smartDepthBands:get('smartDepthBands'),bands:get('bands'),invertBands:get('invertBands'),
     gapFillDensity:get('gapFillDensity'),gapFillRows:get('gapFillRows'),gapFillSpread:get('gapFillSpread'),
     gapFillDepthLimit:get('gapFillDepthLimit'),
-    reconstruction,
+    reconstruction,wallFillPointLimit:get('wallFillPointLimit'),
     reconstructionPointLimit:get('reconstructionPointLimit'),reconstructionWidth:get('reconstructionWidth'),
   });
   if (token !== rebuildToken) return;
@@ -461,8 +461,8 @@ onChange((all, patch) => {
     clearTimeout(countTimer);
     countTimer = setTimeout(() => rebuildCloud(), 350);
   }
-  else if((get('gapFill')>0 && ['bands','bandMap','bandDistribution','invertBands','gapFillDensity','gapFillRows','gapFillSpread','gapFillDepthLimit'].some(key=>key in patch))
-    || (get('occludedBackground') && ['reconstructionPointLimit','reconstructionWidth'].some(key=>key in patch))){
+  else if((get('gapFill')>0 && ['bands','bandMap','bandDistribution','smartDepthBands','invertBands','gapFillDensity','gapFillRows','gapFillSpread','gapFillDepthLimit'].some(key=>key in patch))
+    || (get('occludedBackground') && ['reconstructionPointLimit','reconstructionWidth','wallFillPointLimit'].some(key=>key in patch))){
     clearTimeout(countTimer);countTimer=setTimeout(()=>rebuildCloud(),350);
   }
 });
