@@ -12,6 +12,41 @@ for(let i=0;i<prepared.owner.length;i++)if(prepared.owner[i]>=0){
   assert.ok(prepared.front[i]>.8);
 }
 assert.equal(prepareOcclusion({...depth,data:new Float32Array(depth.data.length).fill(.8)}).count,0,'flat depth must not invent occluders');
+// Smoothed depth edges must carry the far background through the full strip,
+// rather than let the near-side ramp samples seed an intermediate-depth layer.
+for(const rampWidth of [3,6,8])for(const vertical of [false,true]){
+  const w=96,h=96,data=new Float32Array(w*h);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+    const axis=vertical ? y:x;
+    data[y*w+x]=.15+.75*Math.max(0,Math.min(1,(axis-24)/rampWidth));
+  }
+  const result=prepareOcclusion({w,h,data},2.5);
+  for(let axis=24+rampWidth;axis<24+rampWidth+18;axis++){
+    const i=vertical ? axis*w+48:48*w+axis;
+    assert.ok(result.owner[i]>=0,'soft silhouette must extend behind the foreground');
+    assert.ok(Math.abs(result.back[i]-.15)<.001,'hidden layer must keep the far plateau depth');
+    assert.ok(Math.abs(result.front[i]-.9)<.001,'occluder must keep the foreground plateau depth');
+  }
+}
+// A small foreground figure needs fill behind its centre, including where its
+// two softened sides meet.
+const figure={w:96,h:96,data:new Float32Array(96*96).fill(.15)};
+for(let y=0;y<96;y++)for(let x=0;x<96;x++){
+  const head=Math.hypot(x-48,y-28)-7;
+  const body=Math.max(Math.abs(x-48)-9,Math.abs(y-52)-17);
+  figure.data[y*96+x]=.15+.75*Math.max(0,Math.min(1,-Math.min(head,body)/3));
+}
+const figureFill=prepareOcclusion(figure,2.5);
+for(const [x,y] of [[48,28],[48,45],[48,60]]){
+  const i=y*96+x;assert.ok(figureFill.owner[i]>=0,'fill must reach behind a small foreground figure');
+  assert.ok(figureFill.back[i]<.16,'the figure must reveal its background, not another figure slice');
+  assert.ok(figureFill.front[i]>.85);
+}
+const layered={w:96,h:64,data:new Float32Array(96*64)};
+for(let y=0;y<64;y++)for(let x=0;x<96;x++)layered.data[y*96+x]=x<24 ? .15:x<48 ? .5:.9;
+const layers=prepareOcclusion(layered,2.5),layerIndex=32*96+54;
+assert.ok(Math.abs(layers.back[layerIndex]-.5)<.001,'separate depth surfaces must retain their own background');
+assert.ok(Math.abs(layers.front[layerIndex]-.9)<.001);
 const largeDepth={w:256,h:128,data:new Float32Array(256*128).fill(.15)};
 for(let y=16;y<112;y++)for(let x=48;x<208;x++)largeDepth.data[y*256+x]=.9;
 const originalWidth=prepareOcclusion(largeDepth),wide=prepareOcclusion(largeDepth,2.5);
@@ -48,5 +83,7 @@ for(let i=0;i<20&&!entries.size;i++)await new Promise(r=>setTimeout(r,0));
 assert.deepEqual(await reconstructBackground({hash:'same'},depth),prepared);assert.equal(started,1,'same wallpaper reopened must use saved reconstruction');
 await reconstructBackground({hash:'changed'},depth);assert.equal(started,2);
 hold=true;const controller=new AbortController(),pending=reconstructBackground({hash:'cancel'},depth,()=>{},controller.signal);
-await new Promise(r=>setTimeout(r,0));controller.abort();await assert.rejects(pending,{name:'AbortError'});assert.equal(terminated,started,'cancelled inference worker must release its heap');
-console.log('PASS: 2.5x coverage retains original owners, 120k hidden points exceeds old caps, correct hidden depth, deterministic packed sampling, cache reuse and cancellation cleanup.');
+for(let i=0;i<50&&started<3;i++)await new Promise(r=>setTimeout(r,0));
+assert.equal(started,3,'cancellation test must wait until inference has started');
+controller.abort();await assert.rejects(pending,{name:'AbortError'});assert.equal(terminated,started,'cancelled inference worker must release its heap');
+console.log('PASS: softened horizontal/vertical silhouettes keep full background depth, small foreground figures fill through their centre, 2.5x coverage retains owners, point caps, deterministic sampling, cache reuse and cancellation cleanup.');

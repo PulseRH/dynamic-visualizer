@@ -1,7 +1,7 @@
 // Geometry preparation only. AI colours are generated separately, once per image.
 // A bounded strip behind each significant near/far edge stores its background
 // depth and the foreground boundary that must move away before it is revealed.
-export const OCCLUSION_VERSION = 2;
+export const OCCLUSION_VERSION = 3;
 export const OCCLUSION_WIDTH = 12; // pixels of the 256-wide depth grid (~5%)
 export const OCCLUSION_MAX_WIDTH = 2.5;
 
@@ -15,23 +15,57 @@ export function prepareOcclusion(depth, width=1) {
   const back=new Float32Array(n), front=new Float32Array(n);
   const normalX=new Int8Array(n),normalY=new Int8Array(n);
   const queue=new Int32Array(n);let head=0,tail=0;
-  // Look across two depth samples: depth estimation deliberately smooths edges.
+  const directions=[[1,0],[-1,0],[0,1],[0,-1]];
+  const jumpAt=(x,y,dx,dy)=>{
+    const xx=x+dx*2,yy=y+dy*2;
+    return xx<0||xx>=w||yy<0||yy>=h ? 0:data[y*w+x]-data[yy*w+xx];
+  };
+  // A softened silhouette is one transition, not several nested objects.
+  // Keep its gradient peak, then follow the ramp to the depths on both sides.
+  // All of this runs once in the preparation worker, never in the render loop.
+  const trace=(x,y,dx,dy,sign)=>{
+    let value=data[y*w+x],endX=x,endY=y,quiet=0;
+    for(let step=1;step<=10;step++){
+      const xx=x+dx*step,yy=y+dy*step;if(xx<0||xx>=w||yy<0||yy>=h)break;
+      const next=data[yy*w+xx],change=(next-value)*sign;
+      if(change<-.02)break; // another surface, rather than this silhouette
+      if(change<.003){if(++quiet===2)break;}else quiet=0;
+      if(change>0){value=next;endX=xx;endY=yy;}
+    }
+    return {value,x:endX,y:endY};
+  };
   for(let y=2;y<h-2;y++)for(let x=2;x<w-2;x++){
-    const i=y*w+x;let best=.12,dx=0,dy=0,far=0;
-    for(const [nx,ny] of [[1,0],[-1,0],[0,1],[0,-1]]){
-      const value=data[(y+ny*2)*w+x+nx*2],jump=data[i]-value;
-      if(jump>best){best=jump;dx=nx;dy=ny;far=value;}
+    const i=y*w+x;let best=.12,dx=0,dy=0;
+    for(const [nx,ny] of directions){
+      const jump=jumpAt(x,y,nx,ny);
+      if(jump>best){best=jump;dx=nx;dy=ny;}
     }
     if(!dx&&!dy)continue;
-    owner[i]=i;distance[i]=0;back[i]=far;front[i]=data[i];
-    normalX[i]=dx;normalY[i]=-dy;queue[tail++]=i;
+    let peak=true;
+    for(const step of [-2,-1,1,2]){
+      const xx=x+dx*step,yy=y+dy*step;if(xx<0||xx>=w||yy<0||yy>=h)continue;
+      const other=jumpAt(xx,yy,dx,dy),j=yy*w+xx;
+      if(other>best+1e-6||(Math.abs(other-best)<=1e-6&&j<i)){peak=false;break;}
+    }
+    if(!peak)continue;
+    const far=trace(x,y,dx,dy,-1),near=trace(x,y,-dx,-dy,1);
+    const middle=(far.value+near.value)*.5;
+    // Place the owner at the silhouette's half-depth contour. Its depth must
+    // be the foreground plateau, so the background moves independently of it.
+    let ex=far.x,ey=far.y;
+    while(data[ey*w+ex]<middle&&(ex!==near.x||ey!==near.y)){ex-=dx;ey-=dy;}
+    const edge=ey*w+ex;
+    if(owner[edge]>=0&&front[edge]-back[edge]>=near.value-far.value)continue;
+    if(owner[edge]<0)queue[tail++]=edge;
+    owner[edge]=edge;distance[edge]=0;back[edge]=far.value;front[edge]=near.value;
+    normalX[edge]=dx;normalY[edge]=-dy;
   }
   // Multi-source flood keeps one owner per hidden pixel, avoiding duplicate
   // strips/hotspots at corners. Restrict it to the foreground side of the edge.
   while(head<tail){
     const i=queue[head++],x=i%w,y=Math.floor(i/w);
     if(distance[i]>=maxDistance)continue;
-    for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+    for(const [dx,dy] of directions){
       const xx=x+dx,yy=y+dy;if(xx<0||xx>=w||yy<0||yy>=h)continue;
       const j=yy*w+xx;if(owner[j]>=0||data[j]<back[i]+.1)continue;
       const edge=owner[i],ex=edge%w,ey=Math.floor(edge/w);

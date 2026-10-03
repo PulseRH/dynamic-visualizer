@@ -1,7 +1,7 @@
 import {depthImageIdentity} from './depth.js';
 import {OCCLUSION_VERSION} from './occlusion.js';
 
-const RESULTS='dv-hidden-background-v2',memory=new WeakMap();
+const RESULTS=`dv-hidden-background-v${OCCLUSION_VERSION}`,memory=new WeakMap();
 const FIELDS={owner:Int32Array,back:Float32Array,front:Float32Array,normalX:Int8Array,normalY:Int8Array,distance:Uint8Array,rgb:Uint8Array};
 // Binary cache avoids turning large typed grids into JS object/JSON trees.
 export function packReconstruction(result){
