@@ -11,6 +11,7 @@ import { makeProceduralImage } from './sampler.js';
 import { buildCloud } from './cloud-builder.js';
 import { estimateDepth, depthModelUrl, identifyDepthImage, depthImageIdentity } from './depth.js';
 import { reconstructBackground } from './reconstruction.js';
+import {prepareObjectThickness} from './object-thickness.js';
 import { copySpectrumBands } from './spectrum-relay.js';
 import { UI } from './ui.js';
 import { bridge, platform } from './bridge.js';
@@ -272,7 +273,20 @@ async function rebuildCloud() {
       try{
         reconstruction=await reconstructBackground(currentImage,depth,status=>{if(token===rebuildToken)ui.setReconstructionStatus(status);},controller.signal);
         if(token!==rebuildToken)return;
-        ui.setReconstructionStatus(reconstruction ? 'Hidden background ready':'No distinct foreground edges found');
+        let maskStatus='';
+        if(reconstruction&&get('gapFillForegroundLimit')&&get('aiFillThickness')){
+          try{
+            const objects=await prepareObjectThickness(currentImage,depth,reconstruction,status=>{if(token===rebuildToken)ui.setReconstructionStatus(status);},controller.signal);
+            if(token!==rebuildToken)return;
+            reconstruction={...reconstruction,thickness:objects.thickness,edgeWeight:objects.edgeWeight};
+            maskStatus=objects.count ? ` · ${objects.count} AI object masks`:' · no confident object masks; depth estimate';
+          }catch(error){
+            if(controller.signal.aborted||token!==rebuildToken)return;
+            console.warn('Object masks unavailable',error);
+            maskStatus=' · AI masks unavailable; using depth estimate';
+          }
+        }
+        ui.setReconstructionStatus(reconstruction ? 'Hidden background ready'+maskStatus:'No distinct foreground edges found');
       }catch(err){
         if(controller.signal.aborted||token!==rebuildToken)return;
         console.warn('Hidden background failed',err);
@@ -470,7 +484,7 @@ onChange((all, patch) => {
     countTimer = setTimeout(() => rebuildCloud(), 350);
   }
   else if((get('gapFill')>0 && ['bands','bandMap','bandDistribution','smartDepthBands','invertBands','gapFillPointLimit','gapFillDensity','gapFillRows','gapFillSpread','gapFillDepthLimit'].some(key=>key in patch))
-    || (get('occludedBackground') && ['reconstructionPointLimit','reconstructionWidth'].some(key=>key in patch))){
+    || (get('occludedBackground') && ['reconstructionPointLimit','reconstructionWidth','gapFillForegroundLimit','aiFillThickness'].some(key=>key in patch))){
     clearTimeout(countTimer);countTimer=setTimeout(()=>rebuildCloud(),350);
   }
 });

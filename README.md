@@ -63,6 +63,15 @@ a few percent CPU and holds a steady frame rate without spinning fans.
   audio depth reversals cannot transfer ownership to the background. Bias
   changes live; point-budget edits resample cached
   image/depth data without AI. Thickness remains a visual estimate.
+- **AI object masks** (under Fill tuning) guides Auto thickness with quantised
+  SegFormer B0 ADE20K segmentation (~4.5 MB, downloaded once). Building parts
+  share a surface mask; connected regions are separated by depth jumps and
+  bounded depth range. Masks combine with the existing depth/local-width
+  estimate; they do not recover true hidden geometry. Runs in one CPU worker
+  only when preparing a wallpaper, caches up to eight completed estimates,
+  and terminates the worker afterwards. No extra animation draw calls.
+  Requires Auto thickness and Reconstruct behind objects. Off or unavailable
+  inference uses the depth-only estimate; sliders reuse cached results.
 - **Save/Load presets** at the top store named snapshots of visualiser settings,
   including audio response, motion, colour, depth, fill and performance controls.
   Wallpaper, audio source and window/startup choices stay with the session.

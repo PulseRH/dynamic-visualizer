@@ -219,6 +219,7 @@ export class UI {
     slider('gapFillPointLimit','gapFillPointLimit',v=>v===0 ? 'Off':`${Math.round(v/1000)}k`);
     $('smartDepthBands').onchange=e=>set({smartDepthBands:e.target.checked});
     $('gapFillForegroundLimit').onchange=e=>set({gapFillForegroundLimit:e.target.checked});
+    $('aiFillThickness').onchange=e=>set({aiFillThickness:e.target.checked});
     slider('gapFillThicknessBias','gapFillThicknessBias',v=>`${v.toFixed(2)}×`);
     slider('pointCount', 'pointCount', (v) => `${Math.round(v / 1000)}k`);
     slider('pointSize', 'pointSize', (v) => v.toFixed(1));
@@ -428,6 +429,7 @@ export class UI {
     $('occludedBackground').checked=!!get('occludedBackground');
     $('smartDepthBands').checked=!!get('smartDepthBands');
     $('gapFillForegroundLimit').checked=!!get('gapFillForegroundLimit');
+    $('aiFillThickness').checked=!!get('aiFillThickness');
     this._applyAccent();
     $('matchImageAccent').checked = !!get('matchImageAccent');
     const syncSeg = (id, v) => {

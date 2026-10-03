@@ -1,6 +1,6 @@
 // A visual shell estimate from one relative-depth image, not recovered geometry.
 // Prepared once alongside reconstruction and cached; audio bands are not inputs.
-export function estimateFillThickness(depth,reconstruction){
+export function estimateFillThickness(depth,reconstruction,objects=null){
   const {w,h,data}=depth,n=w*h;
   const surface=new Float32Array(n),labels=new Int32Array(n),queue=new Int32Array(n);
   const distance=new Float32Array(n).fill(Infinity),boundary=new Int32Array(n).fill(-1);
@@ -10,13 +10,26 @@ export function estimateFillThickness(depth,reconstruction){
     const rim=reconstruction.owner[i]>=0&&data[i]>reconstruction.back[i]+.1;
     if(data[i]>.55||rim)surface[i]=rim ? Math.max(data[i],reconstruction.front[i]):data[i];
   }
+  const objectIds=objects?.labels?.length===n ? objects.labels:null;
+  if(objectIds){
+    const sums=new Float64Array(65536),counts=new Uint32Array(65536),evidence=new Uint32Array(65536);
+    for(let i=0;i<n;i++)if(objectIds[i]){const id=objectIds[i];sums[id]+=data[i];counts[id]++;if(surface[i])evidence[id]++;}
+    for(let i=0;i<n;i++)if(objectIds[i]){
+      const id=objectIds[i];
+      // Masks identify contours; depth still rejects background regions and
+      // severe within-mask depth disagreement. Depth values remain original.
+      if(evidence[id]>=4&&evidence[id]/counts[id]>=.05&&data[i]>=Math.max(.1,sums[id]/counts[id]-.2))surface[i]=Math.max(surface[i],data[i]);
+    }
+  }
   // Segment continuous depth surfaces, merging the already consolidated soft
   // silhouettes. Never derive object boundaries from the user's band count.
   let label=0;
   for(let seed=0;seed<n;seed++)if(surface[seed]&&!labels[seed]){
     let head=0,tail=1;queue[0]=seed;labels[seed]=++label;
     while(head<tail){const i=queue[head++];neighbours(i,j=>{
-      if(surface[j]&&!labels[j]&&Math.abs(surface[i]-surface[j])<=.16){labels[j]=label;queue[tail++]=j;}
+      const sameObject=!objectIds||objectIds[i]===objectIds[j];
+      const continuous=objectIds?.[i]>0||Math.abs(surface[i]-surface[j])<=.16;
+      if(surface[j]&&!labels[j]&&sameObject&&continuous){labels[j]=label;queue[tail++]=j;}
     });}
   }
   // Seed the outline, with the local depth behind it. The half-pixel distance

@@ -73,6 +73,7 @@ export const DEFAULTS = {
   reconstructionPointLimit: 40000,
   reconstructionWidth: 1,
   gapFillForegroundLimit: false, // automatic shell estimate near foreground outlines
+  aiFillThickness: true, // cached SegFormer masks guide Auto thickness; no per-frame model
   gapFillPointLimit: 180000, // ordinary seam points, independently capped; zero disables
   smartDepthBands: false, // snap audio cuts toward valleys in the image depth distribution
   gapFillThicknessBias: 1, // multiplier of the local estimate, not a gap percentage

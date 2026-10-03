@@ -1,0 +1,30 @@
+<!doctype html><meta charset="utf-8"><pre id="result">RUNNING</pre>
+<script type="module">
+import {prepareObjectThickness} from '../src/js/object-thickness.js';
+const NativeWorker=window.Worker;let live=0,terminated=0;
+try{
+ const canvas=document.createElement('canvas');canvas.width=32;canvas.height=32;
+ const depth={w:8,h:8,data:new Float32Array(64).fill(.9)},reconstruction={owner:new Int32Array(64),front:new Float32Array(64).fill(.9),back:new Float32Array(64).fill(.1)};
+ window.Worker=class{
+   constructor(){live++;}
+   postMessage(){this.timer=setTimeout(()=>this.onmessage({data:{ok:false,error:'Model unavailable'}}),10);}
+   terminate(){clearTimeout(this.timer);live--;terminated++;}
+ };
+ const image=await createImageBitmap(canvas);
+ let failed=false;try{await prepareObjectThickness(image,depth,reconstruction);}catch(error){failed=error.message==='Model unavailable';}
+ if(!failed||live||terminated!==1)throw Error('Failed model worker was not released');
+ const controller=new AbortController();
+ window.Worker=class{
+   constructor(){live++;}
+   postMessage(){this.timer=setTimeout(()=>this.onmessage({data:{status:'Encoding'}}),10);}
+   terminate(){clearTimeout(this.timer);live--;terminated++;}
+ };
+ let aborted=false;
+ try{await prepareObjectThickness(image,depth,reconstruction,()=>controller.abort(),controller.signal);}catch(error){aborted=error.name==='AbortError';}
+ if(!aborted||live||terminated!==2)throw Error('Cancelled model worker was not released');
+ try{await prepareObjectThickness(image,depth,reconstruction,()=>{},controller.signal);throw Error('Already-aborted request ran');}catch(error){if(error.name!=='AbortError')throw error;}
+ if(terminated!==2)throw Error('Already-aborted request created a worker');
+ image.close();document.getElementById('result').textContent='PASS: failed/cancelled object inference releases its worker; already-aborted requests start none.';
+}catch(error){document.getElementById('result').textContent='FAIL '+error.stack;}
+finally{window.Worker=NativeWorker;}
+</script>
