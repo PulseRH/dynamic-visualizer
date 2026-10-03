@@ -9,17 +9,20 @@ import { AudioEngine } from './audio.js';
 import { AudioActivity } from './audio-activity.js';
 import { makeProceduralImage } from './sampler.js';
 import { buildCloud } from './cloud-builder.js';
-import { estimateDepth, depthModelUrl, identifyDepthImage } from './depth.js';
+import { estimateDepth, depthModelUrl, identifyDepthImage, depthImageIdentity } from './depth.js';
 import { reconstructBackground } from './reconstruction.js';
 import { copySpectrumBands } from './spectrum-relay.js';
 import { UI } from './ui.js';
 import { bridge, platform } from './bridge.js';
 import { get, set, getAll, onChange } from './settings.js';
 import { advanceFrameClock } from './frame-pacing.js';
+import {WallpaperBands} from './wallpaper-bands.js';
 
 const canvas = document.getElementById('gl');
 const scene = new VisualScene(canvas);
 const audio = new AudioEngine();
+
+const wallpaperBands=new WallpaperBands();
 
 let currentImage = null;      // canvas or ImageBitmap currently visualized
 let currentImageUrl = null;   // for the thumbnail
@@ -97,6 +100,10 @@ async function loadFromUrl(url) {
 }
 
 function setMainImage(imageLike, urlForThumb) {
+  if(!isWallpaperWindow){
+    const savedBands=wallpaperBands.activate(depthImageIdentity(imageLike)||urlForThumb||null,getAll());
+    if(savedBands)set(savedBands);
+  }
   currentImage = imageLike;
   currentImageUrl = urlForThumb;
   ui.setThumb(urlForThumb || '');
@@ -288,7 +295,7 @@ async function rebuildCloud() {
     bandMap:get('bandMap'),bandDistribution:get('bandDistribution'),smartDepthBands:get('smartDepthBands'),bands:get('bands'),invertBands:get('invertBands'),
     gapFillDensity:get('gapFillDensity'),gapFillRows:get('gapFillRows'),gapFillSpread:get('gapFillSpread'),
     gapFillDepthLimit:get('gapFillDepthLimit'),
-    reconstruction,wallFillPointLimit:get('wallFillPointLimit'),
+    reconstruction,gapFillPointLimit:get('gapFillPointLimit'),
     reconstructionPointLimit:get('reconstructionPointLimit'),reconstructionWidth:get('reconstructionWidth'),
   });
   if (token !== rebuildToken) return;
@@ -426,6 +433,7 @@ function applyAudioResponse() {
 }
 
 onChange((all, patch) => {
+  if(!isWallpaperWindow && ('bands' in patch || 'invertBands' in patch))wallpaperBands.remember(all);
   if('wallpaperCycle' in patch || 'wallpaperCycleMinutes' in patch){cycleElapsed=0;cycleEntries=[];}
   if (calibration && ['audioSource', 'audioFileUrl', 'eqCurve', 'tiltEQ', 'tiltPivot', 'bands'].some((key) => key in patch)) finishCalibration(true);
   scene.applySettings(all);
@@ -461,8 +469,8 @@ onChange((all, patch) => {
     clearTimeout(countTimer);
     countTimer = setTimeout(() => rebuildCloud(), 350);
   }
-  else if((get('gapFill')>0 && ['bands','bandMap','bandDistribution','smartDepthBands','invertBands','gapFillDensity','gapFillRows','gapFillSpread','gapFillDepthLimit'].some(key=>key in patch))
-    || (get('occludedBackground') && ['reconstructionPointLimit','reconstructionWidth','wallFillPointLimit'].some(key=>key in patch))){
+  else if((get('gapFill')>0 && ['bands','bandMap','bandDistribution','smartDepthBands','invertBands','gapFillPointLimit','gapFillDensity','gapFillRows','gapFillSpread','gapFillDepthLimit'].some(key=>key in patch))
+    || (get('occludedBackground') && ['reconstructionPointLimit','reconstructionWidth'].some(key=>key in patch))){
     clearTimeout(countTimer);countTimer=setTimeout(()=>rebuildCloud(),350);
   }
 });

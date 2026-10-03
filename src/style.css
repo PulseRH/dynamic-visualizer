@@ -340,3 +340,8 @@ body.wallpaper #hud,
 body.wallpaper #panel,
 body.wallpaper #toasts,
 body.wallpaper #dropOverlay { display: none !important; }
+
+.preset-row { display:flex; gap:8px; margin-top:14px; }
+.preset-row input { min-width:0; flex:1; width:0; padding:8px 10px; border:1px solid var(--border); border-radius:10px; background:var(--bg-glass-2); color:var(--text); font:inherit; font-size:.8rem; }
+.preset-row input:focus { outline:1px solid var(--accent); }
+.preset-row .btn { flex:0 0 auto; }

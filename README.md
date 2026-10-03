@@ -51,14 +51,18 @@ a few percent CPU and holds a steady frame rate without spinning fans.
   no extra geometry; zero Hidden brightness skips its drawing. It invents
   plausible hidden content; large openings and imperfect depth masks remain
   limitations. Wallpaper windows reuse the preview's completed asset.
-- **Auto thickness**: short side walls originate at foreground depth outlines;
-  nearby Gap fill ends at the estimated shell distance rather than fading
-  across the entire opening. Interior seams retain their fill. **Thickness
-  bias** changes the endpoint live. **Wall points** is an independent 0–200k
-  budget (20k default), with density-compensated light and one optional draw
-  call. Zero points, disabled Auto thickness, silence or zero Fill brightness
-  skips wall drawing. Sliders never rerun AI. Thickness remains a visual
-  estimate from relative depth and image width, not recovered object geometry.
+- **Gap fill points**: independently cap ordinary seam infill at 0–400k extra
+  points (180k default). The Gap fill percentage scales that budget, with a
+  150% of Count ceiling. Higher budgets add GPU work and memory. **Auto
+  thickness** and **Thickness bias** clip excessive foreground infill at the
+  local shell distance, preserving interior seams without separate wall or
+  outline geometry. Bias changes live; point-budget edits resample cached
+  image/depth data without AI. Thickness remains a visual estimate.
+- **Save/Load presets** at the top store named snapshots of visualiser settings,
+  including audio response, motion, colour, depth, fill and performance controls.
+  Wallpaper, audio source and window/startup choices stay with the session.
+  Saving an existing name replaces it. **Bands** and **Invert bands** are also
+  remembered automatically per wallpaper image, including after a restart.
 - **Follow depth surfaces** (Depth band mapping): snap audio-band boundaries
   toward valleys in the wallpaper's depth distribution while retaining band
   count, frequency order and placement bias. A small lookup shared by the GPU,

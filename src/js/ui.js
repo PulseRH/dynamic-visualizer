@@ -1,8 +1,9 @@
 // HUD + settings panel wiring. Owns DOM; app.js supplies the heavy lifting
 // through callbacks.
 
-import { get, set, onChange, getAll } from './settings.js';
+import { get, set, onChange, getAll, DEFAULTS } from './settings.js';
 import { bridge } from './bridge.js';
+import {createPresetStore} from './presets.js';
 import { responsePlots } from './response-plots.js';
 import { easingBendAt, constrainBezier, moveBezierControl, DEFAULT_BEZIER } from './easing.js';
 import { BAND_CHOICES, bandChoiceIndex } from './band-choices.js';
@@ -19,6 +20,7 @@ export class UI {
     this.levelBar = $('levelBar');
     this.hint = $('audioHint');
 
+    this._wirePresets();
     this._wirePanel();
     this._wireSegments();
     this._wireSliders();
@@ -116,6 +118,21 @@ export class UI {
       }
     }
   }
+  _wirePresets() {
+    const store=createPresetStore(DEFAULTS),name=$('presetName');
+    const refresh=()=>{
+      $('presetNames').replaceChildren(...store.names().map(value=>{const option=document.createElement('option');option.value=value;return option;}));
+    };
+    refresh();
+    $('savePreset').onclick=()=>{
+      try{name.value=store.save(name.value,getAll());refresh();this.toast(`Saved “${name.value}”`);}catch(error){this.toast(error.message,'err');}
+    };
+    $('loadPreset').onclick=()=>{
+      try{set(store.load(name.value));this.toast(`Loaded “${name.value.trim()}”`);}catch(error){this.toast(error.message,'err');}
+    };
+    window.addEventListener('storage',event=>{if(event.key==='dv.presets.v1')refresh();});
+  }
+
   _wirePanel() {
     this.narrowWindow = window.matchMedia('(max-width: 480px)');
     this.narrowWindow.addEventListener('change', () => this._syncWindowLayout());
@@ -199,7 +216,7 @@ export class UI {
     slider('reconstructionBrightness','reconstructionBrightness',v=>`${Math.round(v*100)}%`);
     slider('reconstructionPointLimit','reconstructionPointLimit',v=>`${Math.round(v/1000)}k`);
     slider('reconstructionWidth','reconstructionWidth',v=>`${v.toFixed(2)}×`);
-    slider('wallFillPointLimit','wallFillPointLimit',v=>v===0 ? 'Off':`${Math.round(v/1000)}k`);
+    slider('gapFillPointLimit','gapFillPointLimit',v=>v===0 ? 'Off':`${Math.round(v/1000)}k`);
     $('smartDepthBands').onchange=e=>set({smartDepthBands:e.target.checked});
     $('gapFillForegroundLimit').onchange=e=>set({gapFillForegroundLimit:e.target.checked});
     slider('gapFillThicknessBias','gapFillThicknessBias',v=>`${v.toFixed(2)}×`);
@@ -405,7 +422,7 @@ export class UI {
   }
 
   _syncAll() {
-    for(const [key,fmt] of [['wallFillPointLimit',v=>v===0 ? 'Off':`${Math.round(v/1000)}k`],['reconstructionPointLimit',v=>`${Math.round(v/1000)}k`],['reconstructionWidth',v=>`${v.toFixed(2)}×`],['gapFillThicknessBias',v=>`${v.toFixed(2)}×`]]){
+    for(const [key,fmt] of [['gapFillPointLimit',v=>v===0 ? 'Off':`${Math.round(v/1000)}k`],['reconstructionPointLimit',v=>`${Math.round(v/1000)}k`],['reconstructionWidth',v=>`${v.toFixed(2)}×`],['gapFillThicknessBias',v=>`${v.toFixed(2)}×`]]){
       $(key).value=get(key);$(key).parentElement.querySelector('.val').textContent=fmt(get(key));
     }
     $('occludedBackground').checked=!!get('occludedBackground');

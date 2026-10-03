@@ -1,0 +1,24 @@
+import assert from 'node:assert/strict';
+import {createPresetStore} from '../src/js/presets.js';
+import {WallpaperBands} from '../src/js/wallpaper-bands.js';
+const data=new Map(),storage={getItem:key=>data.get(key),setItem:(key,value)=>data.set(key,value)};
+const defaults={bands:64,invertBands:false,intensity:1,sensGain:1,easeInBezier:[.2,.35,.6,1],gapFillPointLimit:180000,
+  imageUrl:null,audioSource:'demo',settingsOnly:false};
+const store=createPresetStore(defaults,storage),curve=[.1,.2,.8,.9];
+store.save(' Calm ',{...defaults,bands:20,intensity:.6,sensGain:1.2,easeInBezier:curve,imageUrl:'private-image',audioSource:'system',settingsOnly:true});
+curve[0]=.9;const loaded=store.load('Calm');
+assert.equal(loaded.bands,20);assert.equal(loaded.intensity,.6);assert.equal(loaded.sensGain,1.2);assert.equal(loaded.easeInBezier[0],.1,'preset curves must be snapshots');
+for(const excluded of ['imageUrl','audioSource','settingsOnly'])assert.ok(!(excluded in loaded));
+store.save('Calm',{...defaults,bands:32});assert.deepEqual(store.names(),['Calm']);assert.equal(store.load('Calm').bands,32,'saving the same name replaces its settings');
+store.save('Energetic',{...defaults,intensity:2});assert.deepEqual(createPresetStore(defaults,storage).names(),['Calm','Energetic'],'presets survive reopening');
+assert.throws(()=>store.save(' ',defaults));assert.throws(()=>store.load('Missing'));
+const blocked=createPresetStore(defaults,{getItem:()=>null,setItem:()=>{throw Error('Full');}});assert.throws(()=>blocked.save('A',defaults),/Full/,'failed storage must not report successful save');
+const a=new WallpaperBands(storage);assert.equal(a.activate('image-content-a',{bands:20,invertBands:false}),null);
+a.remember({bands:40,invertBands:true});assert.equal(a.activate('image-content-b',{bands:40,invertBands:true}),null);
+a.remember({bands:14,invertBands:false});assert.deepEqual(a.activate('image-content-a',{bands:14,invertBands:false}),{bands:40,invertBands:true});
+const reopened=new WallpaperBands(storage);assert.deepEqual(reopened.activate('image-content-b',defaults),{bands:14,invertBands:false});
+assert.equal(reopened.activate('changed-content-at-same-path',defaults),null,'different image content must have its own record');
+assert.equal(reopened.activate(null,defaults),null,'anonymous fallback must not overwrite a wallpaper');
+data.set('dv.presets.v1','broken');assert.deepEqual(store.names(),[]);
+data.set('dv.wallpaper-bands.v1','{}');assert.equal(new WallpaperBands(storage).activate('new',defaults),null);
+console.log('PASS: persistent named snapshots, replace/load, curve isolation, visual-only scope, storage failure, independent wallpaper band/inversion and content identity.');

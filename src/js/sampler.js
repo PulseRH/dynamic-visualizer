@@ -3,7 +3,6 @@
 // z = nearness (0..1; the shader scales it and the audio drives displacement).
 
 import {sampleOcclusion} from './occlusion.js';
-import {sampleWalls} from './wall-fill.js';
 import {depthHistogram,depthBandLookup,DEPTH_BINS} from './depth-bands.js';
 
 export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) {
@@ -21,7 +20,8 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
   const n = cols * rows;
   const fill=Math.max(0,Math.min(1,Number.isFinite(gapFill) ? gapFill:0));
   const depthLimit=Math.max(.01,Math.min(.3,mapping.gapFillDepthLimit ?? .06));
-  const extraCapacity=Math.floor(Math.min(n*1.5,180000)*fill);
+  const pointLimit=Math.max(0,Math.min(400000,Number.isFinite(mapping.gapFillPointLimit) ? Math.round(mapping.gapFillPointLimit):180000));
+  const extraCapacity=Math.floor(Math.min(n*1.5,pointLimit)*fill);
   const capacity=n+extraCapacity;
   const grid=extraCapacity ? new Int32Array(n).fill(-1):null;
 
@@ -111,7 +111,7 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
         keys[candidates]=slot*4+axis;scores[candidates]=score;histogram[score]++;candidates++;
       }
     }
-    const pointBudget=Math.floor(Math.min(baseCount*1.5,180000)*fill);
+    const pointBudget=Math.floor(Math.min(baseCount*1.5,pointLimit)*fill);
     // More fill increases both the number of bridges and their density.
     // Ordinary point sizes are retained even when animated bands pull apart.
     const samplesPerEdge=Math.max(3,Math.min(24,Math.round(mapping.gapFillDensity ?? 12)));
@@ -182,10 +182,6 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
     }
   }
 
-  const walls=sampleWalls(reconstruction,aspect,px,W,H,mapping.wallFillPointLimit||0);
-  let wallArea=0;
-  if(walls?.rands.length)for(let i=0;i<reconstruction.owner.length;i++)if(reconstruction.owner[i]===i)wallArea+=reconstruction.thickness[i]/reconstruction.h;
-  const wallLightScale=walls?.rands.length ? Math.min(1,wallArea*baseCount/aspect/walls.rands.length):1;
   return {
     positions: positions.subarray(0, used * 3),
     colors: colors.subarray(0, used * 3),
@@ -193,7 +189,6 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
     count: used,
     baseCount,
     depthHistogram:histogram,
-    walls,wallLightScale,
     reconstruction: mapping.reconstruction ? sampleOcclusion(mapping.reconstruction,aspect,baseCount,mapping):null,
     fillStarts:fillStarts?.subarray(0,(used-baseCount)*4),
     fillEnds:fillEnds?.subarray(0,(used-baseCount)*4),

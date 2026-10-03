@@ -1,9 +1,7 @@
 import assert from 'node:assert/strict';
 import {prepareOcclusion} from '../src/js/occlusion.js';
-import {estimateFillThickness} from '../src/js/fill-thickness.js';
 import {planReconstructionLayers} from '../src/js/reconstruction-layers.js';
 import {depthHistogram,depthBandLookup} from '../src/js/depth-bands.js';
-import {sampleWalls} from '../src/js/wall-fill.js';
 const depth={w:128,h:96,data:new Float32Array(128*96)};
 for(let y=0;y<96;y++)for(let x=0;x<128;x++)depth.data[y*128+x]=x<32 ? .1:x<72 ? .45:.9;
 const prepared=prepareOcclusion(depth,2.5),plan=planReconstructionLayers(depth,prepared);
@@ -25,15 +23,4 @@ assert.ok(lookup.every((v,i)=>v<20&&(!i||v>=lookup[i-1])),'surface-aware audio a
 const peak=410,hist=new Uint32Array(1024);hist[peak]=500;
 const smart=depthBandLookup(hist,10);assert.equal(smart[peak],smart[peak+1],'cut should move away from a densely populated depth');
 for(const bias of [-1,0,1])assert.ok(depthBandLookup(histogram,256,bias).every(v=>v<256));
-Object.assign(prepared,estimateFillThickness(depth,prepared));
-const pixels=new Uint8ClampedArray(128*96*4).fill(255);
-const walls=sampleWalls(prepared,4/3,pixels,128,96,20000);
-assert.equal(walls.rands.length,20000);assert.deepEqual(walls,sampleWalls(prepared,4/3,pixels,128,96,20000));
-for(let i=0;i<walls.rands.length;i++){
- assert.equal(walls.fillStarts[i*4],walls.fillEnds[i*4]);assert.equal(walls.fillStarts[i*4+1],walls.fillEnds[i*4+1]);
- assert.ok(walls.fillStarts[i*4+2]>walls.fillEnds[i*4+2],'wall connects real silhouette depths');
- assert.ok(walls.fillThickness[i*2]>0);
-}
-assert.equal(sampleWalls(prepared,4/3,pixels,128,96,0),null);
-pixels.fill(0);assert.equal(sampleWalls(prepared,4/3,pixels,128,96,1000).rands.length,0,'transparent source must not generate walls');
-console.log('PASS: separate depth masks preserve middle-layer context, four-pass cap, ordered surface-aware audio cuts, deterministic independent wall budget and transparency.');
+console.log('PASS: separate depth masks preserve middle-layer context, four-pass cap and ordered surface-aware audio cuts.');

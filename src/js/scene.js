@@ -67,8 +67,6 @@ const VERT = /* glsl */ `
     uniform float uFillSpacing;
     uniform float uFillThicknessAuto;
     uniform float uFillThicknessBias;
-    uniform float uWallsEnabled;
-    uniform float uWallBrightness;
   #endif
 
   varying vec3 vColor;
@@ -284,7 +282,6 @@ const VERT = /* glsl */ `
       vec3 pos = mix(first, last, aFillT);
       float opening = 1.0;
       float fillLight = 1.0;
-      #ifndef WALL_FILL
       if (uFillOnlyOpen > 0.5 || uFillAdaptive > 0.0) {
         // Measure extra screen separation, with the resting pair translated
         // to the animated midpoint. Shared movement/camera zoom therefore
@@ -328,26 +325,6 @@ const VERT = /* glsl */ `
           }
         }
       }
-      #endif
-      #ifdef WALL_FILL
-        // Redistribute the entire wall pool into a short physical shell,
-        // rather than leaving faint points along the full animated opening.
-        float wallSpan=length(first-last);
-        float wallT=aFillT*min(1.0,aFillThickness.x*uFillThicknessBias/max(wallSpan,.000001));
-        pos=mix(first,last,wallT);
-        vec4 wallFirst=projectionMatrix*(modelViewMatrix*vec4(first,1.0));
-        vec4 wallLast=projectionMatrix*(modelViewMatrix*vec4(mix(first,last,min(1.0,aFillThickness.x*uFillThicknessBias/max(wallSpan,.000001))),1.0));
-        vec2 wallMetric=vec2(projectionMatrix[1][1]/projectionMatrix[0][0],1.0);
-        float wallGap=length((wallLast.xy/wallLast.w-wallFirst.xy/wallFirst.w)*wallMetric);
-        float wallSpacing=projectionMatrix[1][1]*uFillSpacing/max(wallFirst.w,.000001);
-        opening=min(wallFirst.w,wallLast.w)>0.0 ? smoothstep(.5,1.5,wallGap/max(wallSpacing,.000001)):0.0;
-        fillLight=1.0;
-        gl_Position=projectionMatrix*(modelViewMatrix*vec4(pos,1.0));
-        gl_PointSize=mix(firstSize,lastSize,wallT);
-        vColor=mix(firstColour,lastColour,wallT)*uWallBrightness*opening
-          *min(uFillThicknessBias,wallSpan/max(aFillThickness.x,.000001));
-        vAmp=mix(firstAmp,lastAmp,wallT);
-      #else
       if(uFillThicknessAuto>.5 && aFillThickness.y>.01){
         // A local shell distance, not a percentage of every bridge. Preserve
         // interior seams and remove only excessive extrusion near outlines.
@@ -361,14 +338,12 @@ const VERT = /* glsl */ `
         float feather=max(uFillSpacing*.5,limit*.15);
         float excess=smoothstep(limit,limit+feather,fromFront*span);
         // Outline membership must not leave a faint full-length bridge.
-        // With dedicated walls, suppress these outline bridges completely.
-        opening*=uWallsEnabled>.5 ? 0.0:1.0-excess;
+        opening*=1.0-excess;
       }
       gl_Position = projectionMatrix * (modelViewMatrix * vec4(pos, 1.0));
       gl_PointSize = mix(firstSize, lastSize, aFillT);
       vColor = mix(firstColour, lastColour, aFillT) * uFillBrightness * opening * fillLight;
       vAmp = mix(firstAmp, lastAmp, aFillT);
-      #endif
       if (opening == 0.0) {
         gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
         gl_PointSize = 0.0;
@@ -484,8 +459,6 @@ export class VisualScene {
       uFillSpacing: { value: 1 / 300 },
       uFillThicknessAuto: { value: 0 },
       uFillThicknessBias: { value: 1 },
-      uWallsEnabled: {value:0},
-      uWallBrightness: {value:.35},
       uSmartDepthBands: {value:0},
       uDepthBands: {value:this.depthBandTex},
       uBandDistribution: { value: 1 },
@@ -607,8 +580,6 @@ export class VisualScene {
 
   /** rebuild geometry from sampled cloud arrays */
   setCloud(cloud) {
-    if(this.wallPoints){this.scene.remove(this.wallPoints);this.wallPoints.geometry.dispose();this.wallPoints=null;}
-    this.wallLightScale=cloud.wallLightScale ?? 1;
     this.depthHistogram=cloud.depthHistogram;
     this.depthBandKey=null;
     if(this.reconstructionPoints){this.scene.remove(this.reconstructionPoints);this.reconstructionPoints.geometry.dispose();this.reconstructionPoints=null;}
@@ -654,12 +625,6 @@ export class VisualScene {
       this.fillPoints=new THREE.Points(fill,this.fillMaterial);this.fillPoints.frustumCulled=false;
       this.scene.add(this.fillPoints);
     }
-    if(cloud.walls?.rands.length){
-      this.wallMaterial ||= new THREE.ShaderMaterial({uniforms:this.uniforms,defines:{GAP_FILL:1,WALL_FILL:1},vertexShader:VERT,fragmentShader:FRAG,blending:THREE.AdditiveBlending,depthTest:false,depthWrite:false,transparent:true});
-      const geometry=new THREE.BufferGeometry();
-      for(const [name,key,size] of [['position','positions',3],['aColor','colors',3],['aRand','rands',1],['aFillStart','fillStarts',4],['aFillEnd','fillEnds',4],['aFillT','fillFractions',1],['aFillThickness','fillThickness',2]])geometry.setAttribute(name,new THREE.BufferAttribute(cloud.walls[key],size));
-      this.wallPoints=new THREE.Points(geometry,this.wallMaterial);this.wallPoints.frustumCulled=false;this.scene.add(this.wallPoints);
-    }
     // world spacing between points -> density-aware pixel size for the shader
     const rows = Math.max(1, Math.round(Math.sqrt((cloud.baseCount ?? cloud.count) / cloud.aspect)));
     this.spacingWorld = 1 / rows;
@@ -683,7 +648,6 @@ export class VisualScene {
     this.uniforms.uVis.value = v;
     if(this.points) this.points.visible=v>0;
     if(this.fillPoints) this.fillPoints.visible=v>0;
-    if(this.wallPoints)this.wallPoints.visible=v>0 && this.uniforms.uWallsEnabled.value>0 && this.uniforms.uWallBrightness.value>0;
     if(this.reconstructionPoints)this.reconstructionPoints.visible=v>0 && this.reconstructionEnabled && this.uniforms.uReconstructionBrightness.value>0;
     if (this.backdrop && !this.backdrop.isDestroyed) {
       const base = this.hideBackdrop ? 0 : this.backdropBaseDim;
@@ -791,9 +755,6 @@ export class VisualScene {
     this.uniforms.uFillSamples.value = Math.max(3,Math.min(24,s.gapFillDensity ?? 12));
     this.uniforms.uFillThicknessAuto.value=s.occludedBackground && s.gapFillForegroundLimit ? 1:0;
     this.uniforms.uFillThicknessBias.value=Math.max(.25,Math.min(2.5,s.gapFillThicknessBias ?? 1));
-    this.uniforms.uWallsEnabled.value=s.occludedBackground && s.gapFillForegroundLimit && (s.wallFillPointLimit??20000)>0 && this.wallPoints ? 1:0;
-    this.uniforms.uWallBrightness.value=Math.max(0,Math.min(1,s.gapFillBrightness??.35))*(this.wallLightScale ?? 1);
-    if(this.wallPoints)this.wallPoints.visible=this.uniforms.uVis.value>0 && this.uniforms.uWallsEnabled.value>0 && this.uniforms.uWallBrightness.value>0;
     const depthBandKey=`${s.bands}/${s.bandDistribution||0}`;
     this.uniforms.uSmartDepthBands.value=s.smartDepthBands && this.depthHistogram ? 1:0;
     if(s.smartDepthBands && this.depthHistogram && this.depthBandKey!==depthBandKey){

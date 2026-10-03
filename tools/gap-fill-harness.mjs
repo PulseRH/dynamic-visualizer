@@ -5,7 +5,7 @@ const {prepareOcclusion}=await import(`data:text/javascript;base64,${Buffer.from
 const thicknessSource=await readFile(new URL('../src/js/fill-thickness.js',import.meta.url),'utf8');
 const {estimateFillThickness}=await import(`data:text/javascript;base64,${Buffer.from(thicknessSource).toString('base64')}`);
 const source=(await readFile(new URL('../src/js/sampler.js',import.meta.url),'utf8')).replace("'./occlusion.js'",JSON.stringify(`data:text/javascript;base64,${Buffer.from(occlusion).toString('base64')}`));
-const rewritten=source.replace("'./wall-fill.js'",JSON.stringify(new URL('../src/js/wall-fill.js',import.meta.url).href)).replace("'./depth-bands.js'",JSON.stringify(new URL('../src/js/depth-bands.js',import.meta.url).href));
+const rewritten=source.replace("'./depth-bands.js'",JSON.stringify(new URL('../src/js/depth-bands.js',import.meta.url).href));
 const {sampleImageToCloud}=await import(`data:text/javascript;base64,${Buffer.from(rewritten).toString('base64')}`);
 let pixels;
 globalThis.OffscreenCanvas=class {getContext(){return {drawImage(){},getImageData(){return {data:pixels};}};}};
@@ -62,6 +62,15 @@ assert.equal(firstRows[0][3],firstRows[1][3],'parallel rows share the same endpo
 assert.notDeepEqual([...rows.values()][0],[...rows.values()][1],'rows stagger their samples');
 const large=sampleImageToCloud(image,null,400000,1);
 assert.ok(large.count-large.baseCount<=180000);
+const limited=sampleImageToCloud(image,null,400000,1,{gapFillPointLimit:30000});
+assert.ok(limited.count-limited.baseCount<=30000&&limited.count>limited.baseCount);
+const disabled=sampleImageToCloud(image,null,12000,1,{gapFillPointLimit:0});
+assert.equal(disabled.count,disabled.baseCount);assert.equal(disabled.fillFractions,undefined);
+const expanded=sampleImageToCloud(image,null,400000,1,{gapFillPointLimit:300000});
+assert.ok(expanded.count-expanded.baseCount>large.count-large.baseCount,'the explicit point slider must allow more than the old 180k limit');
+assert.ok(expanded.count-expanded.baseCount<=300000);
+assert.deepEqual(expanded.positions.subarray(0,expanded.baseCount*3),large.positions.subarray(0,large.baseCount*3),'changing gap budget must preserve base points');
+assert.ok(!('walls' in expanded),'ordinary Gap fill must not generate outline-wall geometry');
 for(const gapFillRows of [1,7])for(const gapFillDensity of [3,24])for(const gapFillSpread of [.2,2]){
   const tuned=sampleImageToCloud(image,gradient,12000,1,{bandMap:'depth',bands:16,gapFillRows,gapFillDensity,gapFillSpread});
   assert.ok(tuned.count>tuned.baseCount && tuned.count<=tuned.baseCount*2.5);

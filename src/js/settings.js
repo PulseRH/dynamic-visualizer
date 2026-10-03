@@ -1,5 +1,5 @@
 // Central settings store with persistence. Everything the UI touches lives here.
-const DEFAULTS = {
+export const DEFAULTS = {
   imageUrl: null,          // explicit image (blob or app:// URL); null = try wallpaper, then procedural
   depthMode: 'auto',       // 'auto' | 'onnx' (small) | 'onnx-base' | 'flat'
   depthScale: 0.35,
@@ -73,7 +73,7 @@ const DEFAULTS = {
   reconstructionPointLimit: 40000,
   reconstructionWidth: 1,
   gapFillForegroundLimit: false, // automatic shell estimate near foreground outlines
-  wallFillPointLimit: 20000, // independently bounded side-wall points; zero disables
+  gapFillPointLimit: 180000, // ordinary seam points, independently capped; zero disables
   smartDepthBands: false, // snap audio cuts toward valleys in the image depth distribution
   gapFillThicknessBias: 1, // multiplier of the local estimate, not a gap percentage
   curvatureSource: 'input', // 'input' or original slower 'bands' response
@@ -113,6 +113,7 @@ function load() {
 
 function migrateSaved(saved) {
   const migrated = { ...migrateMotion(saved) };
+  delete migrated.wallFillPointLimit;
   if(typeof migrated.gapFillAdaptive==='boolean')migrated.gapFillAdaptive=Number(migrated.gapFillAdaptive);
   if(Number.isFinite(migrated.gapFillAdaptive))migrated.gapFillAdaptive=Math.max(0,Math.min(1,migrated.gapFillAdaptive));
   if (migrated.swirlRangeVersion !== 1) {
