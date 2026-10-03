@@ -264,14 +264,20 @@ body.settings-only #closePanel { display: none; }
 /* collapsible advanced folds */
 details.fold { margin-top: 12px; }
 details.fold summary {
+  display: flex; align-items: center; gap: 5px; min-height: 30px;
   cursor: pointer; user-select: none;
   font-size: .8rem; color: var(--text-dim);
   padding: 6px 2px;
   list-style: none;
 }
 details.fold summary::-webkit-details-marker { display: none; }
-details.fold summary::before { content: "▸ "; color: var(--accent); }
-details.fold[open] summary::before { content: "▾ "; }
+details.fold summary::before {
+  content: "▸"; color: var(--accent);
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; flex: 0 0 20px;
+  font-size: 22px; line-height: 1;
+}
+details.fold[open] summary::before { content: "▾"; }
 details.fold summary:hover { color: var(--text); }
 details.fold[open] summary { margin-bottom: 2px; }
 

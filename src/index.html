@@ -30,6 +30,23 @@
       <button id="closePanel" class="icon-btn" aria-label="Close">✕</button>
     </div>
 
+    <section>
+      <h3>Image</h3>
+      <div class="row">
+        <button id="useWallpaper" class="btn">Use wallpaper</button>
+        <button id="uploadImage" class="btn">Upload…</button>
+      </div>
+      <div class="thumb-wrap"><img id="imgThumb" alt="" /></div>
+      <div id="recentWallpapers" class="recent-wallpapers" aria-label="Recent wallpapers" hidden></div>
+      <label class="check-row"><input type="checkbox" id="wallpaperCycle" /> Cycle recent wallpapers<span class="q" data-tip="Rotate through your recent wallpapers while wallpaper mode is running. Pauses during Pause visualiser. Only the next image is loaded, when needed."></span></label>
+      <div id="cycleControls" hidden>
+        <label class="slider-row"><span class="lbl">Change every</span><input type="range" id="wallpaperCycleMinutes" min="1" max="60" step="1" /><span class="val"></span></label>
+        <button id="nextWallpaper" class="btn full">Next wallpaper</button>
+      </div>
+      <label class="slider-row"><span class="lbl">Crossfade<span class="q" data-tip="Blend from a saved frame into the new live visualiser when changing images. Avoids rendering two particle clouds. Zero switches immediately."></span></span><input type="range" id="wallpaperCrossfade" min="0" max="10" step="0.1" /><span class="val"></span></label>
+      <p class="hint">Tip: drag &amp; drop or paste (Ctrl+V) an image any time.</p>
+    </section>
+
     <div class="preset-row" aria-label="Visualiser presets">
       <input id="presetName" type="text" list="presetNames" maxlength="80" placeholder="Preset name" aria-label="Preset name" autocomplete="off" />
       <datalist id="presetNames"></datalist>
@@ -49,22 +66,6 @@
     </section>
 
 
-    <section>
-      <h3>Image</h3>
-      <div class="row">
-        <button id="useWallpaper" class="btn">Use wallpaper</button>
-        <button id="uploadImage" class="btn">Upload…</button>
-      </div>
-      <div class="thumb-wrap"><img id="imgThumb" alt="" /></div>
-      <div id="recentWallpapers" class="recent-wallpapers" aria-label="Recent wallpapers" hidden></div>
-      <label class="check-row"><input type="checkbox" id="wallpaperCycle" /> Cycle recent wallpapers<span class="q" data-tip="Rotate through your recent wallpapers while wallpaper mode is running. Pauses during Pause visualiser. Only the next image is loaded, when needed."></span></label>
-      <div id="cycleControls" hidden>
-        <label class="slider-row"><span class="lbl">Change every</span><input type="range" id="wallpaperCycleMinutes" min="1" max="60" step="1" /><span class="val"></span></label>
-        <button id="nextWallpaper" class="btn full">Next wallpaper</button>
-      </div>
-      <label class="slider-row"><span class="lbl">Crossfade<span class="q" data-tip="Blend from a saved frame into the new live visualiser when changing images. Avoids rendering two particle clouds. Zero switches immediately."></span></span><input type="range" id="wallpaperCrossfade" min="0" max="10" step="0.1" /><span class="val"></span></label>
-      <p class="hint">Tip: drag &amp; drop or paste (Ctrl+V) an image any time.</p>
-    </section>
 
 
     <section>
@@ -80,7 +81,6 @@
         <span class="val"></span>
       </label>
       <label class="slider-row"><span class="lbl">Depth shape<span class="q" data-tip="Compress background depth spacing and spread foreground depth spacing for more pronounced parallax. 0% preserves the original depth; 100% gives the strongest shaping. Keeps nearest/farthest depth and frequency assignments unchanged. Requires Depth strength above zero. Updates on the GPU without resampling or rerunning AI."></span></span><input type="range" id="depthShape" min="0" max="1" step="0.01" /><span class="val"></span></label>
-      <label class="slider-row"><span class="lbl">Gap fill<span class="q" data-tip="Fill moving band seams with points that interpolate both neighbours' motion and light. Prioritises band boundaries on the same surface, then wider density gaps. Adds normal-sized points across seams. Controls the extra-point budget; use Fill tuning to adjust rows, spacing and brightness. Avoids sharp depth boundaries and transparent holes. Generated only during cloud rebuilds; capped at 150% extra points or the Gap fill points limit, whichever is smaller. Performance warning: extra rows increase GPU work and memory; high fill can reduce frame rate. Adds drawing cost and cannot reconstruct hidden objects."></span></span><input type="range" id="gapFill" min="0" max="1" step="0.01" /><span class="val"></span></label>
       <details class="fold">
         <summary>Hidden background</summary>
         <label class="check-row"><input type="checkbox" id="occludedBackground" /> Reconstruct behind objects<span class="q" data-tip="Prepare hidden depth layers with local AI, using the depth map to find foreground edges. Each depth slice has its own mask so middle layers retain the appropriate background context. Reveals reconstructed particles when parallax or audio motion moves those objects away. Works with Depth strength at zero if audio separates depth bands. Best with AI depth; Flat has no foreground edges. Invents plausible content, not a perfect recovery. Downloads a 27 MB model once, caches coverage up to 2.5× width and releases the AI worker after preparation. Adds one particle draw call. Hidden points controls the extra point budget and density, up to 200k. Off preserves the existing renderer."></span></label>
@@ -90,6 +90,7 @@
         <p class="hint">AI reconstructs up to four depth slices once per wallpaper. Slices follow foreground/background depth edges, independently of audio band count. Width and point sliders reuse cached colours. More points add GPU work; larger openings can expose imperfect AI detail.</p>
         <p class="hint" id="reconstructionStatus" role="status" aria-live="polite"></p>
       </details>
+      <label class="slider-row"><span class="lbl">Gap fill<span class="q" data-tip="Fill moving band seams with points that interpolate both neighbours' motion and light. Prioritises band boundaries on the same surface, then wider density gaps. Adds normal-sized points across seams. Controls the extra-point budget; use Fill tuning to adjust rows, spacing and brightness. Avoids sharp depth boundaries and transparent holes. Generated only during cloud rebuilds; capped at 150% extra points or the Gap fill points limit, whichever is smaller. Performance warning: extra rows increase GPU work and memory; high fill can reduce frame rate. Adds drawing cost and cannot reconstruct hidden objects."></span></span><input type="range" id="gapFill" min="0" max="1" step="0.01" /><span class="val"></span></label>
       <details class="fold">
         <summary>Fill tuning</summary>
         <label class="slider-row"><span class="lbl">Gap fill points<span class="q" data-tip="Maximum extra points for ordinary Gap fill, independent of Thickness bias. No separate wall or outline points. Gap fill percentage scales this budget; actual count depends on eligible seams and is capped at 150% of Count. 180k keeps the previous limit; up to 400k allows denser fill. Higher counts add GPU work and memory. Zero disables extra fill points. Resamples the existing image/depth; no AI rerun."></span></span><input type="range" id="gapFillPointLimit" min="0" max="400000" step="10000" /><span class="val"></span></label>
