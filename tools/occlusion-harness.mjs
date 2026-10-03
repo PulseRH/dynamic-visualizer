@@ -55,7 +55,14 @@ const originalWidth=prepareOcclusion(largeDepth),wide=prepareOcclusion(largeDept
 assert.ok(wide.count>originalWidth.count*1.5,'2.5x preparation must extend coverage, not only increase density');
 for(let i=0;i<originalWidth.owner.length;i++)if(originalWidth.owner[i]>=0)assert.equal(wide.owner[i],originalWidth.owner[i],'wider coverage must retain the original edge owners');
 wide.rgb=new Uint8Array(wide.w*wide.h*3).fill(96);delete wide.mask;
+wide.thickness=new Float32Array(wide.w*wide.h).fill(.123);
+wide.edgeWeight=new Float32Array(wide.w*wide.h).fill(.65);
 const baseline=sampleOcclusion(wide,2,400000),more=sampleOcclusion(wide,2,400000,{reconstructionPointLimit:120000,reconstructionWidth:2.5});
+assert.equal(more.sideThickness.length,more.rands.length*2);
+for(let i=0;i<more.rands.length;i++){
+  assert.equal(more.sideThickness[i*2],Math.fround(.123));
+  assert.equal(more.sideThickness[i*2+1],Math.fround(.65));
+}
 assert.equal(baseline.rands.length,40000);assert.equal(more.rands.length,120000,'explicit point budget must exceed both 40k and the old 20% cap');
 const furthest=cloud=>{let max=0;for(let i=0;i<cloud.rands.length;i++){const x=(cloud.positions[i*3]/2+.5)*256,y=(.5-cloud.positions[i*3+1])*128;max=Math.max(max,Math.min(x-48,208-x,y-16,112-y));}return max;};
 assert.ok(furthest(more)>furthest(baseline)+10,'wider sampling must add points further behind the object');

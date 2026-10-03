@@ -70,6 +70,7 @@ export const DEFAULTS = {
   audioCurvature: 0,      // signed audio-driven bowl curvature; no static depth needed
   occludedBackground: false, // cached AI hidden background, behind depth edges
   reconstructionBrightness: .7,
+  reconstructionSideOcclusion: false, // filled side shells also hide reconstructed background
   reconstructionPointLimit: 40000,
   reconstructionWidth: 1,
   gapFillForegroundLimit: false, // automatic shell estimate near foreground outlines

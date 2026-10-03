@@ -1,0 +1,65 @@
+<!doctype html><meta charset="utf-8"><canvas></canvas><pre id="result">RUNNING</pre>
+<script type="module">
+import {VisualScene} from '../src/js/scene.js';
+import {getAll} from '../src/js/settings.js';
+try {
+  const scene=new VisualScene(document.querySelector('canvas'));
+  scene.renderer.setSize(256,256,false);scene.camera.aspect=1;
+  const cloud={aspect:1,count:3,baseCount:2,
+    positions:new Float32Array([0,0,.9,.01,0,.85,.005,0,.875]),colors:new Float32Array(9),rands:new Float32Array([.5,.5,.5]),
+    fillStarts:new Float32Array([0,0,.9,.5]),fillEnds:new Float32Array([.01,0,.85,.5]),fillFractions:new Float32Array([.5]),
+    reconstruction:{positions:new Float32Array([-.1,0,.15,-.01,.08,.15]),colors:new Float32Array([1,0,0,0,0,1]),rands:new Float32Array([.5,.5]),
+      occluders:new Float32Array([0,0,.9,.5,0,.08,.9,.5]),normals:new Float32Array([1,0,1,0]),sideThickness:new Float32Array([.4,1,.4,1])}};
+  scene.setCloud(cloud);
+  const settings={...getAll(),bands:4,bandMap:'depth',bandDistribution:0,invertBands:false,smartDepthBands:false,equalDepthMovement:false,occludedBackground:true,reconstructionBrightness:1,reconstructionSideOcclusion:false,gapFill:1,gapFillPointLimit:1000,gapFillBrightness:1,gapFillOnlyOpen:false,gapFillAdaptive:0,gapFillForegroundLimit:true,gapFillThicknessBias:1,depthScale:.8,depthShape:0,audioCurvature:0,dollyZoom:0,boost:0,sizePulse:0,intensity:0,depthShading:0,hueReaction:0,hueCycle:0,motionWave:0,motionRipple:0,motionBands:0,motionDrift:0,motionSwirl:0,motionBreathe:0,motionSweep:0,motionBandShake:0};
+  const gl=scene.renderer.getContext(),pixels=new Uint8Array(256*256*4);
+  const draw=(patch={},x=.8,y=0)=>{
+    scene.applySettings({...settings,...patch});scene.uniforms.uSize.value=4;scene.uniforms.uFillSpacing.value=.008;
+    scene.camera.position.set(x,y,2);scene.camera.lookAt(0,0,0);scene.camera.updateMatrixWorld();
+    scene.renderer.render(scene.scene,scene.camera);gl.readPixels(0,0,256,256,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
+    if(gl.getError()!==gl.NO_ERROR)throw Error('WebGL error');
+    let red=0,blue=0;for(let i=0;i<pixels.length;i+=4){red+=pixels[i];blue+=pixels[i+2];}
+    return {red,blue,pixels:pixels.slice()};
+  };
+  const off=draw();if(!off.red||!off.blue)throw Error('Fixture did not expose the reconstructed background');
+  const on=draw({reconstructionSideOcclusion:true});
+  if(on.red!==0||on.blue===0)throw Error(`Side shell did not hide the inner point while leaving background beyond it: ${JSON.stringify({off:[off.red,off.blue],on:[on.red,on.blue]})}`);
+  const narrow=draw({reconstructionSideOcclusion:true,gapFillThicknessBias:.25});
+  if(!narrow.red||!narrow.blue)throw Error('Thinner wall did not expose more background');
+  const wide=draw({reconstructionSideOcclusion:true,gapFillThicknessBias:2});
+  if(wide.red||wide.blue)throw Error('Wider wall did not cover the full side span');
+  if(draw({reconstructionSideOcclusion:true,gapFillForegroundLimit:false}).blue)throw Error('Manual full-span fill left background visible through its side');
+  if(!draw().pixels.every((v,i)=>v===off.pixels[i]))throw Error('Turning off did not restore pixels exactly');
+  for(const patch of [{gapFill:0},{gapFillBrightness:0},{gapFillPointLimit:0}]){
+    const a=draw(patch),b=draw({...patch,reconstructionSideOcclusion:true});
+    if(!a.pixels.every((v,i)=>v===b.pixels[i]))throw Error('Invisible Gap fill occluded background');
+  }
+  for(const patch of [{gapFillOnlyOpen:true},{gapFillAdaptive:1}]){
+    const a=draw(patch),b=draw({...patch,reconstructionSideOcclusion:true});
+    if(!a.pixels.every((v,i)=>v===b.pixels[i]))throw Error('Closed/faded side still occluded reconstruction');
+  }
+  const oldGeometry=scene.reconstructionPoints.geometry;
+  for(const x of [0,-.8]){const result=draw({reconstructionSideOcclusion:true},x);if(result.red||result.blue)throw Error('Resting/wrong side revealed hidden points');}
+  // Rotate the edge/camera together: vertical and horizontal walls must agree.
+  const geometry=scene.reconstructionPoints.geometry;
+  geometry.attributes.position.array.set([0,-.1,.15,.08,-.01,.15]);geometry.attributes.position.needsUpdate=true;
+  geometry.attributes.aOccluder.array.set([0,0,.9,.5,.08,0,.9,.5]);geometry.attributes.aOccluder.needsUpdate=true;
+  geometry.attributes.aOutward.array.set([0,1,0,1]);geometry.attributes.aOutward.needsUpdate=true;
+  const vertical=draw({reconstructionSideOcclusion:true},0,.8);
+  if(vertical.red||!vertical.blue)throw Error('Horizontal silhouette did not get matching side occlusion');
+  if(scene.reconstructionPoints.geometry!==oldGeometry)throw Error('Toggle/bias rebuilt hidden geometry');
+  geometry.attributes.position.array.set([.24,0,.15,.24,.08,.15]);geometry.attributes.position.needsUpdate=true;
+  geometry.attributes.aOccluder.array.set([.2,0,.9,.5,.2,.08,.9,.5]);geometry.attributes.aOccluder.needsUpdate=true;
+  geometry.attributes.aOutward.array.set([-1,0,-1,0]);geometry.attributes.aOutward.needsUpdate=true;
+  scene.bandData.fill(0);scene.bandData[12]=255;scene.bandTex.needsUpdate=true;
+  const audio={depthScale:0,intensity:8,depthMove:1,xyMove:0,centeredMotion:false,gapFillOnlyOpen:true,gapFillAdaptive:0,gapFillForegroundLimit:false};
+  const audioOff=draw(audio,0,0),audioOn=draw({...audio,reconstructionSideOcclusion:true},0,0);
+  if(!audioOff.red||!audioOff.blue||audioOn.red||audioOn.blue)throw Error('Audio-only exposed side did not occlude background at zero static depth: '+JSON.stringify({off:[audioOff.red,audioOff.blue],on:[audioOn.red,audioOn.blue]}));
+  const noFill={...cloud,fillFractions:null,fillStarts:null,fillEnds:null};scene.setCloud(noFill);
+  scene.applySettings({...settings,reconstructionSideOcclusion:true});
+  if(scene.uniforms.uReconstructionSideOcclusion.value!==0)throw Error('Missing fill geometry still occluded');
+  let disposed=false;scene.reconstructionPoints.geometry.addEventListener('dispose',()=>disposed=true);scene.setCloud({...noFill,reconstruction:null});
+  if(!disposed)throw Error('Side metadata geometry was not disposed');
+  scene.renderer.dispose();document.querySelector('#result').textContent='PASS: filled sides hide only background inside their thickness, beyond-side fill stays visible, bias updates live, off is pixel-identical, both edge orientations, missing/invisible fill and geometry cleanup work.';
+} catch(error){document.querySelector('#result').textContent='FAIL: '+error.stack;}
+</script>

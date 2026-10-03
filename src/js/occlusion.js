@@ -111,7 +111,7 @@ export function sampleOcclusion(reconstruction, aspect, count, options={}) {
     candidates[candidatesUsed*3]=u;candidates[candidatesUsed*3+1]=v;candidates[candidatesUsed*3+2]=i;candidatesUsed++;
   }
   const used=Math.min(candidatesUsed,budget),step=Math.max(1,candidatesUsed/Math.max(1,budget));
-  const positions=new Float32Array(used*3),colors=new Float32Array(used*3),rands=new Float32Array(used),occluders=new Float32Array(used*4),normals=new Float32Array(used*2);
+  const positions=new Float32Array(used*3),colors=new Float32Array(used*3),rands=new Float32Array(used),occluders=new Float32Array(used*4),normals=new Float32Array(used*2),sideThickness=new Float32Array(used*2);
   for(let j=0;j<used;j++){
     const k=Math.floor(j*step)*3,x=candidates[k],y=candidates[k+1],i=candidates[k+2],edge=owner[i];
     positions[j*3]=(x/w-.5)*aspect;positions[j*3+1]=.5-y/h;positions[j*3+2]=back[i];rands[j]=rand();
@@ -120,6 +120,10 @@ export function sampleOcclusion(reconstruction, aspect, count, options={}) {
     occluders[j*4]=((edge%w+.5+normalX[i]*.5)/w-.5)*aspect;
     occluders[j*4+1]=.5-(Math.floor(edge/w)+.5-normalY[i]*.5)/h;occluders[j*4+2]=front[i];occluders[j*4+3]=rand();
     normals[j*2]=normalX[i];normals[j*2+1]=normalY[i];
+    // Use one cached estimate at the foreground boundary, just as Gap fill
+    // does. No AI, image processing or geometry rebuild on toggle/bias changes.
+    sideThickness[j*2]=reconstruction.thickness?.[edge] || 0;
+    sideThickness[j*2+1]=reconstruction.edgeWeight?.[edge] || 0;
   }
-  return {positions,colors,rands,occluders,normals};
+  return {positions,colors,rands,occluders,normals,sideThickness};
 }

@@ -57,6 +57,13 @@ a few percent CPU and holds a steady frame rate without spinning fans.
   no extra geometry; zero Hidden brightness skips its drawing. It invents
   plausible hidden content; large openings and imperfect depth masks remain
   limitations. Wallpaper windows reuse the preview's completed asset.
+  **Sides hide background** optionally extends the reconstruction occlusion
+  boundary along filled sides, so background particles do not show through
+  the side shell. Uses the cached local thickness and live Thickness bias;
+  without Auto thickness it covers the full side span. It adds a boundary
+  evaluation per hidden vertex while enabled, with no extra draw call or AI.
+  Off preserves the existing front-only reveal; empty/invisible Gap fill
+  leaves reconstruction unchanged.
 - **Gap fill points**: independently cap ordinary seam infill at 0–400k extra
   points (180k default). The Gap fill percentage scales that budget, with a
   150% of Count ceiling. Higher budgets add GPU work and memory. **Auto

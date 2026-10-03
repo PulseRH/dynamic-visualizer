@@ -53,7 +53,9 @@ const VERT = /* glsl */ `
   #ifdef OCCLUDED_BACKGROUND
     attribute vec4 aOccluder;
     attribute vec2 aOutward;
+    attribute vec2 aSideThickness;
     uniform float uReconstructionBrightness;
+    uniform float uReconstructionSideOcclusion;
     uniform float uFillSpacing;
   #endif
   #ifdef GAP_FILL
@@ -63,10 +65,12 @@ const VERT = /* glsl */ `
     attribute vec2 aFillThickness;
     attribute vec4 aFillForeground;
     uniform float uFillBrightness;
-    uniform float uFillOnlyOpen;
-    uniform float uFillAdaptive;
     uniform float uFillSamples;
     uniform float uFillSpacing;
+  #endif
+  #if defined(GAP_FILL) || defined(OCCLUDED_BACKGROUND)
+    uniform float uFillOnlyOpen;
+    uniform float uFillAdaptive;
     uniform float uFillThicknessAuto;
     uniform float uFillThicknessBias;
   #endif
@@ -269,6 +273,41 @@ const VERT = /* glsl */ `
         vec2 normal=(axisClip.xy/axisClip.w-edgeClip.xy/edgeClip.w)*metric;
         float spacing=max(length(normal),0.000001);
         float uncovered=dot((hiddenClip.xy/hiddenClip.w-edgeClip.xy/edgeClip.w)*metric,normal/spacing);
+        if(uReconstructionSideOcclusion>.5){
+          vec3 rear, unusedRearColour;float unusedRearAmp,unusedRearSize;
+          // The same foreground boundary at this hidden slice's depth gives
+          // the rear direction under camera, audio and spatial-layer motion.
+          evaluatePoint(vec3(aOccluder.xy,position.z),aRand,aColor,rear,unusedRearColour,unusedRearAmp,unusedRearSize);
+          vec3 separation=rear-edge;
+          float sideVisibility=1.0;
+          if(uFillOnlyOpen>.5 || uFillAdaptive>0.0){
+            vec3 restDelta=vec3(0.0,0.0,(shapedDepth(position.z)-shapedDepth(aOccluder.z))*uDepthScale);
+            vec3 centre=(edge+rear)*.5;
+            vec4 fullRearClip=projectionMatrix*(modelViewMatrix*vec4(rear,1.0));
+            vec4 restFront=projectionMatrix*(modelViewMatrix*vec4(centre-restDelta*.5,1.0));
+            vec4 restRear=projectionMatrix*(modelViewMatrix*vec4(centre+restDelta*.5,1.0));
+            if(min(min(fullRearClip.w,restFront.w),restRear.w)<=0.0)sideVisibility=0.0;
+            else{
+              float currentGap=length((fullRearClip.xy/fullRearClip.w-edgeClip.xy/edgeClip.w)*metric);
+              float restingGap=length((restRear.xy/restRear.w-restFront.xy/restFront.w)*metric);
+              float centreW=(restFront.w+restRear.w)*.5;
+              float referenceGap=max(restingGap,projectionMatrix[1][1]*uFillSpacing/centreW);
+              float extraSpacing=max(0.0,(currentGap-restingGap)/max(referenceGap,.000001));
+              if(uFillOnlyOpen>.5)sideVisibility=smoothstep(.15,.85,extraSpacing);
+              sideVisibility*=mix(1.0,smoothstep(.5,2.5,extraSpacing),uFillAdaptive);
+            }
+          }
+          float fraction=1.0;
+          if(uFillThicknessAuto>.5 && aSideThickness.y>0.0){
+            fraction=mix(1.0,min(1.0,aSideThickness.x*uFillThicknessBias/max(length(separation),.000001)),clamp(aSideThickness.y,0.0,1.0));
+          }
+          vec4 rearClip=projectionMatrix*(modelViewMatrix*vec4(edge+separation*fraction,1.0));
+          if(rearClip.w>0.0){
+            // A wall pointing inward must never uncover the original front.
+            float sideExtent=max(0.0,dot((rearClip.xy/rearClip.w-edgeClip.xy/edgeClip.w)*metric,normal/spacing));
+            uncovered-=sideExtent*sideVisibility;
+          }
+        }
         // Behind the object remains invisible. Feather the exposed boundary
         // by one original point spacing to avoid an additive bright outline.
         reveal=smoothstep(spacing*.35,spacing*1.35,uncovered);
@@ -468,6 +507,7 @@ export class VisualScene {
       uDepthShading: { value: 0 },
       uFillBrightness: { value: .35 },
       uReconstructionBrightness: { value: .7 },
+      uReconstructionSideOcclusion: { value: 0 },
       uFillOnlyOpen: { value: 1 },
       uFillAdaptive: { value: 1 },
       uFillSamples: { value: 12 },
@@ -621,8 +661,10 @@ export class VisualScene {
     const hidden=cloud.reconstruction;
     if(hidden?.rands.length){
       this.reconstructionMaterial ||= new THREE.ShaderMaterial({uniforms:this.uniforms,defines:{OCCLUDED_BACKGROUND:1},vertexShader:VERT,fragmentShader:FRAG,blending:THREE.AdditiveBlending,depthTest:false,depthWrite:false,transparent:true});
+      this.reconstructionMaterial.defaultAttributeValues.aSideThickness=[0,0];
       const geometry=new THREE.BufferGeometry();
       for(const [name,key,size] of [['position','positions',3],['aColor','colors',3],['aRand','rands',1],['aOccluder','occluders',4],['aOutward','normals',2]])geometry.setAttribute(name,new THREE.BufferAttribute(hidden[key],size));
+      if(hidden.sideThickness)geometry.setAttribute('aSideThickness',new THREE.BufferAttribute(hidden.sideThickness,2));
       this.reconstructionPoints=new THREE.Points(geometry,this.reconstructionMaterial);
       this.reconstructionPoints.frustumCulled=false;this.scene.add(this.reconstructionPoints);
     }
@@ -761,6 +803,7 @@ export class VisualScene {
     this.uniforms.uDepthShape.value = Math.max(0,Math.min(1,s.depthShape ?? 0));
     this.uniforms.uDepthShading.value = Math.max(0,Math.min(1,s.depthShading || 0));
     this.uniforms.uReconstructionBrightness.value=Math.max(0,Math.min(1,s.reconstructionBrightness ?? .7));
+    this.uniforms.uReconstructionSideOcclusion.value=s.reconstructionSideOcclusion && this.fillPoints && s.gapFill>0 && (s.gapFillPointLimit ?? 180000)>0 && s.gapFillBrightness>0 ? 1:0;
     this.reconstructionEnabled=!!s.occludedBackground;
     if(this.reconstructionPoints)this.reconstructionPoints.visible=this.uniforms.uVis.value>0 && this.reconstructionEnabled && this.uniforms.uReconstructionBrightness.value>0;
     // Hold approximate light per bridge steady as rows/samples increase.
