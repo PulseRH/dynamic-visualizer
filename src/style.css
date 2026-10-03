@@ -220,6 +220,7 @@ body.settings-only #closePanel { display: none; }
   font-size: .84rem; color: var(--text-dim);
 }
 .slider-row .lbl { white-space: nowrap; }
+#surfaceCohesionRow .lbl { white-space: normal; line-height: 1.35; }
 .slider-row input[type="range"] {
   width: 100%; min-width: 0; height: 22px;
   appearance: none; background: transparent; cursor: pointer;

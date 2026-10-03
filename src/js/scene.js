@@ -27,6 +27,8 @@ const VERT = /* glsl */ `
   uniform float uBandDistribution;
   uniform float uSmartDepthBands;
   uniform sampler2D uDepthBands;
+  uniform sampler2D uSurfaceMotion;
+  uniform float uSurfaceCohesion;
   uniform float uBandCount;
   uniform float uInvert;
   uniform float uLightPulse;
@@ -117,6 +119,21 @@ const VERT = /* glsl */ `
     float lightAmp = amp;                     // no global dimming: quiet
                                               // regions keep their base light
 
+    float originalAmp=amp, surfaceWeight=0.0, motionNear=near, anchorBand=band;
+    if(uSurfaceCohesion>0.0 && uBandMap<.5){
+      vec4 surface=texture2D(uSurfaceMotion,vec2(uvw.x,1.0-uvw.y));
+      // The background reconstructed behind this pixel is a different surface.
+      surfaceWeight=surface.g*uSurfaceCohesion*step(abs(near-surface.b),.025);
+      motionNear=mix(near,surface.r,surfaceWeight);
+      float anchorT=pow(clamp(surface.r,0.0,1.0),uBandDistribution);
+      if(uInvert>.5)anchorT=1.0-anchorT;
+      anchorBand=clamp(floor(anchorT*uBandCount),0.0,uBandCount-1.0);
+      if(uSmartDepthBands>.5){
+        anchorBand=floor(texture2D(uDepthBands,vec2(clamp(surface.r,0.0,1.0),.5)).r*255.0+.5);
+        if(uInvert>.5)anchorBand=uBandCount-1.0-anchorBand;
+      }
+      amp=mix(amp,texture2D(uBands,vec2((anchorBand+.5)/uBandCount,.5)).r,surfaceWeight);
+    }
     float direct = mix(1.0, amp * 2.0 - 0.8, uCentered);
     float w = direct;
     // Uniform branches skip every disabled layer. Normalize the combined
@@ -125,12 +142,12 @@ const VERT = /* glsl */ `
     float layerTotal = dot(uLayers, vec4(1.0)) + uExtraLayers.z;
     if (uLayers.x > 0.0) {
       // traveling wave across the image
-      style += uLayers.x * sin(uWaveTime * 1.7 + uvw.x * 7.0 + near * 5.0 + pointRand * 0.7);
+      style += uLayers.x * sin(uWaveTime * 1.7 + uvw.x * 7.0 + motionNear * 5.0 + pointRand * 0.7);
     }
     if (uLayers.y > 0.0) {
       // radial ripple from the center
       float d = distance(uvw, vec2(0.5));
-      style += uLayers.y * sin(d * 16.0 - uWaveTime * 3.1 + near * 3.0) * (1.0 - d * 0.55);
+      style += uLayers.y * sin(d * 16.0 - uWaveTime * 3.1 + motionNear * 3.0) * (1.0 - d * 0.55);
     }
     if (uLayers.z > 0.0) {
       // horizontal slices pulsing like bars
@@ -144,11 +161,11 @@ const VERT = /* glsl */ `
       style += uLayers.w * clamp(drift, -1.0, 1.0);
     }
     if (uExtraLayers.z > 0.0) {
-      style += uExtraLayers.z * sin((uvw.x + uvw.y) * 11.0 - uWaveTime * 2.0 + near * 2.0);
+      style += uExtraLayers.z * sin((uvw.x + uvw.y) * 11.0 - uWaveTime * 2.0 + motionNear * 2.0);
     }
     w = direct + style / max(1.0, layerTotal) * 0.65;
 
-    float depthRange = mix(0.35 + 0.65 * near, 1.0, uEqualDepthMovement);
+    float depthRange = mix(0.35 + 0.65 * motionNear, 1.0, uEqualDepthMovement);
     float disp = w * amp * uIntensity * uZMove * 0.11 * depthRange * uDyn;
 
     pos = vec3(pointPosition.xy, shapedDepth(near) * uDepthScale + disp);
@@ -162,7 +179,7 @@ const VERT = /* glsl */ `
     float lightStyle = style;
     float lightTotal = layerTotal;
     if (uExtraLayers.x > 0.0) {
-      float swirlPhase = sin(uWaveTime * 0.8 + length(pointPosition.xy) * 4.0 + near * 1.2);
+      float swirlPhase = sin(uWaveTime * 0.8 + length(pointPosition.xy) * 4.0 + motionNear * 1.2);
       float turn = swirlPhase * uExtraLayers.x * layerDrive * 0.112; // new maximum = former 28%
       float c = cos(turn), s = sin(turn);
       layeredXY = vec2(c * layeredXY.x - s * layeredXY.y,
@@ -173,7 +190,7 @@ const VERT = /* glsl */ `
       }
     }
     if (uExtraLayers.y > 0.0) {
-      float breathePhase = sin(uWaveTime * 1.4 + near * 1.2);
+      float breathePhase = sin(uWaveTime * 1.4 + motionNear * 1.2);
       float swell = breathePhase * uExtraLayers.y * layerDrive * 0.2;
       layeredXY *= 1.0 + swell;
       if (uLightFollowMotion > 0.5) {
@@ -195,6 +212,10 @@ const VERT = /* glsl */ `
       float phase = band * 2.399963;
       vec2 shake = vec2(sin(uXYTime * 4.3 + phase),
                         sin(uXYTime * 5.7 + phase * 1.37 + 1.1));
+      if(surfaceWeight>0.0){
+        float anchorPhase=anchorBand*2.399963;
+        shake=mix(shake,vec2(sin(uXYTime*4.3+anchorPhase),sin(uXYTime*5.7+anchorPhase*1.37+1.1)),surfaceWeight);
+      }
       // Square band level to reserve the bigger shakes for loud peaks.
       // A curved amount also gives the lower half of the slider finer control.
       float shakeDrive = amp * layerDrive;
@@ -215,6 +236,7 @@ const VERT = /* glsl */ `
     vec4 mv = modelViewMatrix * vec4(pos, 1.0);
 
 
+    amp=originalAmp; // frequency colour and point growth remain band independent
     float ps = uSize * (1.0 + amp * 0.9 * uSizePulse) * (uCamZ / -mv.z);
     pointSize = clamp(ps, 0.75, 24.0);
 
@@ -498,6 +520,8 @@ export class VisualScene {
     this.depthBandTex=new THREE.DataTexture(this.depthBandData,DEPTH_BINS,1,THREE.RGBAFormat);
     this.depthBandTex.magFilter=THREE.NearestFilter;this.depthBandTex.minFilter=THREE.NearestFilter;
     this.depthBandTex.needsUpdate=true;
+    this.surfaceTex=new THREE.DataTexture(new Float32Array(4),1,1,THREE.RGBAFormat,THREE.FloatType);
+    this.surfaceTex.magFilter=THREE.NearestFilter;this.surfaceTex.minFilter=THREE.NearestFilter;this.surfaceTex.needsUpdate=true;
     this.uniforms = {
       uTime: { value: 0 },
       uEnergy: { value: 0 },
@@ -525,6 +549,8 @@ export class VisualScene {
       uFillThickness: { value: .6 },
       uSmartDepthBands: {value:0},
       uDepthBands: {value:this.depthBandTex},
+      uSurfaceMotion: {value:this.surfaceTex},
+      uSurfaceCohesion: {value:0},
       uBandDistribution: { value: 1 },
       uBandCount: { value: 64 },
       uInvert: { value: 0 },
@@ -645,6 +671,11 @@ export class VisualScene {
   /** rebuild geometry from sampled cloud arrays */
   setCloud(cloud) {
     this.depthHistogram=cloud.depthHistogram;
+    this.surfaceMotion=cloud.surfaceMotion||null;
+    this.surfaceTex.dispose();
+    this.surfaceTex=new THREE.DataTexture(this.surfaceMotion?.data||new Float32Array(4),this.surfaceMotion?.w||1,this.surfaceMotion?.h||1,THREE.RGBAFormat,THREE.FloatType);
+    this.surfaceTex.magFilter=THREE.NearestFilter;this.surfaceTex.minFilter=THREE.NearestFilter;this.surfaceTex.needsUpdate=true;
+    this.uniforms.uSurfaceMotion.value=this.surfaceTex;
     this.depthBandKey=null;
     if(this.reconstructionPoints){this.scene.remove(this.reconstructionPoints);this.reconstructionPoints.geometry.dispose();this.reconstructionPoints=null;}
     if(this.fillPoints){this.scene.remove(this.fillPoints);this.fillPoints.geometry.dispose();this.fillPoints=null;}
@@ -827,6 +858,7 @@ export class VisualScene {
     this.uniforms.uFillThicknessManual.value=s.occludedBackground && s.gapFillManualLimit ? 1:0;
     this.uniforms.uFillThickness.value=Math.max(0,Math.min(1,s.gapFillThickness ?? .6));
     const depthBandKey=`${s.bands}/${s.bandDistribution||0}`;
+    this.uniforms.uSurfaceCohesion.value=s.aiFillThickness && s.bandMap==='depth' && this.surfaceMotion?.surfaceCount ? Math.max(0,Math.min(1,s.surfaceCohesion ?? 0)):0;
     this.uniforms.uSmartDepthBands.value=s.smartDepthBands && this.depthHistogram ? 1:0;
     if(s.smartDepthBands && this.depthHistogram && this.depthBandKey!==depthBandKey){
       const lookup=depthBandLookup(this.depthHistogram,s.bands,s.bandDistribution||0);

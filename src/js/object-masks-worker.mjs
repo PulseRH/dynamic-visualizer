@@ -1,4 +1,5 @@
 import {sceneClasses,sceneObjects} from './object-mask-utils.js';
+import {prepareOcclusion,OCCLUSION_MAX_WIDTH} from './occlusion.js';
 import {estimateFillThickness} from './fill-thickness.js';
 // Quantised SegFormer B0 ADE20K, pinned to the published ONNX revision.
 const MODEL='https://huggingface.co/Xenova/segformer-b0-finetuned-ade-512-512/resolve/d3e5499fa8701ff0453ca940a8dfeae39b2f1504/onnx/model_quantized.onnx';
@@ -23,6 +24,7 @@ self.onmessage=async({data:{bitmap,depth,reconstruction}})=>{
     const small=new OffscreenCanvas(depth.w,depth.h),smallCtx=small.getContext('2d',{willReadFrequently:true});smallCtx.drawImage(bitmap,0,0,depth.w,depth.h);
     const alpha=smallCtx.getImageData(0,0,depth.w,depth.h).data;
     const {classes,confidence}=sceneClasses(logits.data,logits.dims,depth.w,depth.h,alpha);
+    reconstruction ||= prepareOcclusion(depth,OCCLUSION_MAX_WIDTH);
     const objects=sceneObjects(classes,confidence,depth,reconstruction),field=estimateFillThickness(depth,reconstruction,objects);
     self.postMessage({ok:true,result:{...field,labels:objects.labels,count:objects.count}},[field.thickness.buffer,field.edgeWeight.buffer,objects.labels.buffer]);
   }catch(error){self.postMessage({ok:false,error:error.message});}

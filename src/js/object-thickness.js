@@ -39,7 +39,7 @@ export async function prepareObjectThickness(bitmap,depth,reconstruction,onStatu
       if(signal?.aborted){stop();return;}signal?.addEventListener('abort',stop,{once:true});
       worker.onmessage=({data})=>{if(data.status)onStatus(data.status);else if(data.ok)finish(null,data.result);else finish(Error(data.error));};
       worker.onerror=e=>finish(Error(e.message||'Object masks unavailable'));
-      worker.postMessage({bitmap:copy,depth,reconstruction:{owner:reconstruction.owner,back:reconstruction.back,front:reconstruction.front}},[copy]);
+      worker.postMessage({bitmap:copy,depth,reconstruction:reconstruction ? {owner:reconstruction.owner,back:reconstruction.back,front:reconstruction.front}:null},[copy]);
     });
     memory.set(bitmap,{depth,result});
     if(key)try{

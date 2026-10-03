@@ -1,0 +1,56 @@
+<!doctype html><meta charset="utf-8"><canvas></canvas><pre id="result">RUNNING</pre>
+<script type="module">
+import {VisualScene} from '../src/js/scene.js';
+import {animatedSample} from '../src/js/framing-motion.js';
+import {getAll} from '../src/js/settings.js';
+import * as THREE from '../src/vendor/three.module.js';
+try{
+  const scene=new VisualScene(document.querySelector('canvas'));
+  scene.renderer.setSize(500,500,false);scene.camera.aspect=1;
+  const map={data:new Float32Array([.85,1,.55,0]),w:1,h:1,surfaceCount:1,covered:1};
+  const cloud={count:1,aspect:1,positions:new Float32Array([.16,.08,.55]),colors:new Float32Array([1,.2,.1]),rands:new Float32Array([.5]),surfaceMotion:map,depthHistogram:new Uint32Array(1024).fill(1)};
+  scene.setCloud(cloud);
+  const settings={...getAll(),bands:5,bandMap:'depth',invertBands:false,bandDistribution:0,smartDepthBands:false,surfaceCohesion:0,aiFillThickness:true,depthScale:.6,depthShape:.4,depthMove:2,xyMove:1,intensity:1,centeredMotion:true,equalDepthMovement:false,boost:0,lightFollowMotion:false,sizePulse:0,hueReaction:0,hueCycle:0,depthShading:0,motionWave:.3,motionRipple:.4,motionBands:.2,motionDrift:.1,motionSweep:.3,motionSwirl:.5,motionBreathe:.4,motionBandShake:.6};
+  scene.applySettings(settings);
+  const levels=[.05,.3,.9,.45,.1];
+  for(let i=0;i<5;i++)scene.bandData[i*4]=Math.round(levels[i]*255);
+  scene.bandTex.needsUpdate=true;scene.uniforms.uDyn.value=1;
+  scene.uniforms.uWaveTime.value=1.3;scene.uniforms.uXYTime.value=2.7;
+  scene.uniforms.uCursor.value.set(.1,.05,.2);
+  scene.camera.position.set(.1,-.1,1.5);scene.camera.lookAt(0,0,.1);scene.camera.updateMatrixWorld();scene.camera.updateProjectionMatrix();
+  const gl=scene.renderer.getContext(),pixels=new Uint8Array(500*500*4),cpu=new Float64Array(3);
+  const draw=patch=>{
+    scene.applySettings({...settings,...patch});scene.uniforms.uSize.value=3;
+    scene.renderer.render(scene.scene,scene.camera);gl.readPixels(0,0,500,500,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
+    if(gl.getError()!==gl.NO_ERROR)throw Error('WebGL error');
+    let sx=0,sy=0,sum=0;
+    for(let y=0;y<500;y++)for(let x=0;x<500;x++){const b=pixels[(y*500+x)*4];sx+=x*b;sy+=y*b;sum+=b;}
+    if(!sum)throw Error('Point was not drawn');
+    animatedSample(.16,.08,cloud.positions[2],.5,scene.uniforms,scene.bandData,cpu,0);
+    const projected=new THREE.Vector3(...cpu).project(scene.camera);
+    const error=Math.hypot(sx/sum-((projected.x+1)*250-.5),sy/sum-((projected.y+1)*250-.5));
+    if(error>.6)throw Error(`CPU/GPU framing mismatch ${error} for ${JSON.stringify(patch)}`);
+    return {x:sx/sum,y:sy/sum,pixels:pixels.slice(),position:cpu.slice()};
+  };
+  const off=draw({}),on=draw({surfaceCohesion:1}),middle=draw({surfaceCohesion:.5});
+  if(Math.hypot(on.x-off.x,on.y-off.y)<2)throw Error('Shared surface response has no visible effect');
+  if(Math.hypot(middle.x-off.x,middle.y-off.y)<.5||Math.hypot(middle.x-on.x,middle.y-on.y)<.5)throw Error('Slider does not blend motion');
+  for(const invertBands of [false,true])for(const smartDepthBands of [false,true])for(const bandDistribution of [-.6,0,.6])for(const surfaceCohesion of [0,.35,1])draw({invertBands,smartDepthBands,bandDistribution,surfaceCohesion});
+  if(!draw({surfaceCohesion:1,aiFillThickness:false}).pixels.every((v,i)=>v===off.pixels[i]))throw Error('AI off did not restore independent bands');
+  for(const bandMap of ['radial','horizontal','vertical']){
+    const a=draw({bandMap}),b=draw({bandMap,surfaceCohesion:1});
+    if(!a.pixels.every((v,i)=>v===b.pixels[i]))throw Error('Surface motion changed a spatial band mapping');
+  }
+  const litA=draw({intensity:0,boost:1,sizePulse:.8,vibrancyPulse:.7}),litB=draw({intensity:0,boost:1,sizePulse:.8,vibrancyPulse:.7,surfaceCohesion:1});
+  if(!litA.pixels.every((v,i)=>v===litB.pixels[i]))throw Error('Shared motion changed independent frequency lighting or point growth');
+  const geometry=scene.points.geometry;
+  draw({surfaceCohesion:.7});if(scene.points.geometry!==geometry)throw Error('Slider rebuilt geometry');
+  // Same pixel, background depth: reject the foreground response anchor.
+  cloud.positions[2]=.15;scene.points.geometry.attributes.position.needsUpdate=true;
+  const hiddenA=draw({}),hiddenB=draw({surfaceCohesion:1});
+  if(!hiddenA.pixels.every((v,i)=>v===hiddenB.pixels[i]))throw Error('Hidden depth inherited foreground motion');
+  scene.setCloud({...cloud,surfaceMotion:null});
+  if(scene.surfaceTex.image.width!==1||scene.surfaceMotion!==null)throw Error('Surface texture not replaced on wallpaper change');
+  document.getElementById('result').textContent='PASS: GPU motion visibly blends; CPU framing matches across inversion/distribution/smart cuts; AI off and other mappings are neutral; hidden depth stays independent; live slider retains geometry.';
+}catch(error){document.getElementById('result').textContent='FAIL: '+error.stack;}
+</script>

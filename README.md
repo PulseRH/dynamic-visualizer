@@ -81,15 +81,23 @@ a few percent CPU and holds a steady frame rate without spinning fans.
   points across that shorter span. At 0%, foreground edge fill is hidden.
   It works with reconstruction; Auto thickness can remain on, in which case
   the smaller limit wins. Side/background occlusion follows the same cap.
-- **AI object masks** (under Fill tuning) guides Auto thickness with quantised
-  SegFormer B0 ADE20K segmentation (~4.5 MB, downloaded once). Building parts
-  share a surface mask; connected regions are separated by depth jumps and
-  bounded depth range. Masks combine with the existing depth/local-width
-  estimate; they do not recover true hidden geometry. Runs in one CPU worker
-  only when preparing a wallpaper, caches up to eight completed estimates,
-  and terminates the worker afterwards. No extra animation draw calls.
-  Requires Auto thickness and Reconstruct behind objects. Off or unavailable
-  inference uses the depth-only estimate; sliders reuse cached results.
+- **AI object masks** (near Bands) supplies quantised SegFormer B0 ADE20K
+  contours (~4.5 MB, downloaded once) to Keep surfaces together and Auto
+  thickness. Runs in one CPU worker during wallpaper preparation, caches up
+  to eight estimates, and releases the worker afterwards. The status shows
+  detected masks, coherent surface coverage and which controls use them.
+  Masks alone do not change the picture. Auto thickness still needs
+  reconstruction and visible Gap fill; unavailable masks use depth-only
+  thickness and independent band motion.
+- **Keep surfaces together** (Depth band mapping) blends audio motion toward
+  a shared frequency response on confident object faces. Connected AI masks
+  plus a robust depth-plane check separate abrupt jumps and reject uncertain
+  regions. At 100%, direct audio depth motion and band shake are shared;
+  at 0%, bands move independently. Original depth/slope, frequency colour and
+  point growth remain intact, as do spatial motion layers. It works without
+  hidden-background reconstruction. The live slider reuses one small surface
+  texture (about 1 MB for the usual grid), with no additional draw calls or
+  ongoing AI inference. Screen framing uses the same response as the GPU.
 - **Save/Load presets** at the top store named snapshots of visualiser settings,
   including audio response, motion, colour, depth, fill and performance controls.
   Wallpaper, audio source and window/startup choices stay with the session.

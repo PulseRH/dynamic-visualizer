@@ -2,6 +2,7 @@
 // jittered grid sampling so coverage is even, colors in linear space,
 // z = nearness (0..1; the shader scales it and the audio drives displacement).
 
+import {buildSurfaceMotion} from './surface-motion.js';
 import {sampleOcclusion} from './occlusion.js';
 import {depthHistogram,depthBandLookup,DEPTH_BINS} from './depth-bands.js';
 
@@ -203,6 +204,7 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
     count: used,
     baseCount,
     depthHistogram:histogram,
+    surfaceMotion:buildSurfaceMotion(depth,mapping.objectMasks),
     reconstruction: mapping.reconstruction ? sampleOcclusion(mapping.reconstruction,aspect,baseCount,mapping):null,
     fillStarts:fillStarts?.subarray(0,(used-baseCount)*4),
     fillEnds:fillEnds?.subarray(0,(used-baseCount)*4),

@@ -298,6 +298,7 @@ export class UI {
     slider('fillStrength','fillStrength',v=>`${Math.round(v*100)}%`);
     const placement = v => Math.abs(v)<.005 ? 'Even' : `${Math.round(v*100)}%`;
     slider('bandDistribution','bandDistribution',placement);
+    slider('surfaceCohesion','surfaceCohesion',v=>`${Math.round(v*100)}%`);
     slider('wallpaperCycleMinutes','wallpaperCycleMinutes',v=>`${v} min`);
     slider('wallpaperCrossfade','wallpaperCrossfade',v=>`${v.toFixed(1)} s`);
     $('wallpaperCycle').onchange=e=>set({wallpaperCycle:e.target.checked});
@@ -628,6 +629,10 @@ export class UI {
     $('bandDistribution').parentElement.querySelector('.val').textContent=Math.abs(placement)<.005 ? 'Even' : `${Math.round(placement*100)}%`;
     $('bandDistributionRow').hidden=get('bandMap')!=='depth';
     $('smartDepthBands').parentElement.hidden=get('bandMap')!=='depth';
+    $('surfaceCohesionRow').hidden=get('bandMap')!=='depth';
+    $('surfaceCohesion').disabled=!get('aiFillThickness')||get('depthMode')==='flat';
+    setSlider('surfaceCohesion',get('surfaceCohesion'));
+    $('surfaceCohesion').parentElement.querySelector('.val').textContent=`${Math.round(get('surfaceCohesion')*100)}%`;
     $('wallpaperCycle').checked=!!get('wallpaperCycle');
     $('cycleControls').hidden=!get('wallpaperCycle');
     setSlider('wallpaperCycleMinutes',get('wallpaperCycleMinutes'));
@@ -725,6 +730,7 @@ export class UI {
   }
 
   setAbout(text) { $('aboutInfo').textContent = text; }
+  setObjectMaskStatus(text) { $('objectMaskStatus').textContent=text; }
   setReconstructionStatus(text) { $('reconstructionStatus').textContent=text; }
 
   get settings() { return getAll(); }
