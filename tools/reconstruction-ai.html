@@ -8,13 +8,18 @@ try{
   const canvas=document.createElement('canvas');canvas.width=384;canvas.height=256;
   const ctx=canvas.getContext('2d');ctx.fillStyle='#285b9c';ctx.fillRect(0,0,384,256);
   ctx.fillStyle='#efcf31';ctx.fillRect(144,52,96,152);
+  // Give each run a fresh image identity while retaining the cached model,
+  // so this checks the inference worker as well as subsequent disk reuse.
+  const nonce=new Uint8Array(12);crypto.getRandomValues(nonce);
+  for(let x=0;x<4;x++){ctx.fillStyle=`rgb(${nonce[x*3]},${nonce[x*3+1]},${nonce[x*3+2]})`;ctx.fillRect(x,0,1,1);}
   const bitmap=await createImageBitmap(canvas),depth={w:128,h:86,data:new Float32Array(128*86).fill(.15)};
   for(let y=17;y<69;y++)for(let x=48;x<80;x++)depth.data[y*128+x]=.9;
   await identifyDepthImage(bitmap,await new Promise(r=>canvas.toBlob(r)));
   const start=performance.now(),result=await reconstructBackground(bitmap,depth,status=>output.textContent='RUNNING '+status);
   if(!result?.rgb.length)throw Error('No reconstructed background');
+  if(result.thickness?.length!==depth.w*depth.h||result.edgeWeight?.length!==depth.w*depth.h||!result.edgeWeight.some(v=>v>0))throw Error('Fresh AI result missing automatic thickness');
   const packed=packReconstruction(result),restored=unpackReconstruction(packed);
-  if(!restored.rgb.every((v,i)=>v===result.rgb[i])||!restored.owner.every((v,i)=>v===result.owner[i]))throw Error('Cache round trip failed');
+  for(const key of ['rgb','owner','thickness','edgeWeight'])if(!restored[key].every((v,i)=>v===result[key][i]))throw Error('Cache round trip failed: '+key);
   const cached=await reconstructBackground(bitmap,depth);if(cached!==result)throw Error('Repeated build reran AI');
   const blob=await new Promise(r=>canvas.toBlob(r)),reopened=await createImageBitmap(blob);await identifyDepthImage(reopened,blob);
   for(let i=0;i<50;i++){if((await(await caches.open(`dv-hidden-background-v${OCCLUSION_VERSION}`)).keys()).length)break;await new Promise(r=>setTimeout(r,20));}

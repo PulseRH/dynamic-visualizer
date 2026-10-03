@@ -200,7 +200,7 @@ export class UI {
     slider('reconstructionPointLimit','reconstructionPointLimit',v=>`${Math.round(v/1000)}k`);
     slider('reconstructionWidth','reconstructionWidth',v=>`${v.toFixed(2)}×`);
     $('gapFillForegroundLimit').onchange=e=>set({gapFillForegroundLimit:e.target.checked});
-    slider('gapFillThickness','gapFillThickness',v=>`${Math.round(v*100)}%`);
+    slider('gapFillThicknessBias','gapFillThicknessBias',v=>`${v.toFixed(2)}×`);
     slider('pointCount', 'pointCount', (v) => `${Math.round(v / 1000)}k`);
     slider('pointSize', 'pointSize', (v) => v.toFixed(1));
     slider('glow', 'glow', (v) => v.toFixed(2));
@@ -403,7 +403,7 @@ export class UI {
   }
 
   _syncAll() {
-    for(const [key,fmt] of [['reconstructionPointLimit',v=>`${Math.round(v/1000)}k`],['reconstructionWidth',v=>`${v.toFixed(2)}×`]]){
+    for(const [key,fmt] of [['reconstructionPointLimit',v=>`${Math.round(v/1000)}k`],['reconstructionWidth',v=>`${v.toFixed(2)}×`],['gapFillThicknessBias',v=>`${v.toFixed(2)}×`]]){
       $(key).value=get(key);$(key).parentElement.querySelector('.val').textContent=fmt(get(key));
     }
     $('occludedBackground').checked=!!get('occludedBackground');
@@ -444,7 +444,7 @@ export class UI {
     };
     setSlider('depthScale', get('depthScale'));
     $('gapFillOnlyOpen').checked=get('gapFillOnlyOpen')!==false;
-    for(const key of ['depthShape','gapFill','depthShading','gapFillBrightness','gapFillDepthLimit','gapFillAdaptive','reconstructionBrightness','gapFillThickness']){
+    for(const key of ['depthShape','gapFill','depthShading','gapFillBrightness','gapFillDepthLimit','gapFillAdaptive','reconstructionBrightness']){
       setSlider(key,get(key));
       $(key).parentElement.querySelector('.val').textContent=`${Math.round(get(key)*100)}%`;
     }

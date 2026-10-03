@@ -1,4 +1,5 @@
 import {prepareOcclusion,OCCLUSION_MAX_WIDTH} from './occlusion.js';
+import {estimateFillThickness} from './fill-thickness.js';
 
 // Official MI-GAN-512 pipeline, pinned to a content revision (MIT weights).
 const MODEL='https://huggingface.co/andraniksargsyan/migan/resolve/406830d0fa60666da0071c342ad2fbc8f30c5c64/migan_pipeline_v2.onnx';
@@ -44,6 +45,7 @@ self.onmessage=async ({data:{bitmap,depth}})=>{
       for(let c=0;c<3;c++)rgb[i*3+c]=values[c*w*h+j];
     }
     delete prepared.mask;prepared.rgb=rgb;
+    Object.assign(prepared,estimateFillThickness(depth,prepared));
     self.postMessage({ok:true,result:prepared},Object.values(prepared).filter(v=>ArrayBuffer.isView(v)).map(v=>v.buffer));
   }catch(err){self.postMessage({ok:false,error:err.message || String(err)});}
   finally{try{await session?.release();}catch{}bitmap.close();}

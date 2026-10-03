@@ -3,6 +3,8 @@ import {readFile} from 'node:fs/promises';
 const occlusionSource=await readFile(new URL('../src/js/occlusion.js',import.meta.url),'utf8');
 const occlusionUrl=`data:text/javascript;base64,${Buffer.from(occlusionSource).toString('base64')}`;
 const {prepareOcclusion,sampleOcclusion}=await import(occlusionUrl);
+const thicknessSource=await readFile(new URL('../src/js/fill-thickness.js',import.meta.url),'utf8');
+const {estimateFillThickness}=await import(`data:text/javascript;base64,${Buffer.from(thicknessSource).toString('base64')}`);
 const depth={w:128,h:96,data:new Float32Array(128*96).fill(.15)};
 for(let y=20;y<76;y++)for(let x=40;x<88;x++)depth.data[y*128+x]=.9;
 const prepared=prepareOcclusion(depth);assert.ok(prepared.count>1000);
@@ -67,13 +69,17 @@ for(const count of [20000,100000,400000]){
   assert.deepEqual(cloud,sampleOcclusion(prepared,4/3,count),'sampling must be deterministic');
 }
 
+const legacy={...prepared};Object.assign(prepared,estimateFillThickness(depth,prepared));
 const entries=new Map();globalThis.caches={open:async()=>({match:async key=>entries.get(key)?.clone(),put:async(key,value)=>entries.set(key,value.clone()),keys:async()=>[...entries.keys()],delete:async key=>entries.delete(key)})};
-let started=0,terminated=0,hold=false;globalThis.createImageBitmap=async()=>({close(){}});
-globalThis.Worker=class{postMessage(){started++;if(!hold)queueMicrotask(()=>this.onmessage({data:{ok:true,result:prepared}}));}terminate(){terminated++;}};
+let started=0,terminated=0,modelStarts=0,hold=false;globalThis.createImageBitmap=async()=>({close(){}});
+globalThis.Worker=class{postMessage(data){started++;if(!data.reconstruction)modelStarts++;if(!hold)queueMicrotask(()=>this.onmessage({data:{ok:true,result:data.reconstruction ? estimateFillThickness(data.depth,data.reconstruction):prepared}}));}terminate(){terminated++;}};
 const reconstructionUrl=new URL('../src/js/reconstruction.js',import.meta.url);
 const source=(await readFile(reconstructionUrl,'utf8')).replace("'./occlusion.js'",JSON.stringify(occlusionUrl)).replace("import {depthImageIdentity} from './depth.js';","const depthImageIdentity=bitmap=>bitmap.hash;").replaceAll('import.meta.url',JSON.stringify(reconstructionUrl.href));
-const {packReconstruction,unpackReconstruction,reconstructBackground}=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+const {packReconstruction,unpackReconstruction,reconstructBackground,reconstructionKey}=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 assert.deepEqual(unpackReconstruction(packReconstruction(prepared)),prepared);
+assert.deepEqual(unpackReconstruction(packReconstruction(legacy)),legacy,'existing 18-byte-per-pixel caches must remain readable');
+const outdated=packReconstruction(prepared);new Uint32Array(outdated,0,4)[3]=0;
+assert.deepEqual(unpackReconstruction(outdated),legacy,'outdated thickness must drop only the estimate, keeping cached AI colours and geometry');
 assert.equal(unpackReconstruction(packReconstruction(null)),null);
 assert.throws(()=>unpackReconstruction(new ArrayBuffer(17)));
 const bitmap={hash:'same'};assert.equal(await reconstructBackground(bitmap,depth),prepared);
@@ -86,4 +92,10 @@ hold=true;const controller=new AbortController(),pending=reconstructBackground({
 for(let i=0;i<50&&started<3;i++)await new Promise(r=>setTimeout(r,0));
 assert.equal(started,3,'cancellation test must wait until inference has started');
 controller.abort();await assert.rejects(pending,{name:'AbortError'});assert.equal(terminated,started,'cancelled inference worker must release its heap');
+hold=false;const legacyBitmap={hash:'legacy'},legacyKey=await reconstructionKey(legacyBitmap,depth),modelsBefore=modelStarts;
+entries.set(legacyKey,new Response(packReconstruction(legacy)));
+const upgraded=await reconstructBackground(legacyBitmap,depth);
+assert.deepEqual(upgraded,prepared);assert.equal(modelStarts,modelsBefore,'upgrading thickness must not load or rerun the AI model');
+for(let i=0;i<50&&unpackReconstruction(await entries.get(legacyKey).clone().arrayBuffer()).thickness===undefined;i++)await new Promise(r=>setTimeout(r,0));
+assert.deepEqual(await reconstructBackground({hash:'legacy'},depth),prepared);assert.equal(started,4,'reopened upgraded cache must not prepare thickness again');
 console.log('PASS: softened horizontal/vertical silhouettes keep full background depth, small foreground figures fill through their centre, 2.5x coverage retains owners, point caps, deterministic sampling, cache reuse and cancellation cleanup.');
