@@ -17,6 +17,9 @@ for(let i=0;i<prepared.owner.length;i++)if(prepared.owner[i]>=0){
 const many={...prepared,back:prepared.back.slice()};
 let k=0;for(let i=0;i<many.owner.length;i++)if(many.owner[i]>=0)many.back[i]=(k++%8)*.12;
 assert.ok(planReconstructionLayers(depth,many).layers.length<=4,'AI passes must stay capped independently of band count');
+const ramp={...prepared,back:prepared.back.slice()};k=0;
+for(let i=0;i<ramp.owner.length;i++)if(ramp.owner[i]>=0)ramp.back[i]=(k++%50)/100;
+assert.equal(planReconstructionLayers(depth,ramp).layers.length,4,'continuous noisy depth must not chain into one shared background mask');
 const histogram=depthHistogram(depth),lookup=depthBandLookup(histogram,20);
 assert.ok(lookup.every((v,i)=>v<20&&(!i||v>=lookup[i-1])),'surface-aware audio assignment must remain ordered');
 const peak=410,hist=new Uint32Array(1024);hist[peak]=500;
