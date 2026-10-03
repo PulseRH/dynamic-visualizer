@@ -1,8 +1,8 @@
 import {depthImageIdentity} from './depth.js';
 import {OCCLUSION_VERSION} from './occlusion.js';
 
-const RESULTS='dv-hidden-background-v1',memory=new WeakMap();
-const FIELDS={owner:Int32Array,back:Float32Array,front:Float32Array,normalX:Int8Array,normalY:Int8Array,rgb:Uint8Array};
+const RESULTS='dv-hidden-background-v2',memory=new WeakMap();
+const FIELDS={owner:Int32Array,back:Float32Array,front:Float32Array,normalX:Int8Array,normalY:Int8Array,distance:Uint8Array,rgb:Uint8Array};
 // Binary cache avoids turning large typed grids into JS object/JSON trees.
 export function packReconstruction(result){
   if(!result)return new ArrayBuffer(12);
@@ -15,7 +15,7 @@ export function unpackReconstruction(buffer){
   if(buffer.byteLength<12)throw Error('Incomplete reconstruction cache');
   const [w,h,count]=new Uint32Array(buffer,0,3);if(!w&&!h&&buffer.byteLength===12)return null;
   if(!w||!h||w*h>2000000)throw Error('Invalid reconstruction grid');
-  const n=w*h,expected=12+n*17;if(buffer.byteLength!==expected)throw Error('Incomplete reconstruction grid');
+  const n=w*h,expected=12+n*18;if(buffer.byteLength!==expected)throw Error('Incomplete reconstruction grid');
   const result={w,h,count};let offset=12;
   for(const [key,Type] of Object.entries(FIELDS)){const length=n*(key==='rgb' ? 3:1),bytes=length*Type.BYTES_PER_ELEMENT;result[key]=new Type(buffer.slice(offset,offset+bytes));offset+=bytes;}
   return result;

@@ -1,11 +1,16 @@
 // Geometry preparation only. AI colours are generated separately, once per image.
 // A bounded strip behind each significant near/far edge stores its background
 // depth and the foreground boundary that must move away before it is revealed.
-export const OCCLUSION_VERSION = 1;
+export const OCCLUSION_VERSION = 2;
 export const OCCLUSION_WIDTH = 12; // pixels of the 256-wide depth grid (~5%)
+export const OCCLUSION_MAX_WIDTH = 2.5;
 
-export function prepareOcclusion(depth) {
+export const occlusionWidth = value => Math.max(.5,Math.min(OCCLUSION_MAX_WIDTH,Number.isFinite(value) ? value:1));
+export const occlusionPointLimit = value => Math.max(10000,Math.min(200000,Number.isFinite(value) ? Math.round(value):40000));
+
+export function prepareOcclusion(depth, width=1) {
   const {w,h,data}=depth, n=w*h;
+  const maxDistance=Math.round(OCCLUSION_WIDTH*occlusionWidth(width));
   const owner=new Int32Array(n).fill(-1), distance=new Uint8Array(n).fill(255);
   const back=new Float32Array(n), front=new Float32Array(n);
   const normalX=new Int8Array(n),normalY=new Int8Array(n);
@@ -25,7 +30,7 @@ export function prepareOcclusion(depth) {
   // strips/hotspots at corners. Restrict it to the foreground side of the edge.
   while(head<tail){
     const i=queue[head++],x=i%w,y=Math.floor(i/w);
-    if(distance[i]>=OCCLUSION_WIDTH)continue;
+    if(distance[i]>=maxDistance)continue;
     for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
       const xx=x+dx,yy=y+dy;if(xx<0||xx>=w||yy<0||yy>=h)continue;
       const j=yy*w+xx;if(owner[j]>=0||data[j]<back[i]+.1)continue;
@@ -42,36 +47,45 @@ export function prepareOcclusion(depth) {
     // available for the AI to smear into the hidden background near its rim.
     if(data[i]>.55)mask[i]=0;
   }
-  return {w,h,owner,back,front,normalX,normalY,mask,count};
+  return {w,h,owner,back,front,normalX,normalY,distance,mask,count};
 }
 
-export function sampleOcclusion(reconstruction, aspect, count) {
+export function sampleOcclusion(reconstruction, aspect, count, options={}) {
   if(!reconstruction?.count)return null;
-  const {w,h,owner,back,front,normalX,normalY,rgb}=reconstruction;
+  const {w,h,owner,back,front,normalX,normalY,rgb,distance}=reconstruction;
+  const limit=occlusionPointLimit(options.reconstructionPointLimit);
+  const maxDistance=Math.round(OCCLUSION_WIDTH*occlusionWidth(options.reconstructionWidth));
   // Preserve base-cloud density, rather than adding multiple rows to a seam.
   // The hard cap also bounds live vertex work and GPU memory independently.
-  const budget=Math.min(40000,Math.floor(count*.2));
-  const cell=Math.max(.1,Math.sqrt(w*h/Math.max(1,count)));
-  const positions=[],colors=[],rands=[],occluders=[],normals=[];
+  // 40k retains the original density and 20% cap. Raising the limit increases
+  // sampling density too, so it can add points even in a small hidden region.
+  const density=limit/40000;
+  const budget=Math.min(limit,Math.floor(count*.2*density));
+  const cell=Math.max(.1,Math.sqrt(w*h/Math.max(1,count*density)));
   let state=0x634f128b;
   const rand=()=>{state^=state<<13;state^=state>>>17;state^=state<<5;return (state>>>0)/4294967296;};
   // Stratified selection distributes a capped pool over the whole image.
-  const candidates=[];
-  for(let y=0;y<h;y+=cell)for(let x=0;x<w;x+=cell){
+  // Packed temporary storage avoids hundreds of thousands of tiny JS arrays
+  // at higher density. It is reclaimed when the sampling worker terminates.
+  const cols=Math.ceil(w/cell),rows=Math.ceil(h/cell);
+  const candidates=new Float32Array(cols*rows*3);
+  let candidatesUsed=0;
+  for(let row=0;row<rows;row++)for(let col=0;col<cols;col++){
+    const x=col*cell,y=row*cell;
     const u=Math.min(w-1,x+rand()*cell),v=Math.min(h-1,y+rand()*cell);
-    const i=Math.floor(v)*w+Math.floor(u);if(owner[i]<0)continue;
-    candidates.push([u,v,i]);
+    const i=Math.floor(v)*w+Math.floor(u);if(owner[i]<0 || (distance && distance[i]>maxDistance))continue;
+    candidates[candidatesUsed*3]=u;candidates[candidatesUsed*3+1]=v;candidates[candidatesUsed*3+2]=i;candidatesUsed++;
   }
-  const step=Math.max(1,candidates.length/Math.max(1,budget));
-  for(let k=0;k<candidates.length && rands.length<budget;k+=step){
-    const [x,y,i]=candidates[Math.floor(k)],edge=owner[i];
-    positions.push((x/w-.5)*aspect,.5-y/h,back[i]);rands.push(rand());
-    colors.push(rgb[i*3]/255,rgb[i*3+1]/255,rgb[i*3+2]/255);
+  const used=Math.min(candidatesUsed,budget),step=Math.max(1,candidatesUsed/Math.max(1,budget));
+  const positions=new Float32Array(used*3),colors=new Float32Array(used*3),rands=new Float32Array(used),occluders=new Float32Array(used*4),normals=new Float32Array(used*2);
+  for(let j=0;j<used;j++){
+    const k=Math.floor(j*step)*3,x=candidates[k],y=candidates[k+1],i=candidates[k+2],edge=owner[i];
+    positions[j*3]=(x/w-.5)*aspect;positions[j*3+1]=.5-y/h;positions[j*3+2]=back[i];rands[j]=rand();
+    colors[j*3]=rgb[i*3]/255;colors[j*3+1]=rgb[i*3+1]/255;colors[j*3+2]=rgb[i*3+2]/255;
     // Boundary is half a cell towards the far side of the foreground sample.
-    occluders.push(((edge%w+.5+normalX[i]*.5)/w-.5)*aspect,
-      .5-(Math.floor(edge/w)+.5-normalY[i]*.5)/h,front[i],rand());
-    normals.push(normalX[i],normalY[i]);
+    occluders[j*4]=((edge%w+.5+normalX[i]*.5)/w-.5)*aspect;
+    occluders[j*4+1]=.5-(Math.floor(edge/w)+.5-normalY[i]*.5)/h;occluders[j*4+2]=front[i];occluders[j*4+3]=rand();
+    normals[j*2]=normalX[i];normals[j*2+1]=normalY[i];
   }
-  return {positions:new Float32Array(positions),colors:new Float32Array(colors),
-    rands:new Float32Array(rands),occluders:new Float32Array(occluders),normals:new Float32Array(normals)};
+  return {positions,colors,rands,occluders,normals};
 }

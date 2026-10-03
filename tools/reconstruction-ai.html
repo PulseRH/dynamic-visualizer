@@ -17,7 +17,7 @@ try{
   if(!restored.rgb.every((v,i)=>v===result.rgb[i])||!restored.owner.every((v,i)=>v===result.owner[i]))throw Error('Cache round trip failed');
   const cached=await reconstructBackground(bitmap,depth);if(cached!==result)throw Error('Repeated build reran AI');
   const blob=await new Promise(r=>canvas.toBlob(r)),reopened=await createImageBitmap(blob);await identifyDepthImage(reopened,blob);
-  for(let i=0;i<50;i++){if((await(await caches.open('dv-hidden-background-v1')).keys()).length)break;await new Promise(r=>setTimeout(r,20));}
+  for(let i=0;i<50;i++){if((await(await caches.open('dv-hidden-background-v2')).keys()).length)break;await new Promise(r=>setTimeout(r,20));}
   const reopenStart=performance.now();let saved=false;
   const disk=await reconstructBackground(reopened,depth,s=>saved=s.includes('saved'));
   if(!saved||!disk.rgb.every((v,i)=>v===result.rgb[i]))throw Error('Reopened wallpaper did not reuse disk cache');

@@ -1,11 +1,13 @@
-import {prepareOcclusion} from './occlusion.js';
+import {prepareOcclusion,OCCLUSION_MAX_WIDTH} from './occlusion.js';
 
 // Official MI-GAN-512 pipeline, pinned to a content revision (MIT weights).
 const MODEL='https://huggingface.co/andraniksargsyan/migan/resolve/406830d0fa60666da0071c342ad2fbc8f30c5c64/migan_pipeline_v2.onnx';
 self.onmessage=async ({data:{bitmap,depth}})=>{
   let session;
   try{
-    const prepared=prepareOcclusion(depth);
+    // Prepare the largest supported strip once. Width/count controls only
+    // resample this asset, so dragging them cannot launch another AI session.
+    const prepared=prepareOcclusion(depth,OCCLUSION_MAX_WIDTH);
     if(!prepared.count){self.postMessage({ok:true,result:null});return;}
     // Source transparency is intentional, not an occluded background.
     const alphaCanvas=new OffscreenCanvas(depth.w,depth.h),alphaCtx=alphaCanvas.getContext('2d',{willReadFrequently:true});

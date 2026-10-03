@@ -6,7 +6,7 @@ const rebuild=source.slice(source.indexOf('async function rebuildCloud()'),sourc
 const reconstruction={rgb:new Uint8Array([10,20,30]),count:1};
 const make=(ready,result)=>{
  let requested=0,cloudOptions;
- const config={depthMode:'onnx',occludedBackground:true,pointCount:100000,gapFill:0};
+ const config={depthMode:'onnx',occludedBackground:true,pointCount:100000,gapFill:0,reconstructionPointLimit:120000,reconstructionWidth:2.5};
  const context=vm.createContext({currentImage:{},currentImageUrl:'test-wallpaper',isWallpaperWindow:true,
   relayedDepth:{key:'test-wallpaper',mode:'onnx',data:new Float32Array([.1,.9]),w:2,h:1,reconstructionReady:ready,reconstruction:result},
   rebuildToken:0,activeDepthAbort:null,activeReconstructionAbort:null,awaitingRelay:false,displayedImage:null,
@@ -22,6 +22,7 @@ const make=(ready,result)=>{
  return {run:()=>context.rebuildCloud(),requested:()=>requested,options:()=>cloudOptions,context};
 };
 const completed=make(true,reconstruction);await completed.run();assert.equal(completed.options().reconstruction,reconstruction);
+assert.equal(completed.options().reconstructionPointLimit,120000);assert.equal(completed.options().reconstructionWidth,2.5);
 const failed=make(true,null);await failed.run();assert.equal(failed.options().reconstruction,null,'failed inference must allow the normal cloud to appear');
 const pending=make(false,null);await pending.run();assert.equal(pending.requested(),1);assert.equal(pending.options(),undefined);assert.equal(pending.context.awaitingRelay,true);
 pending.context.relayedDepth.reconstructionReady=true;pending.context.relayedDepth.reconstruction=reconstruction;await pending.run();assert.equal(pending.options().reconstruction,reconstruction);

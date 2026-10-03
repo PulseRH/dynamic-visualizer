@@ -197,6 +197,8 @@ export class UI {
     slider('depthShading','depthShading',v=>`${Math.round(v*100)}%`);
     $('occludedBackground').onchange=e=>set({occludedBackground:e.target.checked});
     slider('reconstructionBrightness','reconstructionBrightness',v=>`${Math.round(v*100)}%`);
+    slider('reconstructionPointLimit','reconstructionPointLimit',v=>`${Math.round(v/1000)}k`);
+    slider('reconstructionWidth','reconstructionWidth',v=>`${v.toFixed(2)}×`);
     slider('pointCount', 'pointCount', (v) => `${Math.round(v / 1000)}k`);
     slider('pointSize', 'pointSize', (v) => v.toFixed(1));
     slider('glow', 'glow', (v) => v.toFixed(2));
@@ -399,6 +401,9 @@ export class UI {
   }
 
   _syncAll() {
+    for(const [key,fmt] of [['reconstructionPointLimit',v=>`${Math.round(v/1000)}k`],['reconstructionWidth',v=>`${v.toFixed(2)}×`]]){
+      $(key).value=get(key);$(key).parentElement.querySelector('.val').textContent=fmt(get(key));
+    }
     $('occludedBackground').checked=!!get('occludedBackground');
     this._applyAccent();
     $('matchImageAccent').checked = !!get('matchImageAccent');

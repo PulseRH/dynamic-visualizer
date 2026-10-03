@@ -43,7 +43,10 @@ a few percent CPU and holds a steady frame rate without spinning fans.
   per wallpaper, caches results by image content and depth map, and releases
   the AI worker afterward. The model downloads once (~27 MB, MIT weights);
   inference uses one CPU worker and never runs in the animation loop. Adds
-  one particle draw call, capped at 40k extra points or 20% of Count. Off has
+  one particle draw call. **Hidden points** defaults to the original 40k/20%
+  cap and can increase density and budget up to 200k (~10 MB extra geometry).
+  **Fill width** ranges from 0.5× to 2.5×. The maximum coverage is prepared
+  once; both controls resample cached colours without rerunning AI. Off has
   no extra geometry; zero Hidden brightness skips its drawing. It invents
   plausible hidden content; large openings and imperfect depth masks remain
   limitations. Wallpaper windows reuse the preview's completed asset.

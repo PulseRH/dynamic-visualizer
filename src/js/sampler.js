@@ -173,7 +173,7 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
     rands: rands.subarray(0, used),
     count: used,
     baseCount,
-    reconstruction: mapping.reconstruction ? sampleOcclusion(mapping.reconstruction,aspect,baseCount):null,
+    reconstruction: mapping.reconstruction ? sampleOcclusion(mapping.reconstruction,aspect,baseCount,mapping):null,
     fillStarts:fillStarts?.subarray(0,(used-baseCount)*4),
     fillEnds:fillEnds?.subarray(0,(used-baseCount)*4),
     fillFractions:fillFractions?.subarray(0,used-baseCount),

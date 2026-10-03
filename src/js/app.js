@@ -289,6 +289,7 @@ async function rebuildCloud() {
     gapFillDensity:get('gapFillDensity'),gapFillRows:get('gapFillRows'),gapFillSpread:get('gapFillSpread'),
     gapFillDepthLimit:get('gapFillDepthLimit'),
     reconstruction,
+    reconstructionPointLimit:get('reconstructionPointLimit'),reconstructionWidth:get('reconstructionWidth'),
   });
   if (token !== rebuildToken) return;
   const previousImage=displayedImage;
@@ -460,7 +461,8 @@ onChange((all, patch) => {
     clearTimeout(countTimer);
     countTimer = setTimeout(() => rebuildCloud(), 350);
   }
-  else if(get('gapFill')>0 && ['bands','bandMap','bandDistribution','invertBands','gapFillDensity','gapFillRows','gapFillSpread','gapFillDepthLimit'].some(key=>key in patch)){
+  else if((get('gapFill')>0 && ['bands','bandMap','bandDistribution','invertBands','gapFillDensity','gapFillRows','gapFillSpread','gapFillDepthLimit'].some(key=>key in patch))
+    || (get('occludedBackground') && ['reconstructionPointLimit','reconstructionWidth'].some(key=>key in patch))){
     clearTimeout(countTimer);countTimer=setTimeout(()=>rebuildCloud(),350);
   }
 });
