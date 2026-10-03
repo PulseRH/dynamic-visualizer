@@ -60,6 +60,7 @@ const VERT = /* glsl */ `
     attribute vec4 aFillEnd;
     attribute float aFillT;
     attribute vec2 aFillThickness;
+    attribute vec4 aFillForeground;
     uniform float uFillBrightness;
     uniform float uFillOnlyOpen;
     uniform float uFillAdaptive;
@@ -277,8 +278,12 @@ const VERT = /* glsl */ `
     #elif defined(GAP_FILL)
       vec3 first, last, firstColour, lastColour;
       float firstAmp, lastAmp, firstSize, lastSize;
-      evaluatePoint(aFillStart.xyz, aFillStart.w, aColor, first, firstColour, firstAmp, firstSize);
-      evaluatePoint(aFillEnd.xyz, aFillEnd.w, aColor, last, lastColour, lastAmp, lastSize);
+      bool sidewall=uFillThicknessAuto>.5 && aFillThickness.y>.01;
+      bool foregroundFirst=aFillStart.z>=aFillEnd.z;
+      if(aFillForeground.w!=0.0)foregroundFirst=aFillForeground.w>0.0;
+      vec3 fillColour=sidewall && aFillForeground.w!=0.0 ? aFillForeground.rgb:aColor;
+      evaluatePoint(aFillStart.xyz, aFillStart.w, fillColour, first, firstColour, firstAmp, firstSize);
+      evaluatePoint(aFillEnd.xyz, aFillEnd.w, fillColour, last, lastColour, lastAmp, lastSize);
       vec3 pos = mix(first, last, aFillT);
       float opening = 1.0;
       float fillLight = 1.0;
@@ -325,15 +330,17 @@ const VERT = /* glsl */ `
           }
         }
       }
-      if(uFillThicknessAuto>.5 && aFillThickness.y>.01){
+      if(sidewall){
         // A local shell distance, not a percentage of every bridge. Preserve
         // interior seams and remove only excessive extrusion near outlines.
         // Remove original XY spacing so shared motion cannot create thickness.
         vec3 separation=first-last;
         separation.xy-=aFillStart.xy-aFillEnd.xy;
         float span=length(separation);
-        float viewDepth=dot(vec3(modelViewMatrix[0][2],modelViewMatrix[1][2],modelViewMatrix[2][2]),first-last);
-        float fromFront=viewDepth>=0.0 ? aFillT:1.0-aFillT;
+        // Ownership comes from the original image depth, not camera/audio
+        // displacement. A background band moving closer must not grow a
+        // background-coloured wall towards the foreground object.
+        float fromFront=foregroundFirst ? aFillT:1.0-aFillT;
         float limit=aFillThickness.x*uFillThicknessBias;
         float feather=max(uFillSpacing*.5,limit*.15);
         float excess=smoothstep(limit,limit+feather,fromFront*span);
@@ -344,6 +351,11 @@ const VERT = /* glsl */ `
       gl_PointSize = mix(firstSize, lastSize, aFillT);
       vColor = mix(firstColour, lastColour, aFillT) * uFillBrightness * opening * fillLight;
       vAmp = mix(firstAmp, lastAmp, aFillT);
+      if(sidewall && aFillForeground.w!=0.0){
+        vColor=(foregroundFirst ? firstColour:lastColour)*uFillBrightness*opening*fillLight;
+        vAmp=foregroundFirst ? firstAmp:lastAmp;
+        gl_PointSize=foregroundFirst ? firstSize:lastSize;
+      }
       if (opening == 0.0) {
         gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
         gl_PointSize = 0.0;
@@ -614,6 +626,7 @@ export class VisualScene {
     if(cloud.fillFractions?.length){
       this.fillMaterial ||= new THREE.ShaderMaterial({uniforms:this.uniforms,defines:{GAP_FILL:1},vertexShader:VERT,fragmentShader:FRAG,blending:THREE.AdditiveBlending,depthTest:false,depthWrite:false,transparent:true});
       this.fillMaterial.defaultAttributeValues.aFillThickness=[0,0];
+      this.fillMaterial.defaultAttributeValues.aFillForeground=[0,0,0,0];
       const fill=new THREE.BufferGeometry();
       fill.setAttribute('position',new THREE.BufferAttribute(cloud.positions.subarray(baseCount*3),3));
       fill.setAttribute('aColor',new THREE.BufferAttribute(cloud.colors.subarray(baseCount*3),3));
@@ -622,6 +635,7 @@ export class VisualScene {
       fill.setAttribute('aFillEnd',new THREE.BufferAttribute(cloud.fillEnds,4));
       fill.setAttribute('aFillT',new THREE.BufferAttribute(cloud.fillFractions,1));
       if(cloud.fillThickness)fill.setAttribute('aFillThickness',new THREE.BufferAttribute(cloud.fillThickness,2));
+      if(cloud.fillForeground)fill.setAttribute('aFillForeground',new THREE.BufferAttribute(cloud.fillForeground,4));
       this.fillPoints=new THREE.Points(fill,this.fillMaterial);this.fillPoints.frustumCulled=false;
       this.scene.add(this.fillPoints);
     }

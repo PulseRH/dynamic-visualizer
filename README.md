@@ -56,7 +56,10 @@ a few percent CPU and holds a steady frame rate without spinning fans.
   150% of Count ceiling. Higher budgets add GPU work and memory. **Auto
   thickness** and **Thickness bias** clip excessive foreground infill at the
   local shell distance, preserving interior seams without separate wall or
-  outline geometry. Bias changes live; point-budget edits resample cached
+  outline geometry. Object-edge fill uses the original foreground endpoint's
+  colour and audio lighting, extending it towards the background. Camera or
+  audio depth reversals cannot transfer ownership to the background. Bias
+  changes live; point-budget edits resample cached
   image/depth data without AI. Thickness remains a visual estimate.
 - **Save/Load presets** at the top store named snapshots of visualiser settings,
   including audio response, motion, colour, depth, fill and performance controls.

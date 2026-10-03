@@ -24,6 +24,7 @@ Object.assign(reconstruction,estimateFillThickness(depth,reconstruction));
 const classified=sampleImageToCloud(image,depth,12000,1,{reconstruction});
 for(const key of ['positions','colors','rands','fillStarts','fillEnds','fillFractions'])assert.deepEqual(classified[key],filled[key],'foreground classification must not alter existing geometry');
 assert.equal(classified.fillThickness.length,classified.fillFractions.length*2);
+assert.equal(classified.fillForeground.length,classified.fillFractions.length*4);
 let edges=0,interior=0;
 for(let f=0;f<classified.fillFractions.length;f++){
  const near=classified.positions[(classified.baseCount+f)*3+2],limit=classified.fillThickness[f*2],weight=classified.fillThickness[f*2+1];
@@ -32,6 +33,7 @@ for(let f=0;f<classified.fillFractions.length;f++){
 }
 assert.ok(edges>0&&interior>0,'foreground outlines and interior must be distinguished');
 assert.equal(filled.fillThickness,undefined,'ordinary gap fill must not reserve shell metadata');
+assert.equal(filled.fillForeground,undefined,'ordinary gap fill must not reserve foreground metadata');
 for(let y=0;y<image.height;y++)for(let x=170;x<230;x++)pixels[(y*image.width+x)*4+3]=0;
 const transparent=sampleImageToCloud(image,null,12000,1);
 for(let i=0;i<transparent.count;i++){
@@ -96,4 +98,22 @@ const guarded=sampleImageToCloud(image,step,12000,1,{bands:16,gapFillDepthLimit:
 const relaxed=sampleImageToCloud(image,step,12000,1,{bands:16,gapFillDepthLimit:.15});
 const crossing=cloud=>Array.from(cloud.fillFractions).filter((_,f)=>cloud.fillStarts[f*4+2]!==cloud.fillEnds[f*4+2]).length;
 assert.equal(crossing(guarded),0);assert.ok(crossing(relaxed)>0,'depth limit makes formerly rejected seams available');
+// Red foreground beside blue background: the sidewall must retain the red
+// endpoint sample even where the interpolated image position samples blue.
+for(let y=0;y<image.height;y++)for(let x=0;x<image.width;x++){
+ const i=(y*image.width+x)*4;pixels[i]=x>=200 ? 220:0;pixels[i+1]=0;pixels[i+2]=x<200 ? 220:0;
+}
+const owned=sampleImageToCloud(image,step,12000,1,{bands:16,gapFillDepthLimit:.15,gapFillRows:1,reconstruction:{...reconstruction,w:400,h:240,thickness:new Float32Array(96000).fill(.05),edgeWeight:new Float32Array(96000).fill(1),count:0}});
+let backgroundSamples=0,frontAtStart=0,frontAtEnd=0;
+for(let f=0;f<owned.fillFractions.length;f++){
+ const startsNear=owned.fillStarts[f*4+2],endsNear=owned.fillEnds[f*4+2];
+ const isStart=startsNear>=endsNear;
+ assert.equal(owned.fillForeground[f*4+3],isStart ? 1:-1);
+ if(startsNear!==endsNear){
+   assert.ok(owned.fillForeground[f*4]>.8&&owned.fillForeground[f*4+2]===0,'wall colour must come from original nearer red endpoint');
+   if(owned.colors[(owned.baseCount+f)*3+2]>.8)backgroundSamples++;
+   if(isStart)frontAtStart++;else frontAtEnd++;
+ }
+}
+assert.ok(backgroundSamples>0&&frontAtEnd>0,'fixture must expose the original blue-midpoint bug');
 console.log(`Gap fill adds ${filled.count-base.count} same-surface points; base data unchanged, repeatable, transparent holes preserved, extra count capped.`);

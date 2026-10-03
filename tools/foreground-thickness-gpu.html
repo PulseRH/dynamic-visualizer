@@ -13,7 +13,7 @@ try{
  scene.applySettings(base);scene.uniforms.uSize.value=3;scene.uniforms.uCursor.value.set(0,0,0);
  const positions=[-.12,0,.7,.12,0,.3],starts=[],ends=[],fractions=[.2,.4,.6,.8];
  for(const [i,t] of fractions.entries()){const y=(i-1.5)*.08;positions.push(-.12+.24*t,y,.7-.4*t);starts.push(-.12,y,.7,.2);ends.push(.12,y,.3,.8);}
- scene.setCloud({count:6,baseCount:2,aspect:1,positions:new Float32Array(positions),colors:new Float32Array(18).fill(.3),rands:new Float32Array([.2,.8,.1,.2,.3,.4]),fillStarts:new Float32Array(starts),fillEnds:new Float32Array(ends),fillFractions:new Float32Array(fractions),fillThickness:new Float32Array([.08,1,.08,1,.08,1,.08,1])});
+ scene.setCloud({count:6,baseCount:2,aspect:1,positions:new Float32Array(positions),colors:new Float32Array(Array.from({length:18},(_,i)=>i%3===2 ? .6:0)),rands:new Float32Array([.2,.8,.1,.2,.3,.4]),fillStarts:new Float32Array(starts),fillEnds:new Float32Array(ends),fillFractions:new Float32Array(fractions),fillThickness:new Float32Array([.08,1,.08,1,.08,1,.08,1]),fillForeground:new Float32Array([.6,0,0,1,.6,0,0,1,.6,0,0,1,.6,0,0,1])});
  scene.uniforms.uFillSpacing.value=.004;
  scene.points.visible=false;
  const geometry=scene.fillPoints.geometry,gl=scene.renderer.getContext(),pixels=new Uint8Array(300*300*4);
@@ -21,18 +21,28 @@ try{
  const counts=()=>fractions.map((_,i)=>{geometry.setDrawRange(i,1);return Number(draw());});
  scene.camera.position.set(0,0,2);scene.camera.lookAt(0,0,0);
  if(counts().join()!=='1,1,0,0')throw Error('Local shell did not bound the nearer foreground thickness: '+counts());
+ const channels=()=>{const sums=[0,0,0];for(let i=0;i<pixels.length;i++)if(i%4<3)sums[i%4]+=pixels[i];return sums;};
+ geometry.setDrawRange(0,1);draw();if(!(channels()[0]>0&&channels()[2]===0))throw Error('Sidewall inherited blue background instead of red foreground');
  scene.applySettings({...base,depthScale:.2});if(counts().join()!=='1,1,1,1')throw Error('Small gaps were cut by the same percentage');
  scene.applySettings({...base,depthScale:.8});if(counts().join()!=='1,0,0,0')throw Error('Larger gaps did not retain less of the bridge');
  scene.applySettings({...base,gapFillThicknessBias:.5});if(counts().join()!=='1,0,0,0')throw Error('Thinner bias did not reduce shell distance');
  scene.applySettings({...base,gapFillThicknessBias:2});if(counts().join()!=='1,1,1,1')throw Error('Thicker bias did not increase shell distance');
  scene.applySettings(base);
  scene.camera.position.set(0,0,-2);scene.camera.lookAt(0,0,0);
- if(counts().join()!=='0,0,1,1')throw Error('Thickness did not follow camera direction');
+ if(counts().join()!=='1,1,0,0')throw Error('Camera reversal transferred wall ownership to the background');
  scene.camera.position.set(0,0,2);scene.camera.lookAt(0,0,0);
  scene.applySettings({...base,depthScale:0,intensity:1.5,bands:4,bandMap:'depth',bandDistribution:0,invertBands:false});scene.uniforms.uDyn.value=1;
  scene.bandData.fill(0);scene.bandData[4]=255;
- if(counts().join()!=='0,0,1,1')throw Error('Thickness did not follow audio-driven surface reversal: '+counts());
+ if(counts().join()!=='1,1,0,0')throw Error('Audio reversal transferred wall ownership to the background: '+counts());
+ geometry.setDrawRange(0,1);draw();if(!(channels()[0]>0&&channels()[2]===0))throw Error('Audio reversal changed the red wall into background blue');
  scene.applySettings(base);
+ const begin=geometry.attributes.aFillStart,end=geometry.attributes.aFillEnd,foreground=geometry.attributes.aFillForeground;
+ for(let i=0;i<4;i++){begin.array[i*4+2]=.3;end.array[i*4+2]=.7;foreground.array[i*4+3]=-1;}
+ begin.needsUpdate=end.needsUpdate=foreground.needsUpdate=true;
+ if(counts().join()!=='0,0,1,1')throw Error('End-owned foreground was cut from the wrong side');
+ geometry.setDrawRange(3,1);draw();if(!(channels()[0]>0&&channels()[2]===0))throw Error('End-owned foreground lost its colour');
+ for(let i=0;i<4;i++){begin.array[i*4+2]=.7;end.array[i*4+2]=.3;foreground.array[i*4+3]=1;}
+ begin.needsUpdate=end.needsUpdate=foreground.needsUpdate=true;
  const shell=geometry.attributes.aFillThickness;
  for(let i=0;i<4;i++)shell.array[i*2]=.016;shell.needsUpdate=true;
  if(counts().some(Boolean))throw Error('Thin detail received the wide wall estimate');
@@ -42,6 +52,7 @@ try{
  if(counts().join()!=='1,1,1,1')throw Error('Background fill was shortened');
  for(let i=0;i<4;i++){shell.array[i*2]=.08;shell.array[i*2+1]=1;}shell.needsUpdate=true;geometry.setDrawRange(0,4);
  scene.applySettings({...base,gapFillForegroundLimit:false});draw();const neutral=pixels.slice();
+ if(!(channels()[2]>0&&channels()[0]===0))throw Error('Disabled Auto thickness changed ordinary seam colour');
  scene.applySettings({...base,occludedBackground:false});draw();if(!pixels.every((v,i)=>v===neutral[i]))throw Error('Disabled reconstruction affected fill');
  if(scene.fillPoints.geometry!==geometry)throw Error('Live thickness settings rebuilt geometry');
  const canvas=document.createElement('canvas');canvas.width=384;canvas.height=256;const ctx=canvas.getContext('2d');ctx.fillStyle='#a58176';ctx.fillRect(0,0,384,256);
@@ -50,9 +61,9 @@ try{
  const reconstruction=prepareOcclusion(depth,2.5);reconstruction.rgb=new Uint8Array(96*64*3).fill(100);delete reconstruction.mask;
  Object.assign(reconstruction,estimateFillThickness(depth,reconstruction));
  const options={reconstruction,bands:16},direct=sampleImageToCloud(image,depth,40000,1,options),worker=await buildCloud(image,depth,40000,1,options);
- for(const key of ['positions','colors','rands','fillStarts','fillEnds','fillFractions','fillThickness'])if(!direct[key].every((v,i)=>v===worker[key][i])||direct[key].length!==worker[key].length)throw Error('Worker mismatch '+key);
+ for(const key of ['positions','colors','rands','fillStarts','fillEnds','fillFractions','fillThickness','fillForeground'])if(!direct[key].every((v,i)=>v===worker[key][i])||direct[key].length!==worker[key].length)throw Error('Worker mismatch '+key);
  if(!worker.fillThickness.includes(0)||!worker.fillThickness.some(v=>v>0))throw Error('Worker lost shell estimates');
  image.close();scene.renderer.dispose();
- document.getElementById('result').textContent='PASS: local distance limits retain different percentages in small/large gaps, thin/wide estimates, interior/background unchanged, bias and camera/audio reversal, neutral off, live uniforms, worker parity and no WebGL errors.';
+ document.getElementById('result').textContent='PASS: red foreground owns sidewall colour and cutoff through camera/audio reversal, either endpoint, local distance/bias, neutral off, interior/background unchanged, live uniforms, worker parity and no WebGL errors.';
 }catch(error){document.getElementById('result').textContent='FAIL: '+(error.stack||error);}
 </script>

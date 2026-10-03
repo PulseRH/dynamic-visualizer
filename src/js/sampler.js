@@ -35,6 +35,9 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
   // Bias changes live without another model, rebuild or draw pass.
   const reconstruction=mapping.reconstruction;
   const fillThickness=extraCapacity && reconstruction?.thickness ? new Float32Array(extraCapacity*2):null;
+  // RGB and endpoint ownership for foreground sidewalls. Kept separate from
+  // midpoint colours so ordinary interior seams preserve their image samples.
+  const fillForeground=fillThickness ? new Float32Array(extraCapacity*4):null;
   const histogram=depthHistogram(depth);
   const lookup=mapping.smartDepthBands ? depthBandLookup(histogram,mapping.bands||64,mapping.bandDistribution||0):null;
   const bandAt=i=>{
@@ -176,6 +179,10 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
               +Math.min(reconstruction.w-1,Math.floor(u*reconstruction.w));
             fillThickness[f*2]=reconstruction.thickness[index];
             fillThickness[f*2+1]=reconstruction.edgeWeight[index];
+            if(reconstruction.edgeWeight[index]>.01){
+              const front=positions[ai+2]>=positions[bi+2] ? ai:bi;
+              fillForeground.set([colors[front],colors[front+1],colors[front+2],front===ai ? 1:-1],f*4);
+            }
           }
         }
       }
@@ -194,6 +201,7 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
     fillEnds:fillEnds?.subarray(0,(used-baseCount)*4),
     fillFractions:fillFractions?.subarray(0,used-baseCount),
     fillThickness:fillThickness?.subarray(0,(used-baseCount)*2),
+    fillForeground:fillForeground?.subarray(0,(used-baseCount)*4),
     aspect,
   };
 }
