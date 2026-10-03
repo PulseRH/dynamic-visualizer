@@ -142,6 +142,7 @@ export class UI {
       if (get('settingsOnly')) set({ settingsOnly: false });
       else bridge.settingsOnly(false, true);
     };
+    $('pinWallpaperSelector').onchange = event => set({pinWallpaperSelector:event.target.checked});
     $('gearBtn').onclick = () => {
       $('panel').classList.toggle('open');
       $('hud').classList.remove('faded');
@@ -249,6 +250,8 @@ export class UI {
     slider('gapFillPointLimit','gapFillPointLimit',v=>v===0 ? 'Off':`${Math.round(v/1000)}k`);
     $('smartDepthBands').onchange=e=>set({smartDepthBands:e.target.checked});
     $('gapFillForegroundLimit').onchange=e=>set({gapFillForegroundLimit:e.target.checked});
+    $('gapFillManualLimit').onchange=e=>set({gapFillManualLimit:e.target.checked});
+    slider('gapFillThickness','gapFillThickness',v=>`${Math.round(v*100)}%`);
     $('aiFillThickness').onchange=e=>set({aiFillThickness:e.target.checked});
     slider('gapFillThicknessBias','gapFillThicknessBias',v=>`${v.toFixed(2)}×`);
     slider('pointCount', 'pointCount', (v) => `${Math.round(v / 1000)}k`);
@@ -324,6 +327,7 @@ export class UI {
     for (const el of document.querySelectorAll('#panel input[type="range"]')) {
       let wheelCarry = 0;
       el.addEventListener('wheel', (event) => {
+        if (el.disabled) return;
         event.preventDefault();
         const delta = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 100 : 1);
         if (Math.sign(delta) !== Math.sign(wheelCarry)) wheelCarry = 0;
@@ -460,6 +464,12 @@ export class UI {
     $('reconstructionSideOcclusion').checked=!!get('reconstructionSideOcclusion');
     $('smartDepthBands').checked=!!get('smartDepthBands');
     $('gapFillForegroundLimit').checked=!!get('gapFillForegroundLimit');
+    $('gapFillManualLimit').checked=!!get('gapFillManualLimit');
+    $('gapFillThickness').value=get('gapFillThickness');
+    $('gapFillThickness').parentElement.querySelector('.val').textContent=`${Math.round(get('gapFillThickness')*100)}%`;
+    $('gapFillThickness').disabled=!get('gapFillManualLimit');
+    $('pinWallpaperSelector').checked=!!get('pinWallpaperSelector');
+    $('panel').classList.toggle('pin-wallpaper',!!get('pinWallpaperSelector'));
     $('aiFillThickness').checked=!!get('aiFillThickness');
     this._applyAccent();
     $('matchImageAccent').checked = !!get('matchImageAccent');

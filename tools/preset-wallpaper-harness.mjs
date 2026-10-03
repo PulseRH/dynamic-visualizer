@@ -3,12 +3,13 @@ import {createPresetStore} from '../src/js/presets.js';
 import {WallpaperBands} from '../src/js/wallpaper-bands.js';
 const data=new Map(),storage={getItem:key=>data.get(key),setItem:(key,value)=>data.set(key,value)};
 const defaults={bands:64,invertBands:false,intensity:1,sensGain:1,easeInBezier:[.2,.35,.6,1],gapFillPointLimit:180000,
-  imageUrl:null,audioSource:'demo',settingsOnly:false};
+  gapFillManualLimit:false,gapFillThickness:.6,pinWallpaperSelector:false,imageUrl:null,audioSource:'demo',settingsOnly:false};
 const store=createPresetStore(defaults,storage),curve=[.1,.2,.8,.9];
-store.save(' Calm ',{...defaults,bands:20,intensity:.6,sensGain:1.2,easeInBezier:curve,imageUrl:'private-image',audioSource:'system',settingsOnly:true});
+store.save(' Calm ',{...defaults,bands:20,intensity:.6,sensGain:1.2,easeInBezier:curve,gapFillManualLimit:true,gapFillThickness:.4,pinWallpaperSelector:true,imageUrl:'private-image',audioSource:'system',settingsOnly:true});
 curve[0]=.9;const loaded=store.load('Calm');
 assert.equal(loaded.bands,20);assert.equal(loaded.intensity,.6);assert.equal(loaded.sensGain,1.2);assert.equal(loaded.easeInBezier[0],.1,'preset curves must be snapshots');
-for(const excluded of ['imageUrl','audioSource','settingsOnly'])assert.ok(!(excluded in loaded));
+assert.equal(loaded.gapFillManualLimit,true);assert.equal(loaded.gapFillThickness,.4);
+for(const excluded of ['imageUrl','audioSource','settingsOnly','pinWallpaperSelector'])assert.ok(!(excluded in loaded));
 store.save('Calm',{...defaults,bands:32});assert.deepEqual(store.names(),['Calm']);assert.equal(store.load('Calm').bands,32,'saving the same name replaces its settings');
 store.save('Energetic',{...defaults,intensity:2});assert.deepEqual(createPresetStore(defaults,storage).names(),['Calm','Energetic'],'presets survive reopening');
 assert.throws(()=>store.save(' ',defaults));assert.throws(()=>store.load('Missing'));

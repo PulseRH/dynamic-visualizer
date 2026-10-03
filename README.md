@@ -60,7 +60,7 @@ a few percent CPU and holds a steady frame rate without spinning fans.
   **Sides hide background** optionally extends the reconstruction occlusion
   boundary along filled sides, so background particles do not show through
   the side shell. Uses the cached local thickness and live Thickness bias;
-  without Auto thickness it covers the full side span. It adds a boundary
+  with both automatic and manual thickness limits off it covers the full side span. It adds a boundary
   evaluation per hidden vertex while enabled, with no extra draw call or AI.
   Off preserves the existing front-only reveal; empty/invisible Gap fill
   leaves reconstruction unchanged.
@@ -76,6 +76,11 @@ a few percent CPU and holds a steady frame rate without spinning fans.
   audio depth reversals cannot transfer ownership to the background. Bias
   changes live; point-budget edits resample cached
   image/depth data without AI. Thickness remains a visual estimate.
+  **Limit Gap fill thickness** restores the manual percentage control: 60%
+  occupies the front 60% of a foreground bridge, redistributing the same
+  points across that shorter span. At 0%, foreground edge fill is hidden.
+  It works with reconstruction; Auto thickness can remain on, in which case
+  the smaller limit wins. Side/background occlusion follows the same cap.
 - **AI object masks** (under Fill tuning) guides Auto thickness with quantised
   SegFormer B0 ADE20K segmentation (~4.5 MB, downloaded once). Building parts
   share a surface mask; connected regions are separated by depth jumps and
@@ -90,6 +95,9 @@ a few percent CPU and holds a steady frame rate without spinning fans.
   Wallpaper, audio source and window/startup choices stay with the session.
   Saving an existing name replaces it. **Bands** and **Invert bands** are also
   remembered automatically per wallpaper image, including after a restart.
+  **Pin selector** next to Image keeps wallpaper buttons, the preview and
+  recent thumbnails at the top while scrolling. It is a saved window preference
+  separate from visual presets, implemented with CSS and no polling.
 - **Follow depth surfaces** (Depth band mapping): snap audio-band boundaries
   toward valleys in the wallpaper's depth distribution while retaining band
   count, frequency order and placement bias. A small lookup shared by the GPU,

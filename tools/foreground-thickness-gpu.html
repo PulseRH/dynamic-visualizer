@@ -10,7 +10,7 @@ import {Vector3} from '../src/vendor/three.module.js';
 try{
  const scene=new VisualScene(document.getElementById('gl'));
  scene.renderer.setSize(300,300,false);scene.camera.aspect=1;scene.camera.updateProjectionMatrix();
- const base={...getAll(),occludedBackground:true,gapFillForegroundLimit:true,gapFillThicknessBias:1,gapFillOnlyOpen:false,gapFillAdaptive:0,gapFillBrightness:1,gapFillRows:3,gapFillDensity:12,depthShape:0,depthScale:.4,intensity:0,depthMove:1,xyMove:0,sizePulse:0,boost:0,depthShading:0,hueReaction:0,hueCycle:0,audioCurvature:0,dollyZoom:0,centeredMotion:false,equalDepthMovement:true,motionWave:0,motionRipple:0,motionBands:0,motionDrift:0,motionSwirl:0,motionBreathe:0,motionSweep:0,motionBandShake:0};
+ const base={...getAll(),occludedBackground:true,gapFillForegroundLimit:true,gapFillManualLimit:false,gapFillThicknessBias:1,gapFillOnlyOpen:false,gapFillAdaptive:0,gapFillBrightness:1,gapFillRows:3,gapFillDensity:12,depthShape:0,depthScale:.4,intensity:0,depthMove:1,xyMove:0,sizePulse:0,boost:0,depthShading:0,hueReaction:0,hueCycle:0,audioCurvature:0,dollyZoom:0,centeredMotion:false,equalDepthMovement:true,motionWave:0,motionRipple:0,motionBands:0,motionDrift:0,motionSwirl:0,motionBreathe:0,motionSweep:0,motionBandShake:0};
  scene.applySettings(base);scene.uniforms.uSize.value=3;scene.uniforms.uCursor.value.set(0,0,0);
  const positions=[-.12,0,.7,.12,0,.3],starts=[],ends=[],fractions=[.2,.4,.6,.8];
  for(const [i,t] of fractions.entries()){const y=(i-1.5)*.08;positions.push(-.12+.24*t,y,.7-.4*t);starts.push(-.12,y,.7,.2);ends.push(.12,y,.3,.8);}
@@ -43,6 +43,11 @@ try{
  scene.applySettings({...base,depthScale:.8});verifyPositions(.56,.24,.08);
  scene.applySettings({...base,gapFillThicknessBias:.5});verifyPositions(.28,.12,.04);
  scene.applySettings({...base,gapFillThicknessBias:2});verifyPositions(.28,.12,.16);
+ scene.applySettings({...base,gapFillForegroundLimit:false,gapFillManualLimit:true,gapFillThickness:.6});verifyPositions(.28,.12,.096);
+ scene.applySettings({...base,gapFillForegroundLimit:false,gapFillManualLimit:true,gapFillThickness:1});verifyPositions(.28,.12,.16);
+ scene.applySettings({...base,gapFillManualLimit:true,gapFillThickness:.25});verifyPositions(.28,.12,.04);
+ scene.applySettings({...base,gapFillManualLimit:true,gapFillThickness:.9});verifyPositions(.28,.12,.08);
+ scene.applySettings({...base,gapFillManualLimit:true,gapFillThickness:0});if(counts().some(Boolean))throw Error('Zero manual thickness still draws foreground edges');
  scene.applySettings(base);
  scene.camera.position.set(0,0,-2);scene.camera.lookAt(0,0,0);
  verifyPositions(.28,.12,.08);
@@ -70,6 +75,7 @@ try{
  }
  for(let i=0;i<4;i++){shell.array[i*2]=.08;shell.array[i*2+1]=0;}shell.needsUpdate=true;
  if(counts().join()!=='1,1,1,1')throw Error('Interior band seams were cut');
+ scene.applySettings({...base,gapFillManualLimit:true,gapFillThickness:0});if(counts().join()!=='1,1,1,1')throw Error('Manual limit hid unclassified interior seams');scene.applySettings(base);
  shell.array.fill(0);shell.needsUpdate=true;
  if(counts().join()!=='1,1,1,1')throw Error('Background fill was shortened');
  for(let i=0;i<4;i++){shell.array[i*2]=.08;shell.array[i*2+1]=1;}shell.needsUpdate=true;geometry.setDrawRange(0,4);
@@ -86,6 +92,6 @@ try{
  for(const key of ['positions','colors','rands','fillStarts','fillEnds','fillFractions','fillThickness','fillForeground'])if(!direct[key].every((v,i)=>v===worker[key][i])||direct[key].length!==worker[key].length)throw Error('Worker mismatch '+key);
  if(!worker.fillThickness.includes(0)||!worker.fillThickness.some(v=>v>0))throw Error('Worker lost shell estimates');
  image.close();scene.renderer.dispose();
- document.getElementById('result').textContent='PASS: all samples redistribute across measured shortened wall positions; thin/large gaps, continuous edge influence, red foreground ownership, camera/audio reversal, either endpoint, neutral off, live uniforms, worker parity and no WebGL errors.';
+ document.getElementById('result').textContent='PASS: manual percentages, combined auto/manual limits and zero foreground fill; all samples redistribute across measured shortened wall positions; thin/large gaps, continuous edge influence, red foreground ownership, camera/audio reversal, either endpoint, neutral off, live uniforms, worker parity and no WebGL errors.';
 }catch(error){document.getElementById('result').textContent='FAIL: '+(error.stack||error);}
 </script>

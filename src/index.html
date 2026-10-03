@@ -30,14 +30,19 @@
       <button id="closePanel" class="icon-btn" aria-label="Close">✕</button>
     </div>
 
-    <section>
-      <h3>Image</h3>
+    <section id="wallpaperSelector">
+      <div class="image-heading">
+        <h3>Image</h3>
+        <label class="check-row"><input type="checkbox" id="pinWallpaperSelector" /> Pin selector<span class="q" data-tip="Keep wallpaper buttons, image preview and recent wallpapers at the top while scrolling settings. Uses CSS positioning with no background polling. Saved independently of visual presets."></span></label>
+      </div>
       <div class="row">
         <button id="useWallpaper" class="btn">Use wallpaper</button>
         <button id="uploadImage" class="btn">Upload…</button>
       </div>
       <div class="thumb-wrap"><img id="imgThumb" alt="" /></div>
       <div id="recentWallpapers" class="recent-wallpapers" aria-label="Recent wallpapers" hidden></div>
+    </section>
+    <section class="image-options">
       <label class="check-row"><input type="checkbox" id="wallpaperCycle" /> Cycle recent wallpapers<span class="q" data-tip="Rotate through your recent wallpapers while wallpaper mode is running. Pauses during Pause visualiser. Only the next image is loaded, when needed."></span></label>
       <div id="cycleControls" hidden>
         <label class="slider-row"><span class="lbl">Change every</span><input type="range" id="wallpaperCycleMinutes" min="1" max="60" step="1" /><span class="val"></span></label>
@@ -55,7 +60,7 @@
     </div>
     <section>
       <h3>Visualiser</h3>
-      <label class="slider-row"><span class="lbl">Bands<span class="q" data-tip="How many frequency bands divide the image. Fine steps from 6 to 32, then four-band steps to 128."></span></span>
+      <label class="slider-row"><span class="lbl">Bands<span class="q" data-tip="How many frequency bands divide the image. Every count from 5 to 16, even counts to 32, then four-band steps to 128."></span></span>
         <input type="range" id="bands" min="0" max="37" step="1" />
         <span class="val"></span>
       </label>
@@ -84,7 +89,7 @@
       <details class="fold">
         <summary>Hidden background</summary>
         <label class="check-row"><input type="checkbox" id="occludedBackground" /> Reconstruct behind objects<span class="q" data-tip="Prepare hidden depth layers with local AI, using the depth map to find foreground edges. Each depth slice has its own mask so middle layers retain the appropriate background context. Reveals reconstructed particles when parallax or audio motion moves those objects away. Works with Depth strength at zero if audio separates depth bands. Best with AI depth; Flat has no foreground edges. Invents plausible content, not a perfect recovery. Downloads a 27 MB model once, caches coverage up to 2.5× width and releases the AI worker after preparation. Adds one particle draw call. Hidden points controls the extra point budget and density, up to 200k. Off preserves the existing renderer."></span></label>
-        <label class="check-row"><input type="checkbox" id="reconstructionSideOcclusion" /> Sides hide background<span class="q" data-tip="Stop reconstructed background points showing through thick Gap fill sides. Uses the side's rear edge as well as the front silhouette. Follows Auto thickness and Thickness bias; without Auto thickness it covers the full side span. Requires visible Gap fill. Toggle updates immediately, with no AI run or geometry rebuild. Adds a small shader calculation for hidden points while enabled."></span></label>
+        <label class="check-row"><input type="checkbox" id="reconstructionSideOcclusion" /> Sides hide background<span class="q" data-tip="Stop reconstructed background points showing through thick Gap fill sides. Uses the side's rear edge as well as the front silhouette. Follows Auto thickness, Thickness bias and the manual Fill thickness cap; with both limits off it covers the full side span. Requires visible Gap fill. Toggle updates immediately, with no AI run or geometry rebuild. Adds a small shader calculation for hidden points while enabled."></span></label>
         <label class="slider-row"><span class="lbl">Hidden points<span class="q" data-tip="Maximum added hidden particles. 40k retains the original density and 20% of Count limit; higher settings increase both density and budget, so you can go beyond 40k and 20%. Actual count depends on available hidden area and Count. Up to 200k, roughly 10 MB of extra GPU geometry. Performance warning: higher settings add vertex work and can lower frame rate. Resamples cached colours; does not rerun AI."></span></span><input type="range" id="reconstructionPointLimit" min="10000" max="200000" step="10000" /><span class="val"></span></label>
         <label class="slider-row"><span class="lbl">Fill width<span class="q" data-tip="How far reconstructed background extends behind foreground edges. 1× is the original width; up to 2.5× helps cover larger openings. Uses cached wider reconstruction, without stretching points or rerunning AI. Width can still stop at another depth boundary. Raise Hidden points as needed to keep wider areas dense."></span></span><input type="range" id="reconstructionWidth" min="0.5" max="2.5" step="0.05" /><span class="val"></span></label>
         <label class="slider-row"><span class="lbl">Hidden brightness<span class="q" data-tip="Brightness of newly exposed background particles. Lower this if reconstructed areas stand out. Does not rerun AI; 0 skips their drawing."></span></span><input type="range" id="reconstructionBrightness" min="0" max="1" step="0.01" /><span class="val"></span></label>
@@ -95,6 +100,8 @@
       <details class="fold">
         <summary>Fill tuning</summary>
         <label class="slider-row"><span class="lbl">Gap fill points<span class="q" data-tip="Maximum extra points for ordinary Gap fill, independent of Thickness bias. No separate wall or outline points. Gap fill percentage scales this budget; actual count depends on eligible seams and is capped at 150% of Count. 180k keeps the previous limit; up to 400k allows denser fill. Higher counts add GPU work and memory. Zero disables extra fill points. Resamples the existing image/depth; no AI rerun."></span></span><input type="range" id="gapFillPointLimit" min="0" max="400000" step="10000" /><span class="val"></span></label>
+        <label class="check-row"><input type="checkbox" id="gapFillManualLimit" /> Limit Gap fill thickness<span class="q" data-tip="Manually cap foreground Gap fill as a percentage of the full side span. Requires Reconstruct behind objects. Keeps the foreground's colour and redistributes points into the shorter section. Works alongside Auto thickness; the smaller limit wins. Updates immediately with no AI or geometry rebuild."></span></label>
+        <label class="slider-row"><span class="lbl">Fill thickness<span class="q" data-tip="60% keeps the front 60% of the side span. 100% adds no manual cap; 0% hides foreground edge fill. Interior/background seams are unchanged. Used when Limit Gap fill thickness is on. Sides hide background follows this cap too."></span></span><input type="range" id="gapFillThickness" min="0" max="1" step="0.01" /><span class="val"></span></label>
         <label class="check-row"><input type="checkbox" id="gapFillForegroundLimit" /> Auto thickness<span class="q" data-tip="Shorten foreground Gap fill using one local depth/width estimate per seam. Redistributes points across the shorter section instead of deleting them. Blends gradually into unmodified interior seams. Uses the foreground object's colour and keeps ownership when audio moves the background closer. Requires Reconstruct behind objects and Gap fill. Creates no separate outline or wall geometry. Thickness remains a visual approximation. Cached, with no extra AI on slider changes."></span></label>
         <label class="check-row"><input type="checkbox" id="aiFillThickness" /> AI object masks<span class="q" data-tip="Use SegFormer object/surface contours together with the existing depth and local-width estimate for Auto thickness. Runs locally in one CPU worker, only when preparing a wallpaper; downloads about 4.5 MB once. Completed estimates are cached. The worker is released afterwards, with no extra animation draw calls. Requires Auto thickness and Reconstruct behind objects. Off uses the depth-only estimate. Uncertain masks fall back to depth; thickness is still an approximation."></span></label>
         <label class="slider-row"><span class="lbl">Thickness bias<span class="q" data-tip="Adjust the automatic local thickness estimate. 1× uses the estimate; lower makes foreground edges thinner, higher allows thicker edges. This is a distance limit, so larger openings do not receive the same percentage of fill. Interior seams and background fill are unaffected. Keeps the cutoff anchored to the original foreground through camera and audio motion; changes it immediately without rebuilding or rerunning AI. Used when Auto thickness is enabled."></span></span><input type="range" id="gapFillThicknessBias" min="0.25" max="2.5" step="0.05" /><span class="val"></span></label>

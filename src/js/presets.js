@@ -1,7 +1,7 @@
 // Keep image/device/window choices outside visual presets. Audio response,
 // rendering quality, motion, colours, bands and fill are included.
 const EXCLUDED=new Set(['imageUrl','audioSource','audioFileUrl','settingsOnly','previewPaused','previewFullQuality',
-  'matchImageAccent','wallpaperCycle','wallpaperCycleMinutes','waveMode','motionMix','overscan','overscanAuto','swirlRangeVersion']);
+  'matchImageAccent','pinWallpaperSelector','wallpaperCycle','wallpaperCycleMinutes','waveMode','motionMix','overscan','overscanAuto','swirlRangeVersion']);
 export function createPresetStore(defaults,storage=globalThis.localStorage){
   const key='dv.presets.v1';
   const clean=settings=>{

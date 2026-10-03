@@ -78,6 +78,9 @@ export const DEFAULTS = {
   gapFillPointLimit: 180000, // ordinary seam points, independently capped; zero disables
   smartDepthBands: false, // snap audio cuts toward valleys in the image depth distribution
   gapFillThicknessBias: 1, // multiplier of the local estimate, not a gap percentage
+  gapFillManualLimit: false, // optional uniform percentage cap, alongside Auto thickness
+  gapFillThickness: .6,    // retained foreground side span when manual limiting is on
+  pinWallpaperSelector: false, // keep image selection visible while scrolling settings
   curvatureSource: 'input', // 'input' or original slower 'bands' response
   dollyZoom: 0,           // audio camera approach with compensating field of view
   quietMovement: 0.6,      // minimum audio motion multiplier, before the silence fade

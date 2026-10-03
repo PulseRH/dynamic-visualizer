@@ -97,6 +97,19 @@ html, body {
 }
 #panel.open { transform: translateX(0); }
 
+.image-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+#panel .image-heading h3 { margin-bottom: 0; }
+.image-heading .check-row { margin: 0; font-size: .76rem; }
+.image-heading { margin-bottom: 10px; }
+#panel .image-options { margin-top: 0; padding-top: 0; border-top: none; }
+#panel.pin-wallpaper #wallpaperSelector {
+  position: sticky; top: -18px; z-index: 3;
+  background: #101116;
+  margin-left: -20px; margin-right: -20px;
+  padding: 16px 20px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
 body.settings-only #gl, body.settings-only #hud { display: none; }
 body.settings-only #panel {
   width: 100%; max-width: none; transform: none;

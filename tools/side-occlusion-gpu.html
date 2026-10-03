@@ -11,7 +11,7 @@ try {
     reconstruction:{positions:new Float32Array([-.1,0,.15,-.01,.08,.15]),colors:new Float32Array([1,0,0,0,0,1]),rands:new Float32Array([.5,.5]),
       occluders:new Float32Array([0,0,.9,.5,0,.08,.9,.5]),normals:new Float32Array([1,0,1,0]),sideThickness:new Float32Array([.4,1,.4,1])}};
   scene.setCloud(cloud);
-  const settings={...getAll(),bands:4,bandMap:'depth',bandDistribution:0,invertBands:false,smartDepthBands:false,equalDepthMovement:false,occludedBackground:true,reconstructionBrightness:1,reconstructionSideOcclusion:false,gapFill:1,gapFillPointLimit:1000,gapFillBrightness:1,gapFillOnlyOpen:false,gapFillAdaptive:0,gapFillForegroundLimit:true,gapFillThicknessBias:1,depthScale:.8,depthShape:0,audioCurvature:0,dollyZoom:0,boost:0,sizePulse:0,intensity:0,depthShading:0,hueReaction:0,hueCycle:0,motionWave:0,motionRipple:0,motionBands:0,motionDrift:0,motionSwirl:0,motionBreathe:0,motionSweep:0,motionBandShake:0};
+  const settings={...getAll(),bands:4,bandMap:'depth',bandDistribution:0,invertBands:false,smartDepthBands:false,equalDepthMovement:false,occludedBackground:true,reconstructionBrightness:1,reconstructionSideOcclusion:false,gapFill:1,gapFillPointLimit:1000,gapFillBrightness:1,gapFillOnlyOpen:false,gapFillAdaptive:0,gapFillForegroundLimit:true,gapFillManualLimit:false,gapFillThicknessBias:1,depthScale:.8,depthShape:0,audioCurvature:0,dollyZoom:0,boost:0,sizePulse:0,intensity:0,depthShading:0,hueReaction:0,hueCycle:0,motionWave:0,motionRipple:0,motionBands:0,motionDrift:0,motionSwirl:0,motionBreathe:0,motionSweep:0,motionBandShake:0};
   const gl=scene.renderer.getContext(),pixels=new Uint8Array(256*256*4);
   const draw=(patch={},x=.8,y=0)=>{
     scene.applySettings({...settings,...patch});scene.uniforms.uSize.value=4;scene.uniforms.uFillSpacing.value=.008;
@@ -24,6 +24,12 @@ try {
   const off=draw();if(!off.red||!off.blue)throw Error('Fixture did not expose the reconstructed background');
   const on=draw({reconstructionSideOcclusion:true});
   if(on.red!==0||on.blue===0)throw Error(`Side shell did not hide the inner point while leaving background beyond it: ${JSON.stringify({off:[off.red,off.blue],on:[on.red,on.blue]})}`);
+  const manual=draw({reconstructionSideOcclusion:true,gapFillForegroundLimit:false,gapFillManualLimit:true,gapFillThickness:.25});
+  if(!manual.red||!manual.blue)throw Error('Manual percentage did not expose background beyond a shorter side');
+  const combined=draw({reconstructionSideOcclusion:true,gapFillManualLimit:true,gapFillThickness:.9});
+  if(!combined.pixels.every((v,i)=>v===on.pixels[i]))throw Error('Manual cap overrode a smaller automatic thickness');
+  const zero=draw({reconstructionSideOcclusion:true,gapFillManualLimit:true,gapFillThickness:0});
+  if(!zero.pixels.every((v,i)=>v===off.pixels[i]))throw Error('Zero-thickness side still occluded background');
   const narrow=draw({reconstructionSideOcclusion:true,gapFillThicknessBias:.25});
   if(!narrow.red||!narrow.blue)throw Error('Thinner wall did not expose more background');
   const wide=draw({reconstructionSideOcclusion:true,gapFillThicknessBias:2});

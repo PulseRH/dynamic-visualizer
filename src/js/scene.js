@@ -73,6 +73,8 @@ const VERT = /* glsl */ `
     uniform float uFillAdaptive;
     uniform float uFillThicknessAuto;
     uniform float uFillThicknessBias;
+    uniform float uFillThicknessManual;
+    uniform float uFillThickness;
   #endif
 
   varying vec3 vColor;
@@ -259,6 +261,14 @@ const VERT = /* glsl */ `
       colourOut = lit;
     }
   }
+  #if defined(GAP_FILL) || defined(OCCLUDED_BACKGROUND)
+  float limitedFillSpan(float span, vec2 thickness) {
+    float fraction=1.0;
+    if(uFillThicknessAuto>.5)fraction=min(1.0,thickness.x*uFillThicknessBias/max(span,.000001));
+    if(uFillThicknessManual>.5)fraction=min(fraction,uFillThickness);
+    return mix(1.0,fraction,clamp(thickness.y,0.0,1.0));
+  }
+  #endif
   void main() {
     #ifdef OCCLUDED_BACKGROUND
       vec3 pos, edge, unusedColour;float amp,size,unusedAmp,unusedSize;
@@ -297,10 +307,7 @@ const VERT = /* glsl */ `
               sideVisibility*=mix(1.0,smoothstep(.5,2.5,extraSpacing),uFillAdaptive);
             }
           }
-          float fraction=1.0;
-          if(uFillThicknessAuto>.5 && aSideThickness.y>0.0){
-            fraction=mix(1.0,min(1.0,aSideThickness.x*uFillThicknessBias/max(length(separation),.000001)),clamp(aSideThickness.y,0.0,1.0));
-          }
+          float fraction=limitedFillSpan(length(separation),aSideThickness);
           vec4 rearClip=projectionMatrix*(modelViewMatrix*vec4(edge+separation*fraction,1.0));
           if(rearClip.w>0.0){
             // A wall pointing inward must never uncover the original front.
@@ -318,7 +325,7 @@ const VERT = /* glsl */ `
     #elif defined(GAP_FILL)
       vec3 first, last, firstColour, lastColour;
       float firstAmp, lastAmp, firstSize, lastSize;
-      bool sidewall=uFillThicknessAuto>.5 && aFillThickness.y>0.0;
+      bool sidewall=(uFillThicknessAuto>.5 || uFillThicknessManual>.5) && aFillThickness.y>0.0;
       float sidewallWeight=sidewall ? clamp(aFillThickness.y,0.0,1.0):0.0;
       bool foregroundFirst=aFillStart.z>=aFillEnd.z;
       if(aFillForeground.w!=0.0)foregroundFirst=aFillForeground.w>0.0;
@@ -331,12 +338,11 @@ const VERT = /* glsl */ `
         vec3 separation=last-first;
         separation.xy-=aFillEnd.xy-aFillStart.xy;
         float span=length(separation);
-        float limit=aFillThickness.x*uFillThicknessBias;
         // Shorten the occupied section, rather than discarding samples from
         // the old full bridge. Sparse rows must still cover the shorter wall.
         // Blend the estimate continuously as the edge field approaches the
         // interior, avoiding the old all-or-nothing .01 membership cutoff.
-        fillSpan=mix(1.0,min(1.0,limit/max(span,0.000001)),sidewallWeight);
+        fillSpan=limitedFillSpan(span,aFillThickness);
         float wallT=foregroundFirst ? aFillT*fillSpan:1.0-(1.0-aFillT)*fillSpan;
         // Preserve resting XY spacing; compress only depth and extra motion.
         pos+=(wallT-aFillT)*separation;
@@ -389,6 +395,7 @@ const VERT = /* glsl */ `
           }
         }
       }
+      if(uFillThicknessManual>.5 && uFillThickness<=0.0)opening*=1.0-sidewallWeight;
       gl_Position = projectionMatrix * (modelViewMatrix * vec4(pos, 1.0));
       gl_PointSize = mix(firstSize, lastSize, aFillT);
       vColor = mix(firstColour, lastColour, aFillT) * uFillBrightness * opening * fillLight;
@@ -514,6 +521,8 @@ export class VisualScene {
       uFillSpacing: { value: 1 / 300 },
       uFillThicknessAuto: { value: 0 },
       uFillThicknessBias: { value: 1 },
+      uFillThicknessManual: { value: 0 },
+      uFillThickness: { value: .6 },
       uSmartDepthBands: {value:0},
       uDepthBands: {value:this.depthBandTex},
       uBandDistribution: { value: 1 },
@@ -815,6 +824,8 @@ export class VisualScene {
     this.uniforms.uFillSamples.value = Math.max(3,Math.min(24,s.gapFillDensity ?? 12));
     this.uniforms.uFillThicknessAuto.value=s.occludedBackground && s.gapFillForegroundLimit ? 1:0;
     this.uniforms.uFillThicknessBias.value=Math.max(.25,Math.min(2.5,s.gapFillThicknessBias ?? 1));
+    this.uniforms.uFillThicknessManual.value=s.occludedBackground && s.gapFillManualLimit ? 1:0;
+    this.uniforms.uFillThickness.value=Math.max(0,Math.min(1,s.gapFillThickness ?? .6));
     const depthBandKey=`${s.bands}/${s.bandDistribution||0}`;
     this.uniforms.uSmartDepthBands.value=s.smartDepthBands && this.depthHistogram ? 1:0;
     if(s.smartDepthBands && this.depthHistogram && this.depthBandKey!==depthBandKey){
