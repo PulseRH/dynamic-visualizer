@@ -9,6 +9,7 @@ import { buildHueLookup, buildHueAngleLookup, HueAccentTracker, HueCycleTracker 
 import { backdropTextureSize } from './backdrop-size.js';
 import { DynamicFraming } from './dynamic-framing.js';
 import {depthBandLookup,DEPTH_BINS} from './depth-bands.js';
+import { MusicParallaxDirection } from './music-parallax.js';
 
 const VERT = /* glsl */ `
   uniform float uEnergy;
@@ -177,10 +178,10 @@ const VERT = /* glsl */ `
     pos.xy += layeredXY - pointPosition.xy;
     if (uLightFollowMotion > 0.5 && uLightPulse > 0.0 && lightTotal > 0.0) {
       // Shape only the extra light, never the resting image/glow. Keep the
-      // original band's level and peak brightness; stronger layer mixes
-      // reveal more pattern rather than multiplying brightness when stacked.
-      float pattern = 0.6 + 0.4 * clamp(lightStyle / lightTotal, -1.0, 1.0);
-      lightAmp *= mix(1.0, pattern, min(lightTotal, 1.0));
+      // original band's peak brightness. Amounts mix the patterns, while
+      // contrast remains clear even when geometric motion is subtle.
+      float pattern = 0.5 + 0.5 * clamp(lightStyle / lightTotal, -1.0, 1.0);
+      lightAmp *= pattern;
     }
     if (uExtraLayers.w > 0.0) {
       // Every point mapped to this band receives exactly the same vector.
@@ -904,8 +905,8 @@ export class VisualScene {
     const drift = this.motionMix ?? 0;
     this.pointer.x += (this.pointer.tx - this.pointer.x) * Math.min(1, dt * 3);
     this.pointer.y += (this.pointer.ty - this.pointer.y) * Math.min(1, dt * 3);
-    // music parallax: bass-vs-treble tilt drives x, bass level drives y —
-    // independent of the pointer. Music is nearly always bass-heavy, so the
+    // Music parallax: bass-vs-treble and bass changes form a reference vector
+    // that cycles direction below, independently of the pointer. The
     // raw tilt would pin to one side: subtract its own slow average (the
     // offset) so it centers, then scale the deviation to the full -1..1 range
     // against a decaying peak — the camera moves both ways, and moves more.
@@ -964,8 +965,11 @@ export class VisualScene {
       this.musicPy = 0;
     }
     const t = this.time;
-    this.camera.position.x = Math.sin(t * 0.13) * p * 0.6 * drift + this.pointer.x * p + (this.musicPx ?? 0) * mp * mamp;
-    this.camera.position.y = Math.cos(t * 0.11) * p * 0.4 * drift - this.pointer.y * p * 0.6 - (this.musicPy ?? 0) * mp * 1.4 * mamp;
+    const direction = this.musicDirection ??= new MusicParallaxDirection();
+    const musicActive = mp > 0 && Math.max(bandResponse(loud, this.lensInputGain, this.lensNoiseFloor, 1), analyzer.energy || 0) > .002;
+    direction.update(dt, musicActive, this.musicPx ?? 0, -(this.musicPy ?? 0) * 1.4);
+    this.camera.position.x = Math.sin(t * 0.13) * p * 0.6 * drift + this.pointer.x * p + direction.x * mp * mamp;
+    this.camera.position.y = Math.cos(t * 0.11) * p * 0.4 * drift - this.pointer.y * p * 0.6 + direction.y * mp * mamp;
 
     // cursor ripple: strength rises with cursor speed, decays when it stops
     const spd = Math.hypot(this.pointer.tx - (this._prevNx ?? 0), this.pointer.ty - (this._prevNy ?? 0)) / Math.max(dt, 0.001);

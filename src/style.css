@@ -281,6 +281,13 @@ details.fold[open] summary::before { content: "▾"; }
 details.fold summary:hover { color: var(--text); }
 details.fold[open] summary { margin-bottom: 2px; }
 
+.process-table { width: 100%; border-collapse: collapse; font-size: .72rem; }
+.process-table th, .process-table td { padding: 6px 3px; text-align: right; font-variant-numeric: tabular-nums; }
+.process-table th { color: var(--text-dim); font-weight: 500; }
+.process-table th:first-child, .process-table td:first-child { text-align: left; overflow-wrap: anywhere; }
+.process-table td { border-top: 1px solid var(--border); }
+#processUsageStatus:empty { display: none; }
+
 /* level meter */
 .level-wrap {
   margin-top: 12px; height: 8px;

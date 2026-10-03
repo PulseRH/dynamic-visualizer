@@ -6,6 +6,7 @@ const zlib = require('zlib');
 const os = require('os');
 const { spawn } = require('child_process');
 const { pipeline } = require('stream');
+const { describeProcesses } = require('./process-usage.cjs');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 
@@ -239,7 +240,7 @@ function createWindow({ show = true } = {}) {
     minWidth: 380,
     minHeight: 480,
     backgroundColor: '#000000',
-    title: 'Dynamic Visualizer',
+    title: 'Dynamic Visualizer — Settings / preview',
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
@@ -251,6 +252,7 @@ function createWindow({ show = true } = {}) {
     },
   });
   mainWindow.loadURL('app://bundle/src/index.html');
+  mainWindow.on('page-title-updated', event => event.preventDefault());
   const preview = mainWindow;
   const sendVisibility = () => {
     if (!preview.isDestroyed()) preview.webContents.send('window:visibility', preview.isVisible() && !preview.isMinimized());
@@ -329,6 +331,15 @@ ipcMain.handle('app:info', () => ({
   version: app.getVersion(),
   electron: process.versions.electron,
 }));
+ipcMain.handle('app:processUsage', event => {
+  if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents
+      || !mainWindow.isVisible() || mainWindow.isMinimized()) return [];
+  const windowRoles = [{pid: mainWindow.webContents.getOSProcessId(), name: 'Settings / audio / preview'}];
+  wallpaperWins.forEach((win, index) => {
+    if (!win.isDestroyed()) windowRoles.push({pid: win.webContents.getOSProcessId(), name: `Wallpaper ${index + 1}`});
+  });
+  return describeProcesses(app.getAppMetrics(), windowRoles);
+});
 ipcMain.handle('window:visible', event => {
   const win = BrowserWindow.fromWebContents(event.sender);
   return !!win && !win.isDestroyed() && win.isVisible() && !win.isMinimized();
@@ -877,7 +888,7 @@ async function doEnableWallpaperMode() {
         frame: false, hasShadow: false, roundedCorners: false,
         skipTaskbar: true, resizable: false, movable: false,
         show: false, backgroundColor: '#000000',
-        title: 'Dynamic Visualizer — Wallpaper',
+        title: `Dynamic Visualizer — Wallpaper ${created.length + 1}`,
         webPreferences: {
           preload: path.join(__dirname, 'preload.cjs'),
           contextIsolation: true,
@@ -887,6 +898,7 @@ async function doEnableWallpaperMode() {
         },
       });
       created.push(win);
+      win.on('page-title-updated', event => event.preventDefault());
       win.setIgnoreMouseEvents(true); // clicks pass through: it *is* the desktop
       await new Promise((resolve) => {
         win.webContents.once('did-finish-load', resolve);

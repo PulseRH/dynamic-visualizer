@@ -4,6 +4,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('dv', {
   isElectron: true,
   info: () => ipcRenderer.invoke('app:info'),
+  getProcessUsage: () => ipcRenderer.invoke('app:processUsage'),
   getWallpaper: () => ipcRenderer.invoke('wallpaper:get'),
   chooseImage: () => ipcRenderer.invoke('image:choose'),
   recentImages: () => ipcRenderer.invoke('images:recent'),

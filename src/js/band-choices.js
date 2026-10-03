@@ -1,7 +1,8 @@
 // Fine control when a small number of regions is visually noticeable, while
 // keeping the previous four-band steps and every saved value from 8 to 128.
 export const BAND_CHOICES = Object.freeze([
-  ...Array.from({ length: 14 }, (_, i) => 6 + i * 2), // 6..32
+  ...Array.from({ length: 12 }, (_, i) => 5 + i), // 5..16
+  ...Array.from({ length: 8 }, (_, i) => 18 + i * 2), // 18..32
   ...Array.from({ length: 24 }, (_, i) => 36 + i * 4), // 36..128
 ]);
 

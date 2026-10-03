@@ -34,6 +34,7 @@ function pickFileBrowser(kind) {
 }
 
 export const bridge = {
+  getProcessUsage: () => ev ? ev.getProcessUsage() : Promise.resolve([]),
   recentImages: () => ev ? ev.recentImages() : Promise.resolve([]),
   rememberImage: (url, thumb) => ev ? ev.rememberImage(url, thumb) : Promise.resolve([]),
   settingsOnly: (enabled, expand = false) => ev ? ev.settingsOnly(enabled, expand) : Promise.resolve(),

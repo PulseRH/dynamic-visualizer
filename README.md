@@ -26,6 +26,12 @@ a few percent CPU and holds a steady frame rate without spinning fans.
 - **Motion styles**: audio-driven spectrum displacement (no self-motion — the
   image only moves when the music does), traveling wave, radial ripple,
   band bars, or ambient drift.
+  **Light follows layers** keeps its spatial contrast even at low motion
+  amounts; amounts weight the pattern mix without washing out the base glow.
+  **Music parallax** slowly cycles the audio sway direction while music plays,
+  preserving displacement strength and pausing the cycle in silence.
+  The Bands slider includes every count from 5 to 16, then even counts to 32
+  and the existing four-band steps to 128.
 - **Depth estimation**
   - *Heuristic* (default): instant luminance/saturation/position prior — no
     downloads, works offline.
@@ -91,6 +97,11 @@ a few percent CPU and holds a steady frame rate without spinning fans.
   - **Microphone**, **audio file playback** (plays aloud and analyzes), and a
     built-in silent **demo track** for testing without any audio device.
 - **Quiet by design**
+  - Process usage under Performance names the main/tray, preview/audio,
+    wallpaper, GPU and utility processes with native PIDs, CPU and working-set
+    RAM. Sampling runs only while the fold and settings window are visible.
+    Windows helper rows retain the shared executable name; use PIDs to match
+    them in Task Manager. AI workers belong to their parent preview renderer.
   - FPS cap (30/60/uncapped) — 30 fps is the default; ambient waves look
     identical, GPU draw power roughly halves.
   - Adaptive resolution — if frame time runs over budget the render resolution

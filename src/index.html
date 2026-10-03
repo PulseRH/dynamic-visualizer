@@ -128,7 +128,7 @@
         <input type="range" id="boost" min="0" max="3" step="0.05" />
         <span class="val"></span>
       </label>
-      <label class="check-row"><input type="checkbox" id="lightFollowMotion" /> Light follows layers<span class="q" data-tip="Shapes Light pulse with the active Wave, Ripple, Bands, Drift, Swirl, Breathe and Sweep phases, while each frequency band still controls its own brightness. Layer amounts control the pattern strength. Only extra audio light changes; base Glow stays intact. Band shake moves a whole band and adds no internal light pattern. With no spatial layers, light stays uniform."></span></label>
+      <label class="check-row"><input type="checkbox" id="lightFollowMotion" /> Light follows layers<span class="q" data-tip="Shapes Light pulse with the active Wave, Ripple, Bands, Drift, Swirl, Breathe and Sweep phases, while each frequency band still controls its own brightness. Layer amounts choose the pattern mix; light contrast stays strong even with subtle motion. Only extra audio light changes; base Glow stays intact. Band shake moves a whole band and adds no internal light pattern. With no spatial layers, light stays uniform."></span></label>
       <label class="check-row"><input type="checkbox" id="preserveBoostColor" /> Preserve pulse colours<span class="q" data-tip="Gently reduces extra brightness on already-bright points and softens the pale shimmer. Keeps the original glow and highlights; has no effect at Light pulse 0."></span></label>
       <label class="slider-row"><span class="lbl">Size pulse<span class="q" data-tip="How much each band's points grow with sound. At 100%, fully active points grow up to 90% larger. 0% turns off growth; Size sets their resting size."></span></span>
         <input type="range" id="sizePulse" min="0" max="1" step="0.05" />
@@ -207,7 +207,7 @@
         <input type="range" id="parallax" min="0" max="2" step="0.05" />
         <span class="val"></span>
       </label>
-      <label class="slider-row"><span class="lbl">Music parallax<span class="q" data-tip="Camera drift driven by the music: the spectrum balance sways it sideways, bass pushes it down."></span></span>
+      <label class="slider-row"><span class="lbl">Music parallax<span class="q" data-tip="Camera sway driven by spectrum balance and bass changes. Its direction gradually cycles while music plays, so repeated accents tilt different ways. The cycle pauses in silence; it adds no independent motion."></span></span>
         <input type="range" id="musicParallax" min="0" max="1" step="0.05" />
         <span class="val"></span>
       </label>
@@ -379,6 +379,15 @@
       <label class="check-row"><input type="checkbox" id="previewPaused" /> Pause preview window<span class="q" data-tip="Freeze the preview window completely — the wallpaper keeps running. Saves GPU."></span></label>
       <label class="check-row"><input type="checkbox" id="previewFullQuality" /> Full quality preview<span class="q" data-tip="While wallpaper mode is on, the preview normally mirrors at 15 fps to save GPU. This removes the throttle."></span></label>
       <label class="check-row"><input type="checkbox" id="idleSleep" /> Sleep when music stops<span class="q" data-tip="Points fade out and rendering stops entirely while the music is silent."></span></label>
+      <details class="fold" id="processUsage">
+        <summary>Process usage</summary>
+        <table class="process-table">
+          <thead><tr><th>Process</th><th>PID</th><th>CPU</th><th>RAM MB</th></tr></thead>
+          <tbody id="processUsageRows"></tbody>
+        </table>
+        <p class="hint" id="processUsageStatus">Open to sample processes.</p>
+        <p class="hint">Refreshes once a second while visible. CPU is Electron’s sample; RAM is working set and may differ from Task Manager. Match the PID in Task Manager’s Details tab to inspect GPU usage. AI workers are included in Settings / audio / preview while preparing an image.</p>
+      </details>
       <label class="check-row"><input type="checkbox" id="flybyExit" /> Fly-by idle exit<span class="q" data-tip="On idle exit, points rush toward the camera instead of fading in place."></span></label>
     </section>
 

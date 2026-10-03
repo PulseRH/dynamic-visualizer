@@ -1,0 +1,35 @@
+<!doctype html><meta charset="utf-8"><title>Layer lighting GPU check</title><canvas></canvas><pre id="result">RUNNING</pre>
+<script type="module">
+import {VisualScene} from '../src/js/scene.js';
+import {getAll} from '../src/js/settings.js';
+try {
+  const scene=new VisualScene(document.querySelector('canvas'));
+  scene.renderer.setSize(400,300,false);scene.camera.aspect=4/3;
+  const positions=[],rands=[];
+  for(let y=0;y<15;y++)for(let x=0;x<31;x++){positions.push((x/30-.5)*1.2,(y/14-.5)*.8,.5);rands.push(.5);}
+  scene.setCloud({count:rands.length,aspect:4/3,positions:new Float32Array(positions),colors:new Float32Array(positions.length).fill(.15),rands:new Float32Array(rands)});
+  const settings={...getAll(),intensity:0,depthScale:0,depthShading:0,hueReaction:0,hueCycle:0,vibrancyPulse:0,boost:1,preserveBoostColor:false,sizePulse:0,glow:1,depthMove:0,xyMove:0,musicParallax:0,audioCurvature:0,dollyZoom:0,cursorRipple:false,motionWave:0,motionRipple:0,motionBands:0,motionDrift:0,motionSwirl:0,motionBreathe:0,motionSweep:0,motionBandShake:0,lightFollowMotion:true};
+  const gl=scene.renderer.getContext();
+  const read=patch=>{
+    scene.applySettings({...settings,...patch});scene.uniforms.uSize.value=3;
+    scene.uniforms.uWaveTime.value=1.7;scene.uniforms.uXYTime.value=.8;
+    for(let i=0;i<scene.bandCount;i++)scene.bandData[i*4]=255;
+    scene.bandTex.needsUpdate=true;scene.renderer.render(scene.scene,scene.camera);
+    const pixels=new Uint8Array(400*300*4);gl.readPixels(0,0,400,300,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
+    if(gl.getError()!==gl.NO_ERROR)throw Error('WebGL error');return pixels;
+  };
+  const equal=(a,b)=>a.every((v,i)=>v===b[i]);
+  const weight=a=>a.reduce((sum,v,i)=>sum+(i%4===3?0:v),0);
+  for(const layer of ['motionWave','motionRipple','motionBands','motionDrift','motionSwirl','motionBreathe','motionSweep']){
+    const weak=read({[layer]:.05}),strong=read({[layer]:1});
+    if(!equal(weak,strong))throw Error(`${layer}: light contrast still follows motion strength`);
+    const uniform=read({[layer]:.05,lightFollowMotion:false});
+    if(weight(weak)>=weight(uniform)*.95)throw Error(`${layer}: pattern is too subtle`);
+    if(weak.some((v,i)=>i%4!==3&&v>uniform[i]))throw Error(`${layer}: changed peak brightness or geometry`);
+    if(!equal(read({[layer]:.05,boost:0}),read({[layer]:.05,boost:0,lightFollowMotion:false})))throw Error(`${layer}: zero Light pulse changed base glow`);
+  }
+  if(!equal(read({}),read({lightFollowMotion:false})))throw Error('No active layer changed uniform lighting');
+  if(!equal(read({motionWave:.1,motionRipple:.05}),read({motionWave:1,motionRipple:.5})))throw Error('Pattern mixture depends on total motion amount');
+  scene.renderer.dispose();document.querySelector('#result').textContent='PASS: all seven light patterns retain contrast at 5% motion, preserve peak brightness/base glow, and blend by relative layer weights.';
+} catch(error){document.querySelector('#result').textContent='FAIL: '+error.stack;}
+</script>

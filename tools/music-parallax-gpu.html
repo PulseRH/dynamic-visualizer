@@ -1,0 +1,36 @@
+<!doctype html><meta charset="utf-8"><canvas></canvas><pre id="result">RUNNING</pre>
+<script type="module">
+import {VisualScene} from '../src/js/scene.js';
+import {getAll} from '../src/js/settings.js';
+try {
+  const scene=new VisualScene(document.querySelector('canvas'));
+  scene.renderer.setSize(160,90,false);scene.camera.aspect=16/9;
+  scene.setCloud({count:2,aspect:16/9,positions:new Float32Array([-.2,0,.2,.2,0,.8]),colors:new Float32Array(6).fill(.2),rands:new Float32Array([.5,.5])});
+  const settings={...getAll(),bands:5,musicParallax:1,quietMovement:1,energyResponse:1,keepScreenCovered:false,audioCurvature:0,dollyZoom:0,motionWave:0,motionRipple:0,motionBands:0,motionDrift:0,motionSwirl:0,motionBreathe:0,motionSweep:0,motionBandShake:0,sensFloor:0,sensGain:1};
+  scene.applySettings(settings);
+  const analyzer={bands:new Float32Array(5),loud:.5,energy:.5};
+  const quadrants=new Set();
+  for(let i=0;i<900;i++){
+    analyzer.bands.fill(i%20<10 ? .8:.2);analyzer.bands[4]=.15;
+    scene.lastNow=performance.now()-50;scene.render(analyzer,0);
+    const expected=Math.hypot(scene.musicPx,scene.musicPy*1.4)*.075;
+    if(Math.abs(Math.hypot(scene.camera.position.x,scene.camera.position.y)-expected)>1e-8)throw Error('Camera rotation changed the audio displacement strength');
+    if(i%20===5 && expected>.001)quadrants.add(`${Math.sign(scene.camera.position.x)},${Math.sign(scene.camera.position.y)}`);
+  }
+  if(quadrants.size!==4)throw Error('Repeated accents did not cycle through all camera directions');
+  const phase=scene.musicDirection.phase;
+  analyzer.loud=0;analyzer.energy=0;analyzer.bands.fill(0);
+  for(let i=0;i<10;i++){scene.lastNow=performance.now()-50;scene.render(analyzer,0);}
+  if(scene.musicDirection.phase!==phase)throw Error('Direction cycle continued in silence');
+  for(const bands of [5,7,9,11,13,15]){
+    scene.applySettings({...settings,bands,musicParallax:0});analyzer.bands=new Float32Array(bands).fill(.5);
+    scene.lastNow=performance.now()-50;scene.render(analyzer,0);
+    if(scene.bandCount!==bands||scene.uniforms.uBandCount.value!==bands||scene.camera.position.x!==0||scene.camera.position.y!==0)throw Error('Odd count or disabled parallax failed');
+  }
+  scene.pointer.x=scene.pointer.tx=.5;scene.pointer.y=scene.pointer.ty=-.25;
+  scene.lastNow=performance.now()-50;scene.render(analyzer,1);
+  if(Math.abs(scene.camera.position.x-.03)>1e-8||Math.abs(scene.camera.position.y-.009)>1e-8)throw Error('Music cycling changed pointer parallax');
+  const gl=scene.renderer.getContext();if(gl.getError()!==gl.NO_ERROR)throw Error('WebGL error');
+  scene.renderer.dispose();document.querySelector('#result').textContent='PASS: repeated bass accents tilt four ways at unchanged camera displacement; silence pauses cycling, off restores pointer-only motion, all requested odd band counts render.';
+}catch(error){document.querySelector('#result').textContent='FAIL: '+error.stack;}
+</script>

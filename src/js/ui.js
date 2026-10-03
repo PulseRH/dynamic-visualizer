@@ -2,7 +2,8 @@
 // through callbacks.
 
 import { get, set, onChange, getAll, DEFAULTS } from './settings.js';
-import { bridge } from './bridge.js';
+import { bridge, isElectron } from './bridge.js';
+import { ProcessMonitor } from './process-monitor.js';
 import {createPresetStore} from './presets.js';
 import { responsePlots } from './response-plots.js';
 import { easingBendAt, constrainBezier, moveBezierControl, DEFAULT_BEZIER } from './easing.js';
@@ -22,6 +23,7 @@ export class UI {
 
     this._wirePresets();
     this._wirePanel();
+    this._wireProcessUsage();
     this._wireSegments();
     this._wireSliders();
     this._wireEasingGraphs();
@@ -148,6 +150,33 @@ export class UI {
       if (document.body.classList.contains('settings-only')) set({ settingsOnly: false });
       else $('panel').classList.remove('open');
     };
+  }
+
+  _wireProcessUsage() {
+    const fold = $('processUsage'), body = $('processUsageRows'), status = $('processUsageStatus');
+    let nativeVisible = false;
+    const monitor = new ProcessMonitor({
+      sample: () => bridge.getProcessUsage(),
+      render: rows => {
+        status.textContent = rows === null ? 'Unable to read processes. Retrying…' : rows.length ? '' : 'No visible desktop processes.';
+        body.replaceChildren(...(rows || []).map(item => {
+          const row = document.createElement('tr');
+          for (const value of [item.name, item.pid, item.cpu === null ? '—' : `${item.cpu.toFixed(1)}%`, item.ramMB === null ? '—' : `${item.ramMB.toFixed(1)}`]) {
+            const cell = document.createElement('td'); cell.textContent = value; row.append(cell);
+          }
+          return row;
+        }));
+      },
+    });
+    const sync = () => monitor.setActive(isElectron && fold.open && $('panel').classList.contains('open') && nativeVisible && !document.hidden);
+    fold.addEventListener('toggle', sync);
+    const observer = new MutationObserver(sync);
+    observer.observe($('panel'), {attributes:true, attributeFilter:['class']});
+    document.addEventListener('visibilitychange', sync);
+    const off = bridge.onWindowVisibility(visible => {nativeVisible = visible; sync();});
+    bridge.isWindowVisible().then(visible => {nativeVisible = visible; sync();});
+    window.addEventListener('pagehide', () => {monitor.setActive(false); observer.disconnect(); off();}, {once:true});
+    if (!isElectron) status.textContent = 'Process usage is available in the desktop app.';
   }
 
   _syncWindowLayout() {
