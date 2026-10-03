@@ -54,8 +54,10 @@ a few percent CPU and holds a steady frame rate without spinning fans.
 - **Gap fill points**: independently cap ordinary seam infill at 0–400k extra
   points (180k default). The Gap fill percentage scales that budget, with a
   150% of Count ceiling. Higher budgets add GPU work and memory. **Auto
-  thickness** and **Thickness bias** clip excessive foreground infill at the
-  local shell distance, preserving interior seams without separate wall or
+  thickness** and **Thickness bias** shorten foreground infill to the local
+  shell distance, redistributing samples instead of deleting whole seams.
+  Each seam uses one estimate at its foreground endpoint; outline influence
+  blends continuously into unchanged interior seams without separate wall or
   outline geometry. Object-edge fill uses the original foreground endpoint's
   colour and audio lighting, extending it towards the background. Camera or
   audio depth reversals cannot transfer ownership to the background. Bias

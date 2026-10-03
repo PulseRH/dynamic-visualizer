@@ -162,6 +162,16 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
         const ox=-dy/length*offset,oy=dx/length*offset;
         const ax=positions[ai]+ox,ay=positions[ai+1]+oy,bx=positions[bi]+ox,by=positions[bi+1]+oy;
         if(!validEndpoint(ax,ay,positions[ai+2])||!validEndpoint(bx,by,positions[bi+2]))continue;
+        // One estimate/owner for the whole row, sampled at its foreground
+        // endpoint. Per-point estimates can alternate between full and cut
+        // fill as a jittered row crosses the low-resolution edge field.
+        const front=positions[ai+2]>=positions[bi+2] ? ai:bi;
+        let thicknessIndex=0;
+        if(fillThickness){
+          const fu=(front===ai ? ax:bx)/aspect+.5,fv=.5-(front===ai ? ay:by);
+          thicknessIndex=Math.max(0,Math.min(reconstruction.h-1,Math.floor(fv*reconstruction.h)))*reconstruction.w
+            +Math.max(0,Math.min(reconstruction.w-1,Math.floor(fu*reconstruction.w)));
+        }
         for(let sample=1;sample<=samplesPerEdge;sample++){
           const t=(sampleOrder[sample-1]+(rand()-.5)*.6)/(samplesPerEdge+1);
           const x=ax*(1-t)+bx*t,y=ay*(1-t)+by*t,u=x/aspect+.5,v=.5-y;
@@ -175,12 +185,9 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
           fillEnds.set([bx,by,positions[bi+2],rands[bi/3]],f*4);
           fillFractions[f]=t;rands[used]=(sample-1)/samplesPerEdge;used++;
           if(fillThickness){
-            const index=Math.min(reconstruction.h-1,Math.floor(v*reconstruction.h))*reconstruction.w
-              +Math.min(reconstruction.w-1,Math.floor(u*reconstruction.w));
-            fillThickness[f*2]=reconstruction.thickness[index];
-            fillThickness[f*2+1]=reconstruction.edgeWeight[index];
-            if(reconstruction.edgeWeight[index]>.01){
-              const front=positions[ai+2]>=positions[bi+2] ? ai:bi;
+            fillThickness[f*2]=reconstruction.thickness[thicknessIndex];
+            fillThickness[f*2+1]=reconstruction.edgeWeight[thicknessIndex];
+            if(reconstruction.edgeWeight[thicknessIndex]>0){
               fillForeground.set([colors[front],colors[front+1],colors[front+2],front===ai ? 1:-1],f*4);
             }
           }
