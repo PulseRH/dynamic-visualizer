@@ -347,7 +347,9 @@ const VERT = /* glsl */ `
     #elif defined(GAP_FILL)
       vec3 first, last, firstColour, lastColour;
       float firstAmp, lastAmp, firstSize, lastSize;
-      bool sidewall=(uFillThicknessAuto>.5 || uFillThicknessManual>.5) && aFillThickness.y>0.0;
+      // Magnitude 2 marks a cleaned silhouette: its side always belongs to
+      // the foreground, even when the user disables thickness limiting.
+      bool sidewall=(abs(aFillForeground.w)>1.5 || uFillThicknessAuto>.5 || uFillThicknessManual>.5) && aFillThickness.y>0.0;
       float sidewallWeight=sidewall ? clamp(aFillThickness.y,0.0,1.0):0.0;
       bool foregroundFirst=aFillStart.z>=aFillEnd.z;
       if(aFillForeground.w!=0.0)foregroundFirst=aFillForeground.w>0.0;

@@ -8,7 +8,7 @@ export function cleanDepthEdges(depth, reconstruction=null, objects=null){
   if(!depth)return {depth,edgePixels:null,changed:0};
   const {w,h,data}=depth,n=w*h;
   const edges=reconstruction?.owner?.length===n ? reconstruction:prepareOcclusion(depth);
-  const result=data.slice(),edgePixels=new Uint8Array(n),strength=new Float32Array(n);
+  const result=data.slice(),edgePixels=new Uint8Array(n),strength=new Float32Array(n),edgeOwners=new Int32Array(n).fill(-1);
   const labels=objects?.labels?.length===n ? objects.labels:null;
   for(let edge=0;edge<n;edge++){
     if(edges.owner[edge]!==edge)continue;
@@ -37,15 +37,15 @@ export function cleanDepthEdges(depth, reconstruction=null, objects=null){
       const i=index(t),value=data[i];
       if(value<back-.015||value>front+.015||span<=strength[i])continue;
       result[i]=t<=cut ? front:back;
-      edgePixels[i]=t<=cut ? 1:2;strength[i]=span;
+      edgePixels[i]=t<=cut ? 1:2;strength[i]=span;edgeOwners[i]=edge;
     }
   }
   let changed=0;for(let i=0;i<n;i++)if(Math.abs(result[i]-data[i])>.005)changed++;
-  return {depth:{w,h,data:result},edgePixels,changed};
+  return {depth:{w,h,data:result},edgePixels,edgeOwners,changed};
 }
 
-// A newly sharpened silhouette must remain open for hidden-background reveal,
-// even with the user's permissive Gap fill depth-edge limit.
+// Identify corrected silhouettes so Gap fill builds one foreground-owned
+// sidewall here, with its extent controlled by the existing thickness limits.
 export function crossesCleanDepthEdge(clean,a,b){
   return !!clean?.edgePixels && (clean.edgePixels[a]||clean.edgePixels[b]) && Math.abs(clean.depth.data[a]-clean.depth.data[b])>.08;
 }

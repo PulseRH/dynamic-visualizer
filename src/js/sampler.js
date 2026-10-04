@@ -39,7 +39,7 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
   // Local world thickness and outline influence, prepared with reconstruction.
   // Bias changes live without another model, rebuild or draw pass.
   const reconstruction=mapping.reconstruction;
-  const fillThickness=extraCapacity && reconstruction?.thickness ? new Float32Array(extraCapacity*2):null;
+  const fillThickness=extraCapacity && (reconstruction?.thickness || cleaned?.edgePixels) ? new Float32Array(extraCapacity*2):null;
   // RGB and endpoint ownership for foreground sidewalls. Kept separate from
   // midpoint colours so ordinary interior seams preserve their image samples.
   const fillForeground=fillThickness ? new Float32Array(extraCapacity*4):null;
@@ -102,19 +102,19 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
         if((axis!==0 && slot+cols>=n) || ((axis===0||axis===2) && slot%cols===cols-1) || (axis===3 && slot%cols===0))continue;
         const b=grid[slot+neighbours[axis]];if(b<0)continue;
         const ai=a*3,bi=b*3;
-        if(Math.abs(positions[ai+2]-positions[bi+2])>depthLimit)continue;
-        if(cleaned){
-          if(crossesCleanDepthEdge(cleaned,depthCellAt(positions[ai],positions[ai+1]),depthCellAt(positions[bi],positions[bi+1])))continue;
-        }
+        const cleanSide=cleaned && crossesCleanDepthEdge(cleaned,depthCellAt(positions[ai],positions[ai+1]),depthCellAt(positions[bi],positions[bi+1]));
+        // Cleaning replaces a ramp with a full depth jump. Only these known
+        // silhouettes may cross the ordinary depth limit to form a sidewall.
+        if(!cleanSide && Math.abs(positions[ai+2]-positions[bi+2])>depthLimit)continue;
         const x=(positions[ai]+positions[bi])*.5, y=(positions[ai+1]+positions[bi+1])*.5;
         const u=x/aspect+.5,v=.5-y;
         const midNear=depth ? sampleGrid(depth,u,v):.5;
-        if(Math.abs(midNear-positions[ai+2])>depthLimit || Math.abs(midNear-positions[bi+2])>depthLimit)continue;
+        if(!cleanSide && (Math.abs(midNear-positions[ai+2])>depthLimit || Math.abs(midNear-positions[bi+2])>depthLimit))continue;
         const sx=Math.min(W-1,Math.max(0,Math.floor(u*W))),sy=Math.min(H-1,Math.max(0,Math.floor(v*H)));
         if(px[(sy*W+sx)*4+3]<24)continue;
         const distance2=(positions[ai]-positions[bi])**2+(positions[ai+1]-positions[bi+1])**2;
         const ratio=distance2/(spacing2*(axis>=2 ? 2:1));
-        const seam=bandAt(a)!==bandAt(b);
+        const seam=cleanSide || bandAt(a)!==bandAt(b);
         if(!seam && ratio<=1)continue;
         // Band seams take precedence over density gaps. Unlike ordinary
         // particles, the generated points will interpolate both endpoints.
@@ -147,7 +147,7 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
     const validEndpoint=(x,y,near)=>{
       const u=x/aspect+.5,v=.5-y;
       if(u<0||u>=1||v<0||v>=1)return false;
-      if(cleaned?.edgePixels[depthCellAt(x,y)] && Math.abs(sampleGrid(depth,u,v)-near)>.04)return false;
+      if(cleaned?.edgePixels?.[depthCellAt(x,y)] && Math.abs(sampleGrid(depth,u,v)-near)>.04)return false;
       return px[(Math.floor(v*H)*W+Math.floor(u*W))*4+3]>=24 && (!depth||Math.abs(sampleGrid(depth,u,v)-near)<=depthLimit);
     };
     let edges=0;
@@ -171,23 +171,27 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
         const ox=-dy/length*offset,oy=dx/length*offset;
         const ax=positions[ai]+ox,ay=positions[ai+1]+oy,bx=positions[bi]+ox,by=positions[bi+1]+oy;
         if(!validEndpoint(ax,ay,positions[ai+2])||!validEndpoint(bx,by,positions[bi+2]))continue;
-        if(cleaned && crossesCleanDepthEdge(cleaned,depthCellAt(ax,ay),depthCellAt(bx,by)))continue;
+        const cleanSide=cleaned && crossesCleanDepthEdge(cleaned,depthCellAt(ax,ay),depthCellAt(bx,by));
         // One estimate/owner for the whole row, sampled at its foreground
         // endpoint. Per-point estimates can alternate between full and cut
         // fill as a jittered row crosses the low-resolution edge field.
         const front=positions[ai+2]>=positions[bi+2] ? ai:bi;
         let thicknessIndex=0;
-        if(fillThickness){
+        if(reconstruction?.thickness){
           const fu=(front===ai ? ax:bx)/aspect+.5,fv=.5-(front===ai ? ay:by);
           thicknessIndex=Math.max(0,Math.min(reconstruction.h-1,Math.floor(fv*reconstruction.h)))*reconstruction.w
             +Math.max(0,Math.min(reconstruction.w-1,Math.floor(fu*reconstruction.w)));
+        }
+        if(cleanSide && reconstruction?.thickness){
+          const owner=cleaned.edgeOwners[depthCellAt(front===ai ? ax:bx,front===ai ? ay:by)];
+          if(owner>=0)thicknessIndex=owner;
         }
         for(let sample=1;sample<=samplesPerEdge;sample++){
           const t=(sampleOrder[sample-1]+(rand()-.5)*.6)/(samplesPerEdge+1);
           const x=ax*(1-t)+bx*t,y=ay*(1-t)+by*t,u=x/aspect+.5,v=.5-y;
           const sx=Math.min(W-1,Math.max(0,Math.floor(u*W))),sy=Math.min(H-1,Math.max(0,Math.floor(v*H))),i=(sy*W+sx)*4,p=used*3;
           const near=depth ? sampleGrid(depth,u,v):.5;
-          if(px[i+3]<24 || Math.abs(near-positions[ai+2])>depthLimit || Math.abs(near-positions[bi+2])>depthLimit)continue;
+          if(px[i+3]<24 || (!cleanSide && (Math.abs(near-positions[ai+2])>depthLimit || Math.abs(near-positions[bi+2])>depthLimit)))continue;
           positions[p]=x;positions[p+1]=y;positions[p+2]=near;
           colors[p]=px[i]/255;colors[p+1]=px[i+1]/255;colors[p+2]=px[i+2]/255;
           const f=used-baseCount;
@@ -195,10 +199,10 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
           fillEnds.set([bx,by,positions[bi+2],rands[bi/3]],f*4);
           fillFractions[f]=t;rands[used]=(sample-1)/samplesPerEdge;used++;
           if(fillThickness){
-            fillThickness[f*2]=reconstruction.thickness[thicknessIndex];
-            fillThickness[f*2+1]=reconstruction.edgeWeight[thicknessIndex];
-            if(reconstruction.edgeWeight[thicknessIndex]>0){
-              fillForeground.set([colors[front],colors[front+1],colors[front+2],front===ai ? 1:-1],f*4);
+            fillThickness[f*2]=reconstruction?.thickness?.[thicknessIndex] ?? .05;
+            fillThickness[f*2+1]=cleanSide ? 1:(reconstruction?.edgeWeight?.[thicknessIndex] ?? 0);
+            if(fillThickness[f*2+1]>0){
+              fillForeground.set([colors[front],colors[front+1],colors[front+2],(front===ai ? 1:-1)*(cleanSide ? 2:1)],f*4);
             }
           }
         }

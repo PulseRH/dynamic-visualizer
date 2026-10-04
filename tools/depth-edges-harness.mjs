@@ -32,4 +32,4 @@ if(fs.existsSync('.zcode/diagnose-depth.bin')){
   fs.writeFileSync('.zcode/depth-edge-review.json',JSON.stringify({w:d.w,h:d.h,before:[...d.data],after:[...fixed.depth.data],edge:[...fixed.edgePixels]}));
   console.log(`Saved-wallpaper check: ${fixed.changed} edge pixels corrected (${(100*fixed.changed/d.data.length).toFixed(1)}% of grid)`);
 }
-console.log('PASS: softened edge collapses to two surfaces, AI contour selects the cut, open boundaries reject Gap fill, slopes/cache/flat depth remain intact, both edge orientations match');
+console.log('PASS: softened edge collapses to two surfaces, AI contour selects the cut, corrected boundaries identified for foreground sidewalls, slopes/cache/flat depth remain intact, both edge orientations match');

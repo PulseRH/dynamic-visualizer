@@ -82,6 +82,13 @@ try{
  scene.applySettings({...base,gapFillForegroundLimit:false});draw();const neutral=pixels.slice();
  if(!(channels()[2]>0&&channels()[0]===0))throw Error('Disabled Auto thickness changed ordinary seam colour');
  scene.applySettings({...base,occludedBackground:false});draw();if(!pixels.every((v,i)=>v===neutral[i]))throw Error('Disabled reconstruction affected fill');
+ // Cleaned silhouettes retain red ownership even without a thickness limiter.
+ for(let i=0;i<4;i++)foreground.array[i*4+3]=2;foreground.needsUpdate=true;
+ scene.applySettings({...base,gapFillForegroundLimit:false});verifyPositions(.28,.12,.16);
+ if(!(channels()[0]>0&&channels()[2]===0))throw Error('Unlimited cleaned sidewall lost red ownership');
+ scene.applySettings({...base,gapFillForegroundLimit:false,gapFillManualLimit:true,gapFillThickness:.6});verifyPositions(.28,.12,.096);
+ scene.applySettings({...base,gapFillForegroundLimit:false,gapFillManualLimit:true,gapFillThickness:0});if(counts().some(Boolean))throw Error('Zero thickness did not hide cleaned sidewall');
+
  if(scene.fillPoints.geometry!==geometry)throw Error('Live thickness settings rebuilt geometry');
  const canvas=document.createElement('canvas');canvas.width=384;canvas.height=256;const ctx=canvas.getContext('2d');ctx.fillStyle='#a58176';ctx.fillRect(0,0,384,256);
  const image=await createImageBitmap(canvas),depth={w:96,h:64,data:new Float32Array(96*64).fill(.15)};

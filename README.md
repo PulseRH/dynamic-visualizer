@@ -92,8 +92,9 @@ a few percent CPU and holds a steady frame rate without spinning fans.
 - **Clean object edges** (under Depth) collapses softened foreground/background
   transitions onto their front or back surface, avoiding intermediate depth
   strips that become extra moving slabs. AI contours refine the cut when
-  available. Gap fill cannot bridge these corrected silhouettes, leaving
-  openings for reconstructed background. Interior slopes and the cached source
+  available. Gap fill forms a foreground-coloured sidewall at these silhouettes;
+  Limit Gap fill thickness controls its extent, exposing reconstructed background
+  beyond the wall. Interior slopes and the cached source
   depth are retained; switching off restores original geometry. Runs in the
   sampling worker during rebuilds, with no additional per-frame work or new
   inpainting. This is separate from sharing a surface's audio motion.
