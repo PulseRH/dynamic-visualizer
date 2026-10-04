@@ -2,11 +2,14 @@
 // jittered grid sampling so coverage is even, colors in linear space,
 // z = nearness (0..1; the shader scales it and the audio drives displacement).
 
+import {cleanDepthEdges,crossesCleanDepthEdge} from './depth-edges.js';
 import {buildSurfaceMotion} from './surface-motion.js';
 import {sampleOcclusion} from './occlusion.js';
 import {depthHistogram,depthBandLookup,DEPTH_BINS} from './depth-bands.js';
 
 export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) {
+  const cleaned=mapping.cleanDepthEdges && depth ? cleanDepthEdges(depth,mapping.reconstruction,mapping.objectMasks):null;
+  if(cleaned)depth=cleaned.depth;
   const W = bitmap.width, H = bitmap.height;
   const canvas = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(W, H) : document.createElement('canvas');
   canvas.width = W; canvas.height = H;
@@ -15,6 +18,7 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
   const px = ctx.getImageData(0, 0, W, H).data;
 
   const aspect = W / H;
+  const depthCellAt=(x,y)=>Math.min(depth.h-1,Math.max(0,Math.floor((.5-y)*depth.h)))*depth.w+Math.min(depth.w-1,Math.max(0,Math.floor((x/aspect+.5)*depth.w)));
   const cell = Math.sqrt((W * H) / count);
   const cols = Math.max(1, Math.floor(W / cell));
   const rows = Math.max(1, Math.floor(H / cell));
@@ -99,6 +103,9 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
         const b=grid[slot+neighbours[axis]];if(b<0)continue;
         const ai=a*3,bi=b*3;
         if(Math.abs(positions[ai+2]-positions[bi+2])>depthLimit)continue;
+        if(cleaned){
+          if(crossesCleanDepthEdge(cleaned,depthCellAt(positions[ai],positions[ai+1]),depthCellAt(positions[bi],positions[bi+1])))continue;
+        }
         const x=(positions[ai]+positions[bi])*.5, y=(positions[ai+1]+positions[bi+1])*.5;
         const u=x/aspect+.5,v=.5-y;
         const midNear=depth ? sampleGrid(depth,u,v):.5;
@@ -140,6 +147,7 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
     const validEndpoint=(x,y,near)=>{
       const u=x/aspect+.5,v=.5-y;
       if(u<0||u>=1||v<0||v>=1)return false;
+      if(cleaned?.edgePixels[depthCellAt(x,y)] && Math.abs(sampleGrid(depth,u,v)-near)>.04)return false;
       return px[(Math.floor(v*H)*W+Math.floor(u*W))*4+3]>=24 && (!depth||Math.abs(sampleGrid(depth,u,v)-near)<=depthLimit);
     };
     let edges=0;
@@ -163,6 +171,7 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
         const ox=-dy/length*offset,oy=dx/length*offset;
         const ax=positions[ai]+ox,ay=positions[ai+1]+oy,bx=positions[bi]+ox,by=positions[bi+1]+oy;
         if(!validEndpoint(ax,ay,positions[ai+2])||!validEndpoint(bx,by,positions[bi+2]))continue;
+        if(cleaned && crossesCleanDepthEdge(cleaned,depthCellAt(ax,ay),depthCellAt(bx,by)))continue;
         // One estimate/owner for the whole row, sampled at its foreground
         // endpoint. Per-point estimates can alternate between full and cut
         // fill as a jittered row crosses the low-resolution edge field.
@@ -204,7 +213,8 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
     count: used,
     baseCount,
     depthHistogram:histogram,
-    surfaceMotion:buildSurfaceMotion(depth,mapping.objectMasks),
+    cleanedEdgePixels:cleaned?.changed||0,
+    surfaceMotion:mapping.surfaceCohesion===0 ? null:buildSurfaceMotion(depth,mapping.objectMasks),
     reconstruction: mapping.reconstruction ? sampleOcclusion(mapping.reconstruction,aspect,baseCount,mapping):null,
     fillStarts:fillStarts?.subarray(0,(used-baseCount)*4),
     fillEnds:fillEnds?.subarray(0,(used-baseCount)*4),

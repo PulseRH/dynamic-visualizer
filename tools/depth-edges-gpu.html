@@ -1,0 +1,33 @@
+<!doctype html><meta charset="utf-8"><canvas></canvas><pre id="result">RUNNING</pre>
+<script type="module">
+import {sampleImageToCloud} from '../src/js/sampler.js';
+import {buildCloud} from '../src/js/cloud-builder.js';
+import {prepareOcclusion} from '../src/js/occlusion.js';
+import {VisualScene} from '../src/js/scene.js';
+import {getAll} from '../src/js/settings.js';
+try{
+  const w=64,h=40,depth={w,h,data:new Float32Array(w*h)},labels=new Uint16Array(w*h);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+    depth.data[y*w+x]=x<29 ? .72:x>31 ? .48:.72-(x-28)*.08;
+    if(x<30)labels[y*w+x]=1;
+  }
+  const image=new OffscreenCanvas(320,200),ctx=image.getContext('2d');ctx.fillStyle='#144879';ctx.fillRect(0,0,320,200);ctx.fillStyle='#e43120';ctx.fillRect(0,0,150,200);
+  const reconstruction=prepareOcclusion(depth,2.5);reconstruction.rgb=new Uint8Array(w*h*3).fill(180);
+  const mapping={bandMap:'depth',bands:20,bandDistribution:0,smartDepthBands:false,gapFillDepthLimit:.3,gapFillDensity:5,gapFillRows:3,gapFillSpread:2,reconstruction,objectMasks:{labels,count:1},reconstructionPointLimit:40000,reconstructionWidth:2.5};
+  const raw=sampleImageToCloud(image,depth,20000,1,mapping),clean=sampleImageToCloud(image,depth,20000,1,{...mapping,cleanDepthEdges:true});
+  const intermediate=cloud=>{let count=0;for(let i=0;i<cloud.baseCount;i++){const [x,y,z]=cloud.positions.subarray(i*3,i*3+3);if(Math.abs(y)<.4&&z>.49&&z<.71)count++;}return count;};
+  if(intermediate(raw)<100||intermediate(clean)!==0)throw Error(`Phantom depth strips remain: ${intermediate(raw)} -> ${intermediate(clean)}`);
+  for(let i=0;i<clean.fillFractions.length;i++)if(Math.abs(clean.fillStarts[i*4+1])<.4 && Math.abs(clean.fillStarts[i*4+2]-clean.fillEnds[i*4+2])>.08)throw Error('Gap fill rebuilt the removed sidewall');
+  if(!clean.reconstruction?.positions.length || !clean.reconstruction.positions.every((v,i)=>v===raw.reconstruction.positions[i]))throw Error('Cleaning removed or moved the generated background');
+  const worker=await buildCloud(image,depth,20000,1,{...mapping,cleanDepthEdges:true});
+  if(!worker.positions.every((v,i)=>v===clean.positions[i])||worker.cleanedEdgePixels!==clean.cleanedEdgePixels)throw Error('Worker depth cleanup differs from direct sampling');
+  const restored=sampleImageToCloud(image,depth,20000,1,{...mapping,cleanDepthEdges:false});
+  if(!restored.positions.every((v,i)=>v===raw.positions[i]))throw Error('Off failed to restore original depth');
+  const scene=new VisualScene(document.querySelector('canvas'));scene.setCloud(clean);
+  scene.applySettings({...getAll(),cleanDepthEdges:true,depthScale:0,surfaceCohesion:0,bandMap:'depth',bands:20,occludedBackground:true,reconstructionBrightness:1,keepScreenCovered:false,hideBackdrop:true,quietMovement:1,intensity:2,depthMove:3,idleSleep:false});
+  const bands=Float32Array.from({length:20},(_,i)=>.5+.4*Math.sin(i*1.7));
+  scene.render({bands,energy:1,loud:1},1);
+  const gl=scene.renderer.getContext();if(gl.getError()!==gl.NO_ERROR)throw Error('WebGL error');
+  document.querySelector('#result').textContent=`PASS: ${intermediate(raw)} intermediate wall points collapse to front/back surfaces; permissive multi-row Gap fill leaves the silhouette open; hidden background unchanged; worker parity, neutral off and audio-only GPU rendering pass.`;
+}catch(error){document.querySelector('#result').textContent='FAIL: '+error.stack;}
+</script>

@@ -248,6 +248,7 @@ export class UI {
     slider('reconstructionPointLimit','reconstructionPointLimit',v=>`${Math.round(v/1000)}k`);
     slider('reconstructionWidth','reconstructionWidth',v=>`${v.toFixed(2)}×`);
     slider('gapFillPointLimit','gapFillPointLimit',v=>v===0 ? 'Off':`${Math.round(v/1000)}k`);
+    $('cleanDepthEdges').onchange=e=>set({cleanDepthEdges:e.target.checked});
     $('smartDepthBands').onchange=e=>set({smartDepthBands:e.target.checked});
     $('gapFillForegroundLimit').onchange=e=>set({gapFillForegroundLimit:e.target.checked});
     $('gapFillManualLimit').onchange=e=>set({gapFillManualLimit:e.target.checked});
@@ -463,6 +464,8 @@ export class UI {
     }
     $('occludedBackground').checked=!!get('occludedBackground');
     $('reconstructionSideOcclusion').checked=!!get('reconstructionSideOcclusion');
+    $('cleanDepthEdges').checked=!!get('cleanDepthEdges');
+    $('cleanDepthEdges').disabled=get('depthMode')==='flat';
     $('smartDepthBands').checked=!!get('smartDepthBands');
     $('gapFillForegroundLimit').checked=!!get('gapFillForegroundLimit');
     $('gapFillManualLimit').checked=!!get('gapFillManualLimit');

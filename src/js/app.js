@@ -219,7 +219,7 @@ async function rebuildCloud() {
   const aiModelUrl = depthModelUrl(depthMode);
   const wantReconstruction=get('occludedBackground') && depthMode!=='flat';
   let reconstruction=null, objectMasks=null;
-  const wantMasks=get('aiFillThickness') && depthMode!=='flat' && ((get('surfaceCohesion')>0 && get('bandMap')==='depth') || (wantReconstruction && get('gapFillForegroundLimit')));
+  const wantMasks=get('aiFillThickness') && depthMode!=='flat' && (get('cleanDepthEdges') || (get('surfaceCohesion')>0 && get('bandMap')==='depth') || (wantReconstruction && get('gapFillForegroundLimit')));
 
   let depth = null;
   if (depthMode !== 'flat') {
@@ -305,7 +305,7 @@ async function rebuildCloud() {
       }finally{if(activeReconstructionAbort===controller)activeReconstructionAbort=null;}
     }
   }else if(!isWallpaperWindow){
-    ui.setObjectMaskStatus(!get('aiFillThickness') ? 'AI masks off — surfaces move independently':depthMode==='flat' ? 'Choose a depth mode to use AI masks':'AI masks need Keep surfaces together on Depth bands, or Auto thickness with reconstruction');
+    ui.setObjectMaskStatus(!get('aiFillThickness') ? 'AI masks off — surfaces move independently':depthMode==='flat' ? 'Choose a depth mode to use AI masks':'AI masks need Clean object edges, Keep surfaces together on Depth bands, or Auto thickness with reconstruction');
   }
   if(token!==rebuildToken)return;
   // Relay the completed asset once, including to multiple monitors. Only
@@ -320,7 +320,7 @@ async function rebuildCloud() {
     bandMap:get('bandMap'),bandDistribution:get('bandDistribution'),smartDepthBands:get('smartDepthBands'),bands:get('bands'),invertBands:get('invertBands'),
     gapFillDensity:get('gapFillDensity'),gapFillRows:get('gapFillRows'),gapFillSpread:get('gapFillSpread'),
     gapFillDepthLimit:get('gapFillDepthLimit'),
-    reconstruction,objectMasks,gapFillPointLimit:get('gapFillPointLimit'),
+    reconstruction,objectMasks,cleanDepthEdges:get('cleanDepthEdges'),surfaceCohesion:get('surfaceCohesion'),gapFillPointLimit:get('gapFillPointLimit'),
     reconstructionPointLimit:get('reconstructionPointLimit'),reconstructionWidth:get('reconstructionWidth'),
   });
   if (token !== rebuildToken) return;
@@ -328,6 +328,7 @@ async function rebuildCloud() {
     const surfaces=cloud.surfaceMotion;
     const coverage=surfaces ? Math.round(surfaces.covered/(surfaces.w*surfaces.h)*100):0;
     const uses=[];
+    if(get('cleanDepthEdges'))uses.push(`${cloud.cleanedEdgePixels} depth-edge pixels corrected`);
     if(get('bandMap')==='depth' && get('surfaceCohesion')>0)uses.push(`${surfaces?.surfaceCount||0} coherent surfaces (${coverage}% coverage)`);
     if(reconstruction && get('gapFillForegroundLimit'))uses.push(get('gapFill')>0 ? 'guiding Auto thickness':'Auto thickness ready; Gap fill is off');
     ui.setObjectMaskStatus(`${objectMasks.count} AI masks ready · ${uses.join(' · ')}`);
@@ -505,7 +506,7 @@ onChange((all, patch) => {
   }
   else if((get('gapFill')>0 && ['bands','bandMap','bandDistribution','smartDepthBands','invertBands','gapFillPointLimit','gapFillDensity','gapFillRows','gapFillSpread','gapFillDepthLimit'].some(key=>key in patch))
     || (get('occludedBackground') && ['reconstructionPointLimit','reconstructionWidth','gapFillForegroundLimit'].some(key=>key in patch))
-    || ['aiFillThickness','bandMap'].some(key=>key in patch)
+    || ['aiFillThickness','bandMap','cleanDepthEdges'].some(key=>key in patch)
     || ('surfaceCohesion' in patch && get('surfaceCohesion')>0 && !scene.surfaceMotion?.surfaceCount)){
     clearTimeout(countTimer);countTimer=setTimeout(()=>rebuildCloud(),350);
   }

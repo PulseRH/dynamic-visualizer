@@ -3,6 +3,7 @@ export const DEFAULTS = {
   imageUrl: null,          // explicit image (blob or app:// URL); null = try wallpaper, then procedural
   depthMode: 'auto',       // 'auto' | 'onnx' (small) | 'onnx-base' | 'flat'
   depthScale: 0.35,
+  cleanDepthEdges: true,  // collapse soft silhouette ramps so hidden background can show
   depthShape: 0,           // compress background spacing, expand foreground spacing
   gapFill: 0,              // bounded same-surface infill, generated during cloud rebuild
   gapFillDensity: 12,      // samples along each bridge row

@@ -82,13 +82,21 @@ a few percent CPU and holds a steady frame rate without spinning fans.
   It works with reconstruction; Auto thickness can remain on, in which case
   the smaller limit wins. Side/background occlusion follows the same cap.
 - **AI object masks** (near Bands) supplies quantised SegFormer B0 ADE20K
-  contours (~4.5 MB, downloaded once) to Keep surfaces together and Auto
+  contours (~4.5 MB, downloaded once) to Clean object edges, Keep surfaces together and Auto
   thickness. Runs in one CPU worker during wallpaper preparation, caches up
   to eight estimates, and releases the worker afterwards. The status shows
   detected masks, coherent surface coverage and which controls use them.
   Masks alone do not change the picture. Auto thickness still needs
   reconstruction and visible Gap fill; unavailable masks use depth-only
   thickness and independent band motion.
+- **Clean object edges** (under Depth) collapses softened foreground/background
+  transitions onto their front or back surface, avoiding intermediate depth
+  strips that become extra moving slabs. AI contours refine the cut when
+  available. Gap fill cannot bridge these corrected silhouettes, leaving
+  openings for reconstructed background. Interior slopes and the cached source
+  depth are retained; switching off restores original geometry. Runs in the
+  sampling worker during rebuilds, with no additional per-frame work or new
+  inpainting. This is separate from sharing a surface's audio motion.
 - **Keep surfaces together** (Depth band mapping) blends audio motion toward
   a shared frequency response on confident object faces. Connected AI masks
   plus a robust depth-plane check separate abrupt jumps and reject uncertain
