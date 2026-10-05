@@ -6,7 +6,7 @@ const section = (start, end) => source.slice(source.indexOf(start), source.index
 let broadcasts = 0, refreshed = 0, stopped = 0;
 const cfg = { wallpaperMode: true };
 const context = {
-  wallpaperActive: true, wallpaperWins: [], psBlockerId: 1, tray: {},
+  wallpaperActive: true, wallpaperWins: [], wallpaperGeneration: 0, psBlockerId: 1, tray: {},
   readConfig: () => cfg, writeConfig: () => {},
   stopCursorBroadcast: () => stopped++, refreshTrayMenu: () => refreshed++,
   broadcastWallpaperState: () => broadcasts++,

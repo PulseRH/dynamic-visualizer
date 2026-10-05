@@ -9,16 +9,19 @@
   "scripts": {
     "start": "electron .",
     "serve": "node tools/serve.mjs",
-    "postinstall": "node tools/vendor-three.mjs",
+    "postinstall": "node tools/vendor-three.mjs && node tools/build-wayland.mjs --optional",
     "dist:win": "npx electron-builder --win",
-    "dist:linux": "npx electron-builder --linux"
+    "dist:linux": "npx electron-builder --linux",
+    "build:wayland": "node tools/build-wayland.mjs"
   },
   "dependencies": {
     "koffi": "^3.1.6",
     "three": "0.180.0"
   },
   "devDependencies": {
-    "electron": "^38.0.0"
+    "electron": "^44.5.1",
+    "node-addon-api": "^8.5.0",
+    "node-gyp": "^11.5.0"
   },
   "build": {
     "appId": "dev.loz.dynamicvisualizer",
@@ -39,6 +42,9 @@
         "nsis",
         "portable"
       ]
-    }
+    },
+    "asarUnpack": [
+      "electron/vendor/wayland-wallpaper/build/Release/*.node"
+    ]
   }
 }

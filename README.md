@@ -16,7 +16,8 @@ a few percent CPU and holds a steady frame rate without spinning fans.
   your desktop icons*, click-through, no taskbar entry: it behaves like the OS
   wallpaper. Controlled from the tray icon; exit anytime from the tray or the
   settings panel. (Windows: WorkerW parenting incl. 24H2 Progman fallback.
-  Linux/X11: `_NET_WM_WINDOW_TYPE_DESKTOP` via xprop/wmctrl, best effort.)
+  Linux/X11: `_NET_WM_WINDOW_TYPE_DESKTOP` via xprop/wmctrl, best effort.
+  Linux/Wayland: native layer-shell background surfaces on compatible compositors.)
 - **Image → point cloud**: jittered-grid sampling of up to 400k points, each
   point keeps its pixel color and a depth estimate.
 - **Spatial frequency mapping** — you choose *where* each band acts on the
@@ -175,6 +176,45 @@ Works out of the box for GNOME, Cinnamon, MATE (gsettings), KDE Plasma
 (config parse) and XFCE (xfconf). If detection fails, upload/drop an image —
 your choice is remembered.
 
+### Wayland wallpaper mode
+
+Wallpaper mode uses native `wlr-layer-shell` Background surfaces on DriftWM
+and other compatible compositors. Each selected monitor gets its own
+click-through surface with no keyboard focus. The settings window remains an
+ordinary Electron window. System audio still uses PulseAudio/PipeWire.
+
+Windows uses the existing native wallpaper backend. The Wayland helper is built
+only on Linux and is loaded only for native Wayland wallpaper mode; it creates
+no renderers, native threads, surfaces or polling timers on Windows.
+
+On Linux, `npm install` attempts to build the native helper. It requires a C++
+compiler, Python, and Wayland development headers (`wayland-devel` on Fedora,
+`libwayland-dev` on Debian/Ubuntu). Rebuild explicitly with:
+
+```bash
+npm run build:wayland
+npm start -- --wallpaper
+```
+
+DriftWM must use `[background] type = "none"` to show external wallpapers.
+Stopping or pausing the visualizer removes its surfaces, revealing the existing
+wallpaper. Other wallpaper daemons can obscure it if they recreate their surfaces.
+GNOME's default compositor does not provide this layer-shell protocol.
+
+This version caps Wayland output at 30 fps and uses GPU-rendered bitmap
+frames over shared memory. Frame copies add CPU and memory bandwidth overhead,
+especially with several large monitors. Experimental direct DMA-BUF transport
+can be tested with `DV_WAYLAND_SHARED_TEXTURE=1 npm start`, but currently fails
+on some Linux GPU drivers; bitmap transport is the default. Global cursor
+parallax is unavailable on Wayland. Automatic fullscreen game detection remains
+Windows-only; the tray pause/resume controls work on Wayland.
+
+Native transport is adapted from the MIT-licensed
+[@covas-labs/electron-overlay](https://github.com/COVAS-Labs/electron-overlay).
+Attribution and native source are under `electron/vendor/wayland-wallpaper`.
+Live smoke tests are `electron tools/wayland-wallpaper-smoke.cjs` and
+`electron tools/wayland-integration-smoke.cjs` in a layer-shell Wayland session.
+
 ## Packaging
 
 ```bash
@@ -218,6 +258,6 @@ src/js/ui.js           settings panel wiring, toasts, drag & drop / paste
   including the `TranscodedWallpaper` fallback.
 - Wallpaper mode on Windows reparents a window into the desktop (WorkerW /
   Progman). Explorer restarts or Windows updates can detach it — just toggle
-  the mode again. Wayland isn't supported yet (needs layer-shell).
-- Linux wallpaper mode needs an X11 session; on GNOME Wayland it will fall
-  back to a normal window.
+  the mode again.
+- Wayland wallpaper mode requires `wlr-layer-shell`; unsupported compositors
+  return an error rather than opening an ordinary wallpaper window.

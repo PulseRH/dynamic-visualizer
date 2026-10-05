@@ -4,3 +4,4 @@ src/vendor/
 *.log
 assets/sample-wallpaper.jpg
 .zcode/
+electron/vendor/wayland-wallpaper/build/

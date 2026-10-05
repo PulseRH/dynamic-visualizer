@@ -4,9 +4,12 @@ const path = require('path');
 const fs = require('fs');
 const zlib = require('zlib');
 const os = require('os');
+const { pathToFileURL } = require('url');
 const { spawn } = require('child_process');
 const { pipeline } = require('stream');
 const { describeProcesses } = require('./process-usage.cjs');
+const { usesNativeWayland, createWaylandWallpaper } = require('./wayland-wallpaper.cjs');
+const nativeWayland = usesNativeWayland();
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 
@@ -39,7 +42,7 @@ if (!app.isPackaged) {
 }
 const SERVE_EXTENSIONS = new Set([
   '.html', '.css', '.js', '.mjs', '.cjs', '.json', '.txt',
-  '.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.ico', '.avif',
+  '.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.ico', '.avif', '.bmp',
   '.woff', '.woff2', '.wasm', '.onnx',
 ]);
 
@@ -50,16 +53,23 @@ const SERVE_EXTENSIONS = new Set([
 //   app://abs/<encoded/abs/path> -> an absolute path (e.g. a user's wallpaper)
 // ---------------------------------------------------------------------------
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
+  { scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } },
 ]);
 
 function registerAppProtocol() {
-  protocol.handle('app', (request) => {
+  protocol.handle('app', async (request) => {
     try {
       const url = new URL(request.url);
       let rel = decodeURIComponent(url.pathname).replace(/^\/+/, '');
       let filePath;
-      if (rel.startsWith('abs/')) {
+      if (url.hostname === 'abs') {
+        // The absolute-path marker is the URL host, not its pathname.
+        // Preserve the leading slash on Unix; strip it before Windows drives.
+        const absolutePath = decodeURIComponent(url.pathname);
+        filePath = path.resolve(process.platform === 'win32'
+          ? absolutePath.replace(/^\/(?=[A-Za-z]:\/)/, '')
+          : absolutePath);
+      } else if (rel.startsWith('abs/')) {
         filePath = path.resolve(rel.slice(4));
       } else {
         filePath = path.resolve(PROJECT_ROOT, rel);
@@ -68,7 +78,13 @@ function registerAppProtocol() {
       if (!SERVE_EXTENSIONS.has(ext)) {
         return new Response('Forbidden extension', { status: 403 });
       }
-      return net.fetch('file://' + filePath.split(path.sep).join('/'));
+      const response = await net.fetch(pathToFileURL(filePath).href);
+      // Uploaded images have the app://abs origin; the renderer is app://bundle.
+      const headers = new Headers(response.headers);
+      headers.set('Access-Control-Allow-Origin', 'app://bundle');
+      return new Response(response.body, {
+        status: response.status, statusText: response.statusText, headers,
+      });
     } catch (err) {
       return new Response('Bad request: ' + err.message, { status: 400 });
     }
@@ -288,8 +304,11 @@ if (!gotLock) {
     registerAppProtocol();
     // surface renderer errors (shader compiles, exceptions) in the main log
     app.on('web-contents-created', (_e, wc) => {
-      wc.on('console-message', (e) => {
-        if (e.level >= 2) console.log('[renderer]', e.message);
+      wc.on('console-message', (details, level, message) => {
+        const severity = details.level ?? level;
+        if (severity === 'warning' || severity === 'error' || severity >= 2) {
+          console.log('[renderer]', details.message ?? message);
+        }
       });
     });
     // Allow microphone / loopback capture without prompts.
@@ -308,7 +327,7 @@ if (!gotLock) {
     // hidden. Create it before restoring wallpaper mode so tray/login startup
     // has a spectrum producer without requiring the user to open the window.
     createWindow({ show: !cfg.startInTray && !process.argv.includes('--hidden') });
-    if (cfg.wallpaperMode) await enableWallpaperMode();
+    if (cfg.wallpaperMode || process.argv.includes('--wallpaper')) await enableWallpaperMode();
   });
 
   // With wallpaper mode active, closing the preview only hides it — the
@@ -441,6 +460,8 @@ let cursorTimer = null;
  *  subtly parallaxes with the mouse (they're click-through, so they get no
  *  pointer events of their own). Normalized per window to -1..1. */
 function startCursorBroadcast() {
+  // Wayland intentionally does not expose the global cursor position.
+  if (nativeWayland) return;
   if (cursorTimer) return;
   cursorTimer = setInterval(() => {
     if (!wallpaperWins.length) return;
@@ -557,7 +578,8 @@ function setGameMode(on) {
   gameMode = on;
   for (const win of wallpaperWins) {
     if (win.isDestroyed()) continue;
-    if (on) win.hide(); else win.showInactive();
+    if (win.waylandWallpaper) void win.waylandWallpaper.setPaused(on);
+    else if (on) win.hide(); else win.showInactive();
   }
   for (const win of BrowserWindow.getAllWindows()) {
     if (!win.isDestroyed()) win.webContents.send('gamemode', on);
@@ -866,15 +888,26 @@ function win32DesktopPlacement(hwnd, displayBounds) {
 }
 
 let enablePromise = null;
+let wallpaperGeneration = 0;
+let enablingGeneration = 0;
 function enableWallpaperMode() {
   if (wallpaperWins.length) return Promise.resolve({ ok: true });
-  if (enablePromise) return enablePromise; // a click while enabling just waits
+  if (enablePromise) {
+    return enablingGeneration === wallpaperGeneration
+      ? enablePromise
+      : enablePromise.then(() => enableWallpaperMode());
+  }
+  enablingGeneration = wallpaperGeneration;
   enablePromise = doEnableWallpaperMode().finally(() => { enablePromise = null; });
   return enablePromise;
 }
 
 async function doEnableWallpaperMode() {
   const created = [];
+  const generation = wallpaperGeneration;
+  const checkCancelled = () => {
+    if (generation !== wallpaperGeneration) throw new Error('Wallpaper startup was cancelled.');
+  };
   try {
     // main-monitor-only: the other displays keep the OS wallpaper — every
     // animated window costs render time AND a DWM recomposition per frame
@@ -882,8 +915,14 @@ async function doEnableWallpaperMode() {
       ? [screen.getPrimaryDisplay()]
       : screen.getAllDisplays();
     for (const display of displays) {
+      checkCancelled();
       const b = display.bounds;
-      const win = new BrowserWindow({
+      const win = nativeWayland ? await createWaylandWallpaper({
+        BrowserWindow, display,
+        preload: path.join(__dirname, 'preload.cjs'),
+        title: `Dynamic Visualizer — Wallpaper ${created.length + 1}`,
+        onFailure: err => console.error('[wayland wallpaper]', err.message),
+      }) : new BrowserWindow({
         x: b.x, y: b.y, width: b.width, height: b.height,
         frame: false, hasShadow: false, roundedCorners: false,
         skipTaskbar: true, resizable: false, movable: false,
@@ -898,23 +937,25 @@ async function doEnableWallpaperMode() {
         },
       });
       created.push(win);
+      checkCancelled();
       win.on('page-title-updated', event => event.preventDefault());
-      win.setIgnoreMouseEvents(true); // clicks pass through: it *is* the desktop
-      await new Promise((resolve) => {
-        win.webContents.once('did-finish-load', resolve);
-        win.loadURL('app://bundle/src/index.html?wallpaper=1' + (created.length === 0 ? '&primary=1' : ''));
-      });
+      if (!nativeWayland) win.setIgnoreMouseEvents(true);
+      await win.loadURL('app://bundle/src/index.html?wallpaper=1' + (created.length === 0 ? '&primary=1' : ''));
+      checkCancelled();
       // show first — SetParent on a hidden window can be refused by win32
-      win.showInactive();
+      if (!nativeWayland) win.showInactive();
 
       if (process.platform === 'win32') {
         const hwnd = win.getNativeWindowHandle().readBigUInt64LE(0);
         await win32ParentToWorkerW(hwnd, b);
-      } else if (process.platform === 'linux') {
+      } else if (process.platform === 'linux' && !nativeWayland) {
         const xid = win.getNativeWindowHandle().readUInt32LE(0);
         await runX11DesktopHints(xid);
       }
-      if (gameMode) win.hide();
+      if (gameMode) {
+        if (win.waylandWallpaper) await win.waylandWallpaper.setPaused(true);
+        else win.hide();
+      }
 
       win.on('closed', () => {
         console.log('[wallpaper] window closed');
@@ -948,6 +989,7 @@ async function doEnableWallpaperMode() {
 }
 
 function disableWallpaperMode() {
+  wallpaperGeneration++;
   // Mark the stop before destroying windows: their synchronous closed events
   // must not treat an intentional stop as an unexpected last-window closure.
   wallpaperActive = false;
