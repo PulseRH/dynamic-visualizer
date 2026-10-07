@@ -43,6 +43,14 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
   // RGB and endpoint ownership for foreground sidewalls. Kept separate from
   // midpoint colours so ordinary interior seams preserve their image samples.
   const fillForeground=fillThickness ? new Float32Array(extraCapacity*4):null;
+  // Bind reconstructed side occlusion to a real, emitted wall row, including
+  // its endpoint depths/random phases. This lookup is worker-only.
+  const sideWalls=reconstruction && fillThickness ? {
+    front:new Float32Array(reconstruction.w*reconstruction.h*4),
+    rear:new Float32Array(reconstruction.w*reconstruction.h*4),
+    thickness:new Float32Array(reconstruction.w*reconstruction.h*2),
+    score:new Float32Array(reconstruction.w*reconstruction.h).fill(Infinity),
+  }:null;
   const histogram=depthHistogram(depth);
   const lookup=mapping.smartDepthBands ? depthBandLookup(histogram,mapping.bands||64,mapping.bandDistribution||0):null;
   const bandAt=i=>{
@@ -177,15 +185,16 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
         // fill as a jittered row crosses the low-resolution edge field.
         const front=positions[ai+2]>=positions[bi+2] ? ai:bi;
         let thicknessIndex=0;
-        if(reconstruction?.thickness){
+        if(reconstruction){
           const fu=(front===ai ? ax:bx)/aspect+.5,fv=.5-(front===ai ? ay:by);
           thicknessIndex=Math.max(0,Math.min(reconstruction.h-1,Math.floor(fv*reconstruction.h)))*reconstruction.w
             +Math.max(0,Math.min(reconstruction.w-1,Math.floor(fu*reconstruction.w)));
         }
-        if(cleanSide && reconstruction?.thickness){
+        if(cleanSide && reconstruction){
           const owner=cleaned.edgeOwners[depthCellAt(front===ai ? ax:bx,front===ai ? ay:by)];
           if(owner>=0)thicknessIndex=owner;
         }
+        const rowStart=used;
         for(let sample=1;sample<=samplesPerEdge;sample++){
           const t=(sampleOrder[sample-1]+(rand()-.5)*.6)/(samplesPerEdge+1);
           const x=ax*(1-t)+bx*t,y=ay*(1-t)+by*t,u=x/aspect+.5,v=.5-y;
@@ -206,6 +215,21 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
             }
           }
         }
+        if(sideWalls && used>rowStart){
+          const f=rowStart-baseCount,owner=reconstruction.owner[thicknessIndex];
+          if(owner>=0 && fillThickness[f*2+1]>0){
+            const start=front===ai ? fillStarts:fillEnds,end=front===ai ? fillEnds:fillStarts;
+            const ex=((owner%reconstruction.w+.5)/reconstruction.w-.5)*aspect;
+            const ey=.5-(Math.floor(owner/reconstruction.w)+.5)/reconstruction.h;
+            const score=(start[f*4]-ex)**2+(start[f*4+1]-ey)**2;
+            if(score<sideWalls.score[owner]){
+              sideWalls.score[owner]=score;
+              sideWalls.front.set(start.subarray(f*4,f*4+4),owner*4);
+              sideWalls.rear.set(end.subarray(f*4,f*4+4),owner*4);
+              sideWalls.thickness.set(fillThickness.subarray(f*2,f*2+2),owner*2);
+            }
+          }
+        }
       }
     }
   }
@@ -219,7 +243,7 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
     depthHistogram:histogram,
     cleanedEdgePixels:cleaned?.changed||0,
     surfaceMotion:mapping.surfaceCohesion===0 ? null:buildSurfaceMotion(depth,mapping.objectMasks),
-    reconstruction: mapping.reconstruction ? sampleOcclusion(mapping.reconstruction,aspect,baseCount,mapping):null,
+    reconstruction: mapping.reconstruction ? sampleOcclusion(mapping.reconstruction,aspect,baseCount,{...mapping,sideWalls}):null,
     fillStarts:fillStarts?.subarray(0,(used-baseCount)*4),
     fillEnds:fillEnds?.subarray(0,(used-baseCount)*4),
     fillFractions:fillFractions?.subarray(0,used-baseCount),

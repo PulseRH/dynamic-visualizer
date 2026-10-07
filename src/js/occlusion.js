@@ -112,6 +112,7 @@ export function sampleOcclusion(reconstruction, aspect, count, options={}) {
   }
   const used=Math.min(candidatesUsed,budget),step=Math.max(1,candidatesUsed/Math.max(1,budget));
   const positions=new Float32Array(used*3),colors=new Float32Array(used*3),rands=new Float32Array(used),occluders=new Float32Array(used*4),normals=new Float32Array(used*2),sideThickness=new Float32Array(used*2);
+  const sideFronts=new Float32Array(used*4),sideRears=new Float32Array(used*4);
   for(let j=0;j<used;j++){
     const k=Math.floor(j*step)*3,x=candidates[k],y=candidates[k+1],i=candidates[k+2],edge=owner[i];
     positions[j*3]=(x/w-.5)*aspect;positions[j*3+1]=.5-y/h;positions[j*3+2]=back[i];rands[j]=rand();
@@ -124,6 +125,14 @@ export function sampleOcclusion(reconstruction, aspect, count, options={}) {
     // does. No AI, image processing or geometry rebuild on toggle/bias changes.
     sideThickness[j*2]=reconstruction.thickness?.[edge] || 0;
     sideThickness[j*2+1]=reconstruction.edgeWeight?.[edge] || 0;
+    const walls=options.sideWalls;
+    // -2: sampler checked but no actual wall; -1: legacy/unbound geometry.
+    sideRears[j*4+3]=walls ? -2:-1;
+    if(walls && Number.isFinite(walls.score[edge])){
+      sideFronts.set(walls.front.subarray(edge*4,edge*4+4),j*4);
+      sideRears.set(walls.rear.subarray(edge*4,edge*4+4),j*4);
+      sideThickness.set(walls.thickness.subarray(edge*2,edge*2+2),j*2);
+    }
   }
-  return {positions,colors,rands,occluders,normals,sideThickness};
+  return {positions,colors,rands,occluders,normals,sideThickness,sideFronts,sideRears};
 }

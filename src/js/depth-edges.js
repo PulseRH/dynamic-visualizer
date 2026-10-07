@@ -41,11 +41,19 @@ export function cleanDepthEdges(depth, reconstruction=null, objects=null){
     }
   }
   let changed=0;for(let i=0;i<n;i++)if(Math.abs(result[i]-data[i])>.005)changed++;
-  return {depth:{w,h,data:result},edgePixels,edgeOwners,changed};
+  return {depth:{w,h,data:result},edgePixels,edgeOwners,edges,changed};
 }
 
 // Identify corrected silhouettes so Gap fill builds one foreground-owned
 // sidewall here, with its extent controlled by the existing thickness limits.
 export function crossesCleanDepthEdge(clean,a,b){
-  return !!clean?.edgePixels && (clean.edgePixels[a]||clean.edgePixels[b]) && Math.abs(clean.depth.data[a]-clean.depth.data[b])>.08;
+  if(!clean?.edgePixels || Math.abs(clean.depth.data[a]-clean.depth.data[b])<=.08)return false;
+  const near=Math.max(clean.depth.data[a],clean.depth.data[b]),far=Math.min(clean.depth.data[a],clean.depth.data[b]);
+  // Two neighbouring foreground plateaus are not an object silhouette.
+  // Require endpoints to match the same detected front/back transition.
+  for(const i of [a,b]){
+    const owner=clean.edgeOwners[i];if(owner<0)continue;
+    if(Math.abs(near-clean.edges.front[owner])<.04 && Math.abs(far-clean.edges.back[owner])<.04)return true;
+  }
+  return false;
 }

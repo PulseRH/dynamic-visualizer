@@ -27,8 +27,22 @@ try{
   const withoutReconstruction=sampleImageToCloud(image,depth,20000,1,{...mapping,reconstruction:null,cleanDepthEdges:true});
   if(!withoutReconstruction.fillForeground.some(v=>Math.abs(v)===2))throw Error('Depth-only cleanup removed all sidewalls');
   if(!clean.reconstruction?.positions.length || !clean.reconstruction.positions.every((v,i)=>v===raw.reconstruction.positions[i]))throw Error('Cleaning removed or moved the generated background');
+  const walls=new Set();
+  for(let i=0;i<clean.fillFractions.length;i++){
+    const foreground=clean.fillForeground[i*4+3];if(!foreground)continue;
+    const first=foreground>0 ? clean.fillStarts:clean.fillEnds,last=foreground>0 ? clean.fillEnds:clean.fillStarts;
+    walls.add([...first.subarray(i*4,i*4+4),...last.subarray(i*4,i*4+4),...clean.fillThickness.subarray(i*2,i*2+2)].join(','));
+  }
+  let bound=0;
+  const hidden=clean.reconstruction;
+  for(let i=0;i<hidden.rands.length;i++)if(hidden.sideRears[i*4+3]>=0){
+    bound++;
+    if(!walls.has([...hidden.sideFronts.subarray(i*4,i*4+4),...hidden.sideRears.subarray(i*4,i*4+4),...hidden.sideThickness.subarray(i*2,i*2+2)].join(',')))throw Error('Occlusion references a wall that was not emitted');
+  }
+  if(!bound)throw Error('No hidden points matched real wall endpoints');
   const worker=await buildCloud(image,depth,20000,1,{...mapping,cleanDepthEdges:true});
   for(const key of ['positions','fillThickness','fillForeground'])if(!worker[key].every((v,i)=>v===clean[key][i])||worker[key].length!==clean[key].length)throw Error('Worker mismatch: '+key);
+  for(const key of ['sideFronts','sideRears','sideThickness'])if(!worker.reconstruction[key].every((v,i)=>v===clean.reconstruction[key][i]))throw Error('Worker lost side binding '+key);
   const restored=sampleImageToCloud(image,depth,20000,1,{...mapping,cleanDepthEdges:false});
   if(!restored.positions.every((v,i)=>v===raw.positions[i]))throw Error('Off failed to restore original depth');
   const scene=new VisualScene(document.querySelector('canvas'));scene.setCloud(clean);

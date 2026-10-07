@@ -1,6 +1,7 @@
 <!doctype html><meta charset="utf-8"><canvas></canvas><pre id="result">RUNNING</pre>
 <script type="module">
 import {VisualScene} from '../src/js/scene.js';
+import {Vector3} from '../src/vendor/three.module.js';
 import {getAll} from '../src/js/settings.js';
 try {
   const scene=new VisualScene(document.querySelector('canvas'));
@@ -61,6 +62,28 @@ try {
   const audio={depthScale:0,intensity:8,depthMove:1,xyMove:0,centeredMotion:false,gapFillOnlyOpen:true,gapFillAdaptive:0,gapFillForegroundLimit:false};
   const audioOff=draw(audio,0,0),audioOn=draw({...audio,reconstructionSideOcclusion:true},0,0);
   if(!audioOff.red||!audioOff.blue||audioOn.red||audioOn.blue)throw Error('Audio-only exposed side did not occlude background at zero static depth: '+JSON.stringify({off:[audioOff.red,audioOff.blue],on:[audioOn.red,audioOn.blue]}));
+  // Probe either side of the actual wall end. The legacy silhouette is
+  // deliberately at another depth: it must not define side-wall thickness.
+  scene.camera.position.set(.8,0,2);scene.camera.lookAt(0,0,0);scene.camera.updateMatrixWorld();
+  const wallEnd=new Vector3(.01,0,.72+(.12-.72)*.61).project(scene.camera);
+  const probe=offset=>{
+    const x=wallEnd.x+offset/128,y=wallEnd.y;
+    const a=new Vector3(x,y,-1).unproject(scene.camera),b=new Vector3(x,y,1).unproject(scene.camera);
+    const t=(.12-a.z)/(b.z-a.z);return [a.x+(b.x-a.x)*t,a.y+(b.y-a.y)*t,.15];
+  };
+  const boundCloud={...cloud,reconstruction:{...cloud.reconstruction,
+    positions:new Float32Array([...probe(-5),...probe(5)]),
+    occluders:new Float32Array([0,0,.97,.1,0,0,.97,.9]),
+    normals:new Float32Array([1,0,1,0]),
+    sideFronts:new Float32Array([0,0,.9,.5,0,0,.9,.5]),
+    sideRears:new Float32Array([.01,0,.15,.5,.01,0,.15,.5]),
+  }};
+  scene.setCloud(boundCloud);
+  const matched=draw({reconstructionSideOcclusion:true,gapFillForegroundLimit:false,gapFillManualLimit:true,gapFillThickness:.61});
+  if(matched.red || !matched.blue)throw Error('Actual side boundary over/under-occludes its inside/outside probes: '+JSON.stringify([matched.red,matched.blue]));
+  boundCloud.reconstruction.sideRears[3]=-2;boundCloud.reconstruction.sideRears[7]=-2;scene.setCloud(boundCloud);
+  const unmatched=draw({reconstructionSideOcclusion:true,gapFillForegroundLimit:false,gapFillManualLimit:true,gapFillThickness:.61});
+  if(!unmatched.red||!unmatched.blue)throw Error('A missing sidewall occluded the reconstructed background');
   const noFill={...cloud,fillFractions:null,fillStarts:null,fillEnds:null};scene.setCloud(noFill);
   scene.applySettings({...settings,reconstructionSideOcclusion:true});
   if(scene.uniforms.uReconstructionSideOcclusion.value!==0)throw Error('Missing fill geometry still occluded');

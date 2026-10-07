@@ -56,8 +56,11 @@ const VERT = /* glsl */ `
     attribute vec4 aOccluder;
     attribute vec2 aOutward;
     attribute vec2 aSideThickness;
+    attribute vec4 aSideFront;
+    attribute vec4 aSideRear;
     uniform float uReconstructionBrightness;
     uniform float uReconstructionSideOcclusion;
+    uniform float uSideWallReferences;
     uniform float uFillSpacing;
   #endif
   #ifdef GAP_FILL
@@ -305,22 +308,36 @@ const VERT = /* glsl */ `
         vec2 normal=(axisClip.xy/axisClip.w-edgeClip.xy/edgeClip.w)*metric;
         float spacing=max(length(normal),0.000001);
         float uncovered=dot((hiddenClip.xy/hiddenClip.w-edgeClip.xy/edgeClip.w)*metric,normal/spacing);
-        if(uReconstructionSideOcclusion>.5){
+        float matchedSideReveal=1.0;
+        if(uReconstructionSideOcclusion>.5 && (uSideWallReferences<.5 || aSideRear.w>-1.5)){
           vec3 rear, unusedRearColour;float unusedRearAmp,unusedRearSize;
           // The same foreground boundary at this hidden slice's depth gives
           // the rear direction under camera, audio and spatial-layer motion.
-          evaluatePoint(vec3(aOccluder.xy,position.z),aRand,aColor,rear,unusedRearColour,unusedRearAmp,unusedRearSize);
-          vec3 separation=rear-edge;
+          vec3 wallEdge=edge;
+          bool matchedWall=uSideWallReferences>.5 && aSideRear.w>=0.0;
+          vec3 restXY=vec3(0.0);
+          if(matchedWall){
+            evaluatePoint(aSideFront.xyz,aSideFront.w,aColor,wallEdge,unusedRearColour,unusedRearAmp,unusedRearSize);
+            evaluatePoint(aSideRear.xyz,aSideRear.w,aColor,rear,unusedRearColour,unusedRearAmp,unusedRearSize);
+            restXY=vec3(aSideRear.xy-aSideFront.xy,0.0);
+          }else{
+            evaluatePoint(vec3(aOccluder.xy,position.z),aRand,aColor,rear,unusedRearColour,unusedRearAmp,unusedRearSize);
+          }
+          vec3 separation=rear-wallEdge-restXY;
           float sideVisibility=1.0;
           if(uFillOnlyOpen>.5 || uFillAdaptive>0.0){
             vec3 restDelta=vec3(0.0,0.0,(shapedDepth(position.z)-shapedDepth(aOccluder.z))*uDepthScale);
-            vec3 centre=(edge+rear)*.5;
+            if(matchedWall)restDelta=vec3(restXY.xy,
+              (shapedDepth(aSideRear.z)-shapedDepth(aSideFront.z))*uDepthScale
+              +curvatureDepth(aSideRear.xy)-curvatureDepth(aSideFront.xy));
+            vec3 centre=(wallEdge+rear)*.5;
+            vec4 wallFrontClip=projectionMatrix*(modelViewMatrix*vec4(wallEdge,1.0));
             vec4 fullRearClip=projectionMatrix*(modelViewMatrix*vec4(rear,1.0));
             vec4 restFront=projectionMatrix*(modelViewMatrix*vec4(centre-restDelta*.5,1.0));
             vec4 restRear=projectionMatrix*(modelViewMatrix*vec4(centre+restDelta*.5,1.0));
-            if(min(min(fullRearClip.w,restFront.w),restRear.w)<=0.0)sideVisibility=0.0;
+            if(min(min(fullRearClip.w,restFront.w),min(restRear.w,wallFrontClip.w))<=0.0)sideVisibility=0.0;
             else{
-              float currentGap=length((fullRearClip.xy/fullRearClip.w-edgeClip.xy/edgeClip.w)*metric);
+              float currentGap=length((fullRearClip.xy/fullRearClip.w-wallFrontClip.xy/wallFrontClip.w)*metric);
               float restingGap=length((restRear.xy/restRear.w-restFront.xy/restFront.w)*metric);
               float centreW=(restFront.w+restRear.w)*.5;
               float referenceGap=max(restingGap,projectionMatrix[1][1]*uFillSpacing/centreW);
@@ -330,16 +347,20 @@ const VERT = /* glsl */ `
             }
           }
           float fraction=limitedFillSpan(length(separation),aSideThickness);
-          vec4 rearClip=projectionMatrix*(modelViewMatrix*vec4(edge+separation*fraction,1.0));
+          vec4 rearClip=projectionMatrix*(modelViewMatrix*vec4(wallEdge+restXY+separation*fraction,1.0));
           if(rearClip.w>0.0){
             // A wall pointing inward must never uncover the original front.
             float sideExtent=max(0.0,dot((rearClip.xy/rearClip.w-edgeClip.xy/edgeClip.w)*metric,normal/spacing));
-            uncovered-=sideExtent*sideVisibility;
+            if(matchedWall && sideExtent>0.0 && fraction>0.0){
+              // Centre the side's feather on its actual end; the original
+              // positive front feather otherwise adds another empty strip.
+              matchedSideReveal=mix(1.0,smoothstep(-spacing*.5,spacing*.5,uncovered-sideExtent),sideVisibility);
+            }else if(!matchedWall)uncovered-=sideExtent*sideVisibility;
           }
         }
         // Behind the object remains invisible. Feather the exposed boundary
         // by one original point spacing to avoid an additive bright outline.
-        reveal=smoothstep(spacing*.35,spacing*1.35,uncovered);
+        reveal=smoothstep(spacing*.35,spacing*1.35,uncovered)*matchedSideReveal;
       }
       gl_Position=hiddenClip;gl_PointSize=size;vAmp=amp;
       vColor*=reveal*uReconstructionBrightness;
@@ -541,6 +562,7 @@ export class VisualScene {
       uFillBrightness: { value: .35 },
       uReconstructionBrightness: { value: .7 },
       uReconstructionSideOcclusion: { value: 0 },
+      uSideWallReferences: { value: 0 },
       uFillOnlyOpen: { value: 1 },
       uFillAdaptive: { value: 1 },
       uFillSamples: { value: 12 },
@@ -701,11 +723,16 @@ export class VisualScene {
     this.points.frustumCulled = false;
     this.scene.add(this.points);
     const hidden=cloud.reconstruction;
+    this.uniforms.uSideWallReferences.value=hidden?.sideRears ? 1:0;
     if(hidden?.rands.length){
       this.reconstructionMaterial ||= new THREE.ShaderMaterial({uniforms:this.uniforms,defines:{OCCLUDED_BACKGROUND:1},vertexShader:VERT,fragmentShader:FRAG,blending:THREE.AdditiveBlending,depthTest:false,depthWrite:false,transparent:true});
       this.reconstructionMaterial.defaultAttributeValues.aSideThickness=[0,0];
+      this.reconstructionMaterial.defaultAttributeValues.aSideFront=[0,0,0,0];
+      this.reconstructionMaterial.defaultAttributeValues.aSideRear=[0,0,0,-1];
       const geometry=new THREE.BufferGeometry();
       for(const [name,key,size] of [['position','positions',3],['aColor','colors',3],['aRand','rands',1],['aOccluder','occluders',4],['aOutward','normals',2]])geometry.setAttribute(name,new THREE.BufferAttribute(hidden[key],size));
+      if(hidden.sideFronts)geometry.setAttribute('aSideFront',new THREE.BufferAttribute(hidden.sideFronts,4));
+      if(hidden.sideRears)geometry.setAttribute('aSideRear',new THREE.BufferAttribute(hidden.sideRears,4));
       if(hidden.sideThickness)geometry.setAttribute('aSideThickness',new THREE.BufferAttribute(hidden.sideThickness,2));
       this.reconstructionPoints=new THREE.Points(geometry,this.reconstructionMaterial);
       this.reconstructionPoints.frustumCulled=false;this.scene.add(this.reconstructionPoints);

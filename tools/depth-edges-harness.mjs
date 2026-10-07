@@ -13,8 +13,11 @@ const row=y=>Array.from(result.depth.data.subarray(y*w+25,y*w+34));
 assert.ok(row(20).every(v=>Math.abs(v-.85)<1e-5||Math.abs(v-.15)<1e-5),JSON.stringify(row(20)));
 assert.ok(result.changed>100,'fixture needs a meaningful softened edge');
 assert.ok(result.depth.data[20*w+29]>.8 && result.depth.data[20*w+30]<.2,'AI contour locates the foreground edge');
-assert.ok(crossesCleanDepthEdge(result,20*w+29,20*w+30),'Gap fill must not rebuild the removed sidewall');
+assert.ok(crossesCleanDepthEdge(result,20*w+29,20*w+30),'Corrected silhouette must retain its foreground-owned sidewall');
 assert.ok(!crossesCleanDepthEdge(result,20*w+27,20*w+28),'same-side fill remains eligible');
+const nearby={...result,depth:{...result.depth,data:result.depth.data.slice()}};
+nearby.depth.data[20*w+28]=.65;
+assert.ok(!crossesCleanDepthEdge(nearby,20*w+27,20*w+28),'different foreground depths must not masquerade as a front/back silhouette');
 // Interior planar slope must survive without being flattened to one depth.
 const sloping=Float32Array.from({length:w*h},(_,i)=>.2+.45*(i%w)/(w-1));
 const slope=cleanDepthEdges({w,h,data:sloping});assert.deepEqual(slope.depth.data,sloping);
