@@ -865,9 +865,9 @@ async function win32ParentToWorkerW(hwnd, displayBounds) {
 
   if (insertAfter) {
     // sibling mode: sit directly below the icon layer in z-order
-    SetWindowPos(hwnd, insertAfter, cx, cy, cw, ch, 0x0010); // NOACTIVATE
+    SetWindowPos(hwnd, insertAfter, cx, cy, cw, ch, 0x0030); // NOACTIVATE | FRAMECHANGED
   } else {
-    SetWindowPos(hwnd, 0n, cx, cy, cw, ch, 0x0014); // NOZORDER | NOACTIVATE
+    SetWindowPos(hwnd, 0n, cx, cy, cw, ch, 0x0034); // NOZORDER | NOACTIVATE | FRAMECHANGED
   }
   const fr = { L: 0, T: 0, R: 0, B: 0 };
   GetWindowRect(hwnd, fr);
@@ -924,7 +924,9 @@ async function doEnableWallpaperMode() {
         onFailure: err => console.error('[wayland wallpaper]', err.message),
       }) : new BrowserWindow({
         x: b.x, y: b.y, width: b.width, height: b.height,
-        frame: false, hasShadow: false, roundedCorners: false,
+        // Electron's native thick frame can consume side/bottom client pixels
+        // after SetParent, even on a non-resizable frameless window.
+        frame: false, thickFrame: false, hasShadow: false, roundedCorners: false,
         skipTaskbar: true, resizable: false, movable: false,
         show: false, backgroundColor: '#000000',
         title: `Dynamic Visualizer — Wallpaper ${created.length + 1}`,

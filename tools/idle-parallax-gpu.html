@@ -1,0 +1,37 @@
+<!doctype html><meta charset="utf-8"><canvas></canvas><pre id="result">RUNNING</pre>
+<script type="module">
+import {VisualScene} from '../src/js/scene.js';
+import {DEFAULTS} from '../src/js/settings.js';
+try{
+  const scene=new VisualScene(document.querySelector('canvas'));
+  scene.renderer.setSize(320,180,false);scene.camera.aspect=16/9;
+  scene.setCloud({count:4,aspect:16/9,positions:new Float32Array([-.8,-.45,.2,.8,-.45,.9,-.8,.45,.2,.8,.45,.9]),colors:new Float32Array(12).fill(.8),rands:new Float32Array([.1,.3,.6,.9])});
+  const source=document.createElement('canvas');source.width=640;source.height=360;
+  const ctx=source.getContext('2d'),gradient=ctx.createLinearGradient(0,0,640,360);gradient.addColorStop(0,'#ec4025');gradient.addColorStop(.5,'#37ab59');gradient.addColorStop(1,'#346deb');ctx.fillStyle=gradient;ctx.fillRect(0,0,640,360);
+  scene.setBackdrop(source,'dim');
+  const settings={...DEFAULTS,bands:5,keepScreenCovered:true,fillStrength:1,framingSmoothing:0,depthScale:.6,depthMove:1,dollyZoom:.8,musicParallax:0,
+    quietMovement:1,energyResponse:1,motionWave:0,motionRipple:0,motionBands:0,motionDrift:0,motionSwirl:0,motionBreathe:0,motionSweep:0,motionBandShake:0,cursorRipple:false,audioCurvature:0};
+  scene.applySettings(settings);
+  const audio={bands:new Float32Array(5).fill(.8),loud:1,energy:1},gl=scene.renderer.getContext();
+  const frame=()=>{scene.lastNow=performance.now()-50;scene.render(audio,3);if(gl.getError()!==gl.NO_ERROR)throw Error('WebGL error');};
+  const read=()=>{const p=new Uint8Array(320*180*4);gl.readPixels(0,0,320,180,gl.RGBA,gl.UNSIGNED_BYTE,p);return p;};
+  scene.setIdleVis(0,1000);for(let i=0;i<10;i++){scene.setIdleVis(0,1000);frame();}const reference=read();
+  scene.pointer.x=scene.pointer.tx=1;scene.pointer.y=scene.pointer.ty=-.8;
+  scene.setIdleVis(1,1000);for(let i=0;i<20;i++)frame();
+  if(Math.abs(scene.camera.position.x-.18)>1e-9||Math.abs(scene.camera.position.y-.0864)>1e-9)throw Error('Active pointer parallax changed');
+  if(scene.camera.zoom===1)throw Error('Test did not exercise dynamic framing');
+  for(const v of [.75,.5,.25,.1,.02]){scene.setIdleVis(v,50);frame();if(Math.abs(scene.camera.position.x-.18*v*v*(3-2*v))>1e-9)throw Error('Camera does not follow the fade smoothly');}
+  scene.setIdleVis(0,1000);if(scene.backdropSettled())throw Error('Idle sleep skipped the final centred draw');
+  for(let i=0;i<10;i++){scene.setIdleVis(0,1000);frame();}
+  if(scene.camera.position.x!==0||scene.camera.position.y!==0||scene.camera.position.z!==scene.camBaseZ||scene.camera.zoom!==1||scene.camera.fov!==scene.baseFov||scene.camera.projectionMatrix.elements[8]!==0||scene.camera.projectionMatrix.elements[9]!==0)throw Error('Idle pose is not the original wallpaper fit');
+  const actual=read();if(actual.some((v,i)=>v!==reference[i]))throw Error('Idle wallpaper pixels differ from the centred reference');
+  for(let y=0;y<180;y++)for(let x=0;x<320;x++)if(x===0||x===319||y===0||y===179){const i=(y*320+x)*4;if(actual[i]+actual[i+1]+actual[i+2]<20)throw Error('Exposed idle image border');}
+  scene.setExternalPointer(-1,1);frame();if(read().some((v,i)=>v!==reference[i]))throw Error('Idle cursor movement displaced wallpaper');
+  if(!scene.backdropSettled())throw Error('Centred wallpaper never becomes eligible for sleep');
+  scene.backdropDim=.999;scene.renderedBackdropDim=.999;scene.setIdleVis(0,16);
+  if(scene.backdropSettled())throw Error('Sleep skipped the final full-brightness backdrop draw');
+  frame();if(!scene.backdropSettled())throw Error('Final backdrop draw did not release idle sleep');
+  scene.setIdleVis(.1,50);frame();if(scene.camera.position.x===0)throw Error('Parallax did not resume after waking');
+  scene.renderer.dispose();document.querySelector('#result').textContent='PASS: active parallax unchanged; fade smoothly centres camera, dolly and framing; idle pixels match the original cover fit, borders stay covered, cursor cannot shift idle image and sleep/wake works.';
+}catch(error){document.querySelector('#result').textContent='FAIL '+error.stack;}
+</script>

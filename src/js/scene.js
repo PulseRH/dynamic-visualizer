@@ -794,6 +794,9 @@ export class VisualScene {
 
   /** true when the wallpaper image has finished its rise after the points left */
   backdropSettled() {
+    // The envelope can reach zero between draws. Render the centred camera
+    // once before sleeping, rather than retaining the last offset frame.
+    if(this.idleVis===0 && (this.renderedIdleVis!==0 || (this.backdrop && this.renderedBackdropDim!==this.backdropDim)))return false;
     if (!this.backdrop || this.backdrop.isDestroyed) return true;
     const base = this.hideBackdrop ? 0 : this.backdropBaseDim;
     const target = base + (1 - base) * (1 - this.idleVis);
@@ -1121,9 +1124,32 @@ export class VisualScene {
         /(2*Math.tan(THREE.MathUtils.degToRad(lensFov/2))*this.camera.position.z);
     }
 
+    this._settleIdleCamera(hPx);
     this.renderer.render(this.scene, this.camera);
+    this.renderedIdleVis=this.idleVis ?? 1;
+    this.renderedBackdropDim=this.backdropDim;
     this.drawCrossfade(performance.now());
     return dt;
+  }
+
+  _settleIdleCamera(hPx) {
+    const v=Math.max(0,Math.min(1,this.idleVis ?? 1));
+    if(v===1)return;
+    // Fade the complete camera pose back to the original wallpaper fit.
+    // Pointer, music tilt, dolly and framing all need a neutral idle endpoint.
+    const motion=v*v*(3-2*v),camera=this.camera;
+    const offsetX=camera.projectionMatrix.elements[8]*motion;
+    const offsetY=camera.projectionMatrix.elements[9]*motion;
+    camera.position.x*=motion;camera.position.y*=motion;
+    camera.position.z=this.camBaseZ+(camera.position.z-this.camBaseZ)*motion;
+    camera.fov=this.baseFov+(camera.fov-this.baseFov)*motion;
+    camera.zoom=1+(camera.zoom-1)*motion;
+    camera.lookAt(0,0,.1);camera.updateProjectionMatrix();
+    camera.projectionMatrix.elements[8]=offsetX;camera.projectionMatrix.elements[9]=offsetY;
+    camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+    this.uniforms.uCamZ.value=camera.position.z;
+    this.uniforms.uSize.value=(this.pointSizeSetting || 1)*hPx*(this.spacingWorld || 1/300)*camera.zoom
+      /(2*Math.tan(THREE.MathUtils.degToRad(camera.fov/2))*camera.position.z);
   }
 
   beginCrossfade(seconds) {

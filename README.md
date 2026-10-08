@@ -18,6 +18,8 @@ a few percent CPU and holds a steady frame rate without spinning fans.
   settings panel. (Windows: WorkerW parenting incl. 24H2 Progman fallback.
   Linux/X11: `_NET_WM_WINDOW_TYPE_DESKTOP` via xprop/wmctrl, best effort.
   Linux/Wayland: native layer-shell background surfaces on compatible compositors.)
+  Windows wallpaper windows disable the native thick frame so reparenting does
+  not leave side or bottom margins on newer Electron versions.
 - **Image → point cloud**: jittered-grid sampling of up to 400k points, each
   point keeps its pixel color and a depth estimate.
 - **Spatial frequency mapping** — you choose *where* each band acts on the
@@ -31,6 +33,9 @@ a few percent CPU and holds a steady frame rate without spinning fans.
   amounts; amounts weight the pattern mix without washing out the base glow.
   **Music parallax** slowly cycles the audio sway direction while music plays,
   preserving displacement strength and pausing the cycle in silence.
+  When the plain wallpaper fades in, the camera smoothly returns to the centred
+  cover fit, including zoom and framing. The final centred, full-brightness frame
+  is drawn before idle sleep; normal parallax resumes as the particles return.
   The Bands slider includes every count from 5 to 16, then even counts to 32
   and the existing four-band steps to 128.
 - **Depth estimation**

@@ -2,7 +2,7 @@
 <canvas id="cloud" style="width:400px;height:300px"></canvas><pre id="result">Running…</pre>
 <script type="module">
 import { VisualScene } from '../src/js/scene.js';
-import { getAll } from '../src/js/settings.js';
+import { DEFAULTS } from '../src/js/settings.js';
 const out = document.querySelector('#result');
 try {
   const scene = new VisualScene(document.querySelector('#cloud'));
@@ -16,10 +16,11 @@ try {
   scene.setCloud({ count: rands.length, aspect: 1.8, positions: new Float32Array(positions),
     colors: new Float32Array(colors), rands: new Float32Array(rands) });
   scene.spacingWorld = .0056;
-  const settings = { ...getAll(), keepScreenCovered: true, fillStrength: 1, framingSmoothing: 0, depthScale: .8, depthMove: 1,
+  // Saved brightness/lens settings must not change the pixel-coverage check.
+  const settings = { ...DEFAULTS, keepScreenCovered: true, fillStrength: 1, framingSmoothing: 0, depthScale: .8, depthShape: 0, depthMove: 1, audioCurvature: 0, dollyZoom: 0,
     bandMap: 'depth', intensity: 1, quietMovement: 1, energyResponse: 1,
     sizePulse: 0, boost: 0, hueReaction: 0, hueCycle: 0, vibrancyPulse: 0,
-    musicParallax: 0, cursorRipple: false, pointSize: 2,
+    musicParallax: 0, cursorRipple: false, pointSize: 3,
     motionWave: 0, motionRipple: 0, motionBands: 0, motionDrift: 0, motionSweep: 0,
     xyMove: 0, motionSwirl: 1, motionBreathe: 1, motionBandShake: 0 };
   scene.applySettings(settings);
@@ -28,6 +29,7 @@ try {
   for (const direction of [-1, 1]) {
     scene.pointer.x = direction; scene.pointer.tx = direction;
     scene.pointer.y = direction * .5; scene.pointer.ty = direction * .5;
+    scene.time=0;scene.xyTime=0;scene.waveTime=0;scene.lastNow=performance.now()-50;
     scene.render({ bands: new Float32Array(scene.bandCount).fill(.8), energy: 1, loud: 1 }, 4);
     gl.readPixels(0,0,400,300,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
     let lit=0, border=0;
