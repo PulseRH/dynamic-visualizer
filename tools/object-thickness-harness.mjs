@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {sceneClasses,sceneObjects,surfaceClass,MAX_OBJECT_MASKS} from '../src/js/object-mask-utils.js';
 import {estimateFillThickness} from '../src/js/fill-thickness.js';
 import {prepareOcclusion} from '../src/js/occlusion.js';
-import {packObjectThickness,unpackObjectThickness} from '../src/js/object-thickness.js';
+import {packObjectThickness,unpackObjectThickness,packObjectClasses,unpackObjectClasses} from '../src/js/object-thickness.js';
 
 // Building, windows and signs are one surface group, not a wall full of holes.
 const logits=new Float32Array(150*4).fill(-10);
@@ -42,4 +42,7 @@ const bad=packObjectThickness(result,w,h);new Uint32Array(bad,0,4)[3]=MAX_OBJECT
 assert.throws(()=>unpackObjectThickness(bad,w,h));
 const stale=packObjectThickness(result,w,h);new Uint32Array(stale,0,4)[0]=0;
 assert.throws(()=>unpackObjectThickness(stale,w,h));
+const classData={classes,confidence};
+assert.deepEqual(unpackObjectClasses(packObjectClasses(classData,w,h),w,h),classData);
+assert.throws(()=>unpackObjectClasses(packObjectClasses(classData,w,h),h,w+1));
 console.log('PASS: semantic masks combine building parts, split objects/depth chains, preserve transparency and original depth, guide distinct local widths, fall back on uncertainty, round-trip cached fields and reject stale/corrupt data.');

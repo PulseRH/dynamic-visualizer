@@ -3,12 +3,13 @@ import {createPresetStore} from '../src/js/presets.js';
 import {WallpaperBands} from '../src/js/wallpaper-bands.js';
 const data=new Map(),storage={getItem:key=>data.get(key),setItem:(key,value)=>data.set(key,value)};
 const defaults={bands:64,invertBands:false,intensity:1,sensGain:1,easeInBezier:[.2,.35,.6,1],gapFillPointLimit:180000,
-  cleanDepthEdges:true,surfaceCohesion:.75,aiFillThickness:true,gapFillManualLimit:false,gapFillThickness:.6,pinWallpaperSelector:false,imageUrl:null,audioSource:'demo',settingsOnly:false};
+  cleanDepthEdges:true,depthSmoothing:1,depthSpikeCleanup:1,surfaceCohesion:.75,aiFillThickness:true,gapFillManualLimit:false,gapFillThickness:.6,pinWallpaperSelector:false,imageUrl:null,audioSource:'demo',settingsOnly:false};
 const store=createPresetStore(defaults,storage),curve=[.1,.2,.8,.9];
-store.save(' Calm ',{...defaults,bands:20,intensity:.6,sensGain:1.2,easeInBezier:curve,cleanDepthEdges:false,surfaceCohesion:.9,aiFillThickness:false,gapFillManualLimit:true,gapFillThickness:.4,pinWallpaperSelector:true,imageUrl:'private-image',audioSource:'system',settingsOnly:true});
+store.save(' Calm ',{...defaults,bands:20,intensity:.6,sensGain:1.2,easeInBezier:curve,cleanDepthEdges:false,depthSmoothing:.5,depthSpikeCleanup:2,surfaceCohesion:.9,aiFillThickness:false,gapFillManualLimit:true,gapFillThickness:.4,pinWallpaperSelector:true,imageUrl:'private-image',audioSource:'system',settingsOnly:true});
 curve[0]=.9;const loaded=store.load('Calm');
 assert.equal(loaded.bands,20);assert.equal(loaded.intensity,.6);assert.equal(loaded.sensGain,1.2);assert.equal(loaded.easeInBezier[0],.1,'preset curves must be snapshots');
 assert.equal(loaded.cleanDepthEdges,false);assert.equal(loaded.surfaceCohesion,.9);assert.equal(loaded.aiFillThickness,false);
+assert.equal(loaded.depthSmoothing,.5);assert.equal(loaded.depthSpikeCleanup,2);
 assert.equal(loaded.gapFillManualLimit,true);assert.equal(loaded.gapFillThickness,.4);
 for(const excluded of ['imageUrl','audioSource','settingsOnly','pinWallpaperSelector'])assert.ok(!(excluded in loaded));
 store.save('Calm',{...defaults,bands:32});assert.deepEqual(store.names(),['Calm']);assert.equal(store.load('Calm').bands,32,'saving the same name replaces its settings');

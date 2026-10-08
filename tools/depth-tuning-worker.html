@@ -1,0 +1,23 @@
+<!doctype html><meta charset="utf-8"><pre id="result">RUNNING</pre>
+<script type="module">
+import {prepareAIDepth} from '../src/js/depth-refine.js';
+const run=(url,params)=>new Promise((resolve,reject)=>{
+  const worker=new Worker(url,{type:'module'}),timer=setTimeout(()=>finish(Error('Cached tuning attempted AI or timed out')),5000);
+  const finish=(error,result)=>{clearTimeout(timer);worker.terminate();error ? reject(error):resolve(result);};
+  worker.onmessage=({data})=>{if(data.status)return;data.ok ? finish(null,data):finish(Error(data.error));};
+  worker.onerror=e=>finish(Error(e.message));worker.postMessage(params);
+});
+try{
+  const canvas=new OffscreenCanvas(32,32);canvas.getContext('2d').fillRect(0,0,32,32);const bitmap=await createImageBitmap(canvas);
+  const prediction={w:32,h:32,data:Float32Array.from({length:1024},(_,i)=>i%32<16 ? .8:.2)};
+  for(const amount of [0,1,2]){
+    const tuning={depthSmoothing:amount,depthSpikeCleanup:amount};
+    const actual=await run('../src/js/depth-worker.mjs',{bitmap,prediction,tuning,modelUrl:'invalid://must-not-load',S:518});
+    const expected=prepareAIDepth(prediction.data,32,32,32,32,512,tuning);
+    if(actual.w!==512||actual.h!==512||actual.data.some((v,i)=>v!==expected.data[i]))throw Error('Depth worker ignored cached prediction/tuning');
+  }
+  const masks=await run('../src/js/object-masks-worker.mjs',{bitmap,depth:prediction,classifications:{classes:new Uint8Array(1024).fill(1),confidence:new Float32Array(1024).fill(3)}});
+  if(!masks.result.count||masks.result.labels.length!==1024||masks.classifications)throw Error('Cached segmentation was not reused');
+  bitmap.close();document.querySelector('#result').textContent='PASS: real depth and mask workers refine cached predictions without loading AI.';
+}catch(error){document.querySelector('#result').textContent='FAIL '+error.stack;}
+</script>

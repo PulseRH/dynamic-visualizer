@@ -85,6 +85,12 @@
         <button data-v="flat">Flat</button>
       </div>
       <label class="check-row"><input type="checkbox" id="cleanDepthEdges" /> Clean object edges<span class="q" data-tip="Remove intermediate depth strips along softened foreground silhouettes. Places those points on the foreground or background surface and gives Gap fill one foreground-coloured sidewall. Limit Gap fill thickness controls how far that side extends back, leaving the generated background visible beyond it. Uses the existing depth estimate and available AI contours. Prepared during cloud rebuilds, with no additional per-frame work or inpainting. Retains interior surface slopes. Off restores the original depth map."></span></label>
+      <details class="fold" id="depthTuning">
+        <summary>Depth tuning</summary>
+        <label class="slider-row"><span class="lbl">Surface smoothing<span class="q" data-tip="Smooth small variations within similar AI depths, while retaining abrupt foreground/background boundaries. 0% disables smoothing; 100% is the default; higher values also smooth larger local variations. Uses the saved AI prediction, with no work added to animation frames. Rebuilds the cloud after adjustment; hidden-background reconstruction may need to refresh."></span></span><input type="range" id="depthSmoothing" min="0" max="2" step="0.05" /><span class="val"></span></label>
+        <label class="slider-row"><span class="lbl">Spike cleanup<span class="q" data-tip="Remove isolated depth outliers supported by fewer than two neighbours. Retains continuous thin ledges and genuine boundaries. 0% disables cleanup; 100% is the default; higher values also catch smaller isolated spikes. Long strips assigned the wrong depth may remain. Reuses the saved AI prediction and adds no work to animation frames."></span></span><input type="range" id="depthSpikeCleanup" min="0" max="2" step="0.05" /><span class="val"></span></label>
+        <p class="hint">AI modes only. 100% keeps the current preparation. Changes apply after you stop adjusting. Cached AI depth is reused; hidden background may refresh if its edges change.</p>
+      </details>
       <label class="slider-row"><span class="lbl">Depth strength<span class="q" data-tip="How strongly the depth layers separate. 0 flattens the cloud into a single plane."></span></span>
         <input type="range" id="depthScale" min="0" max="1.5" step="0.01" />
         <span class="val"></span>

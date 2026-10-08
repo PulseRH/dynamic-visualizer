@@ -5,6 +5,7 @@
 //  onnx      : Depth-Anything-V2-small (fast AI option).
 //  onnx-base : Depth-Anything-V2-base (more detailed, slower AI option).
 //  Both models are downloaded on first use and cached in the Cache API.
+import {depthTuningKey} from './depth-refine.js';
 
 export const DEPTH_GRID_W = 256;
 
@@ -20,9 +21,11 @@ export function depthModelUrl(mode) {
 // Cache per image object: different wallpapers often share the same resolution.
 // Weak keys let old images and their depth grids be reclaimed after a switch.
 const resultCache = new WeakMap(); // bitmap -> Map<mode:modelUrl, {data,w,h}>
+const predictionCache = new WeakMap(); // bitmap -> Map<modelUrl, raw prediction>
 const imageIds = new WeakMap();
 export const depthImageIdentity = bitmap => imageIds.get(bitmap);
-const DEPTH_CACHE = 'dv-depth-results-v1';
+const DEPTH_CACHE = 'dv-depth-results-v2';
+const PREDICTION_CACHE = 'dv-depth-predictions-v1';
 
 // Content identity also handles a wallpaper file overwritten at the same path.
 export async function identifyDepthImage(bitmap, blob) {
@@ -39,26 +42,27 @@ async function diskKey(bitmap, modelUrl) {
   const modelId = Array.from(new Uint8Array(hash), b => b.toString(16).padStart(2, '0')).join('');
   // Cache API accepts HTTP(S) keys only, even on Electron's app:// origin.
   // This is a storage key; it is never fetched or sent over the network.
-  return `https://dynamic-visualizer.invalid/depth-results/${imageId}-${modelId}.bin`;
+  return `https://dynamic-visualizer.invalid/depth-results/edge-v2/${imageId}-${modelId}.bin`;
 }
 
-async function readDepthResult(key) {
+async function readDepthResult(key,cacheName=DEPTH_CACHE,maxSize=512,minSize=32) {
   if (!key) return null;
   try {
-    const hit = await (await caches.open(DEPTH_CACHE)).match(key);
+    const hit = await (await caches.open(cacheName)).match(key);
     if (!hit) return null;
     const w = Number(hit.headers.get('grid-width')), h = Number(hit.headers.get('grid-height'));
     const buffer = await hit.arrayBuffer();
-    if (w !== DEPTH_GRID_W || !Number.isInteger(h) || h < 32 || buffer.byteLength !== w * h * 4) return null;
-    return { data: new Float32Array(buffer), w, h };
+    if (!Number.isInteger(w) || w < minSize || w > maxSize || !Number.isInteger(h) || h < minSize || h > maxSize || buffer.byteLength !== w * h * 4) return null;
+    const data=new Float32Array(buffer);if(!data.every(Number.isFinite))return null;
+    return { data, w, h };
   } catch { return null; }
 }
 
 let saveQueue = Promise.resolve();
-function saveDepthResult(key, result) {
-  if (!key) return;
-  saveQueue = saveQueue.then(async () => {
-    const cache = await caches.open(DEPTH_CACHE);
+function saveDepthResult(key, result,cacheName=DEPTH_CACHE) {
+  if (!key) return Promise.resolve();
+  return saveQueue = saveQueue.then(async () => {
+    const cache = await caches.open(cacheName);
     await cache.put(key, new Response(result.data, { headers: {
       'grid-width': String(result.w), 'grid-height': String(result.h),
     } }));
@@ -148,10 +152,18 @@ function normalizePercentile(grid, loP, hiP) {
 // ----------------------------------------------------------------------- onnx
 
 /** Returns {data,w,h} nearness grid from Depth-Anything. Throws on failure. */
-export async function onnxDepth(bitmap, modelUrl = DEFAULT_ONNX_MODEL, onStatus = () => {}, signal) {
+export async function onnxDepth(bitmap, modelUrl = DEFAULT_ONNX_MODEL, onStatus = () => {}, signal,tuning={}) {
   // AI inference runs in a short-lived module worker so its ONNX runtime
   // memory is released after each estimate, especially for the Base model.
-  onStatus('running AI model…');
+  let prediction=predictionCache.get(bitmap)?.get(modelUrl),rawKey=null;
+  try{rawKey=(await diskKey(bitmap,modelUrl))?.replace('/depth-results/edge-v2/','/depth-predictions/v1/');}catch{}
+  prediction ||= await readDepthResult(rawKey,PREDICTION_CACHE,2048,1);
+  if(signal?.aborted)throw new DOMException('Depth estimate cancelled','AbortError');
+  if(prediction){
+    let models=predictionCache.get(bitmap);
+    if(!models){models=new Map();predictionCache.set(bitmap,models);}models.set(modelUrl,prediction);
+  }
+  onStatus(prediction ? 'tuning saved AI depth…':'running AI model…');
   const worker = new Worker(new URL('./depth-worker.mjs', import.meta.url), { type: 'module' });
   try {
     const result = await new Promise((resolve, reject) => {
@@ -166,45 +178,39 @@ export async function onnxDepth(bitmap, modelUrl = DEFAULT_ONNX_MODEL, onStatus 
         signal?.removeEventListener('abort', abort);
         reject(new Error(e.message || 'worker error'));
       };
-      worker.postMessage({ bitmap, modelUrl, S: 518 });
+      worker.postMessage({ bitmap, modelUrl, S: 518,prediction,tuning });
     });
-    onStatus('resampling depth grid…');
-    // resample the full-resolution disparity onto our shared grid size
-    const aspect = bitmap.height / bitmap.width;
-    const w = DEPTH_GRID_W;
-    const h = Math.max(32, Math.round(DEPTH_GRID_W * aspect));
-    const near = new Float32Array(w * h);
-    const ow = result.ow, oh = result.oh, disp = result.grid;
-    for (let y = 0; y < h; y++) {
-      const sy = Math.min(oh - 1, Math.floor(((y + 0.5) / h) * oh));
-      for (let x = 0; x < w; x++) {
-        const sx = Math.min(ow - 1, Math.floor(((x + 0.5) / w) * ow));
-        near[y * w + x] = disp[sy * ow + sx];
-      }
+    if(result.prediction){
+      let models=predictionCache.get(bitmap);
+      if(!models){models=new Map();predictionCache.set(bitmap,models);}models.set(modelUrl,result.prediction);
+      // Finish this small save before terminating; it must survive reopening.
+      await saveDepthResult(rawKey,result.prediction,PREDICTION_CACHE);
     }
-    normalizePercentile(near, 0.02, 0.98);
-    blurGrid(near, w, h, 1);
-    return { data: near, w, h };
+    onStatus('depth edges prepared');
+    return {data:result.data,w:result.w,h:result.h};
   } finally {
     worker.terminate();
   }
 }
 /** cache-aware entry point */
-export async function estimateDepth(bitmap, mode, modelUrl, onStatus = () => {}, signal) {
+export async function estimateDepth(bitmap, mode, modelUrl, onStatus = () => {}, signal,tuning={}) {
   if (mode === 'flat') return null;
   const selectedModel = modelUrl || depthModelUrl(mode);
-  const key = `${mode}:${selectedModel || ''}`;
+  const signature=depthTuningKey(mode,tuning);
+  const key = `${mode}:${selectedModel || ''}:${signature}`;
   let imageCache = resultCache.get(bitmap);
   if (imageCache?.has(key)) return imageCache.get(key);
   let result;
   if (selectedModel) {
     let key = null;
     try { key = await diskKey(bitmap, selectedModel); } catch {}
+    // Keep the default compatible with already-installed edge-v2 results.
+    if(key&&signature!=='1.00:1.00')key=key.replace('.bin',`-${signature.replace(':','-')}.bin`);
     result = await readDepthResult(key);
     if (signal?.aborted) throw new DOMException('Depth estimate cancelled', 'AbortError');
     if (result) onStatus('using saved depth…');
     else {
-      result = await onnxDepth(bitmap, selectedModel, onStatus, signal);
+      result = await onnxDepth(bitmap, selectedModel, onStatus, signal,tuning);
       if (!signal?.aborted) saveDepthResult(key, result);
     }
   } else {
@@ -215,5 +221,7 @@ export async function estimateDepth(bitmap, mode, modelUrl, onStatus = () => {},
     resultCache.set(bitmap, imageCache);
   }
   imageCache.set(key, result);
+  // Dragging controls must not retain an unlimited collection of large grids.
+  while(imageCache.size>6)imageCache.delete(imageCache.keys().next().value);
   return result;
 }

@@ -1,3 +1,4 @@
+import {prepareAIDepth} from './depth-refine.js';
 // Depth-Anything inference worker. Runs in its own process-like scope and is
 // terminated after each estimate so ONNX runtime memory is released instead
 // of lingering in the renderer.
@@ -24,8 +25,13 @@ async function fetchModelCached(url) {
 }
 
 self.onmessage = async (e) => {
-  const { bitmap, modelUrl, S } = e.data;
+  const { bitmap, modelUrl, S, prediction, tuning } = e.data;
   try {
+    // A tuning change needs only the cached prediction, never an ONNX runtime.
+    if(prediction){
+      const result=prepareAIDepth(prediction.data,prediction.w,prediction.h,bitmap.width,bitmap.height,512,tuning);
+      self.postMessage({ok:true,...result},[result.data.buffer]);return;
+    }
     const ort = await getOrt();
 
     // preprocess: NCHW, ImageNet-normalized
@@ -58,7 +64,8 @@ self.onmessage = async (e) => {
     grid.set(Float32Array.from(out.data));
     try { await session.release(); } catch {}
 
-    self.postMessage({ ok: true, grid, ow, oh }, [grid.buffer]);
+    const result=prepareAIDepth(grid,ow,oh,bitmap.width,bitmap.height,512,tuning);
+    self.postMessage({ok:true,...result,prediction:{data:grid,w:ow,h:oh}},[result.data.buffer,grid.buffer]);
   } catch (err) {
     self.postMessage({ ok: false, error: String((err && err.message) || err) });
   }

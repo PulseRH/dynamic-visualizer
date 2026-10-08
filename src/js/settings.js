@@ -2,6 +2,8 @@
 export const DEFAULTS = {
   imageUrl: null,          // explicit image (blob or app:// URL); null = try wallpaper, then procedural
   depthMode: 'auto',       // 'auto' | 'onnx' (small) | 'onnx-base' | 'flat'
+  depthSmoothing: 1,       // cached AI depth refinement; 1 retains the original filter
+  depthSpikeCleanup: 1,    // repair unsupported local outliers; never a per-frame filter
   depthScale: 0.35,
   cleanDepthEdges: true,  // collapse soft silhouette ramps so hidden background can show
   depthShape: 0,           // compress background spacing, expand foreground spacing

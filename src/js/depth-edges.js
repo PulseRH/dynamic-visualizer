@@ -17,10 +17,10 @@ export function cleanDepthEdges(depth, reconstruction=null, objects=null){
     const x=edge%w,y=Math.floor(edge/w),dx=edges.normalX[edge],dy=-edges.normalY[edge];
     if(Math.abs(dx)+Math.abs(dy)!==1)continue;
     const index=t=>{const xx=x+dx*t,yy=y+dy*t;return xx<0||xx>=w||yy<0||yy>=h ? -1:yy*w+xx;};
-    let lo=0,hi=0;
+    let lo=0,hi=0;const reach=Math.round(10*(Math.max(w,h)>256 ? w/256:1));
     // Stop at each plateau, an opposite slope, or another object edge.
-    while(lo>-10){const i=index(lo-1),j=index(lo);if(i<0||data[i]<data[j]-.025)break;lo--;if(data[i]>=front-.015)break;}
-    while(hi<10){const i=index(hi+1),j=index(hi);if(i<0||data[i]>data[j]+.025)break;hi++;if(data[i]<=back+.015)break;}
+    while(lo>-reach){const i=index(lo-1),j=index(lo);if(i<0||data[i]<data[j]-.025)break;lo--;if(data[i]>=front-.015)break;}
+    while(hi<reach){const i=index(hi+1),j=index(hi);if(i<0||data[i]>data[j]+.025)break;hi++;if(data[i]<=back+.015)break;}
     if(hi-lo<2)continue;
     let cut=lo;
     const middle=(front+back)*.5;

@@ -261,3 +261,19 @@ src/js/ui.js           settings panel wiring, toasts, drag & drop / paste
   the mode again.
 - Wayland wallpaper mode requires `wlr-layer-shell`; unsupported compositors
   return an error rather than opening an ordinary wallpaper window.
+
+AI depth preparation retains up to 512 pixels along the longest edge, smooths only
+similar depths, and repairs isolated depth spikes while retaining continuous thin
+ledges. Preparation runs in the short-lived depth worker and is cached per image.
+Point budgets are unchanged; depth and mask grids use more memory. Saved results
+from the older blurred pipeline are regenerated once.
+
+Depth tuning exposes Surface smoothing and Spike cleanup (0–200%, default 100%).
+They refine a saved raw AI prediction in a worker after adjustments settle; they
+add no animation-frame work and are included in visual presets. A first tuning
+change on an older saved wallpaper may need one AI depth run to populate the raw
+cache. AI object classifications are also reused while surfaces and thickness are
+recalculated. Hidden-background reconstruction refreshes when the resulting depth
+changes, so adjustment can briefly use extra resources. Completed grids and raw
+predictions have bounded caches. Cleanup preserves thin continuous ledges; it
+cannot reliably correct every long strip assigned to the wrong depth.

@@ -1,7 +1,7 @@
 // Geometry preparation only. AI colours are generated separately, once per image.
 // A bounded strip behind each significant near/far edge stores its background
 // depth and the foreground boundary that must move away before it is revealed.
-export const OCCLUSION_VERSION = 4;
+export const OCCLUSION_VERSION = 5;
 export const OCCLUSION_WIDTH = 12; // pixels of the 256-wide depth grid (~5%)
 export const OCCLUSION_MAX_WIDTH = 2.5;
 
@@ -10,14 +10,15 @@ export const occlusionPointLimit = value => Math.max(10000,Math.min(200000,Numbe
 
 export function prepareOcclusion(depth, width=1) {
   const {w,h,data}=depth, n=w*h;
-  const maxDistance=Math.round(OCCLUSION_WIDTH*occlusionWidth(width));
+  const maxDistance=Math.round(OCCLUSION_WIDTH*(Math.max(w,h)>256 ? w/256:1)*occlusionWidth(width));
   const owner=new Int32Array(n).fill(-1), distance=new Uint8Array(n).fill(255);
   const back=new Float32Array(n), front=new Float32Array(n);
   const normalX=new Int8Array(n),normalY=new Int8Array(n);
   const queue=new Int32Array(n);let head=0,tail=0;
   const directions=[[1,0],[-1,0],[0,1],[0,-1]];
   const jumpAt=(x,y,dx,dy)=>{
-    const xx=x+dx*2,yy=y+dy*2;
+    const radius=Math.max(1,Math.round(2*(Math.max(w,h)>256 ? w/256:1)));
+    const xx=x+dx*radius,yy=y+dy*radius;
     return xx<0||xx>=w||yy<0||yy>=h ? 0:data[y*w+x]-data[yy*w+xx];
   };
   // A softened silhouette is one transition, not several nested objects.
@@ -25,11 +26,11 @@ export function prepareOcclusion(depth, width=1) {
   // All of this runs once in the preparation worker, never in the render loop.
   const trace=(x,y,dx,dy,sign)=>{
     let value=data[y*w+x],endX=x,endY=y,quiet=0;
-    for(let step=1;step<=10;step++){
+    for(let step=1;step<=Math.round(10*(Math.max(w,h)>256 ? w/256:1));step++){
       const xx=x+dx*step,yy=y+dy*step;if(xx<0||xx>=w||yy<0||yy>=h)break;
       const next=data[yy*w+xx],change=(next-value)*sign;
       if(change<-.02)break; // another surface, rather than this silhouette
-      if(change<.003){if(++quiet===2)break;}else quiet=0;
+      if(change<.003){if(++quiet>=Math.round(2*(Math.max(w,h)>256 ? w/256:1)))break;}else quiet=0;
       if(change>0){value=next;endX=xx;endY=yy;}
     }
     return {value,x:endX,y:endY};
@@ -88,7 +89,7 @@ export function sampleOcclusion(reconstruction, aspect, count, options={}) {
   if(!reconstruction?.count)return null;
   const {w,h,owner,back,front,normalX,normalY,rgb,distance}=reconstruction;
   const limit=occlusionPointLimit(options.reconstructionPointLimit);
-  const maxDistance=Math.round(OCCLUSION_WIDTH*occlusionWidth(options.reconstructionWidth));
+  const maxDistance=Math.round(OCCLUSION_WIDTH*(Math.max(w,h)>256 ? w/256:1)*occlusionWidth(options.reconstructionWidth));
   // Preserve base-cloud density, rather than adding multiple rows to a seam.
   // The hard cap also bounds live vertex work and GPU memory independently.
   // 40k retains the original density and 20% cap. Raising the limit increases

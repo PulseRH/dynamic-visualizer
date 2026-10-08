@@ -47,7 +47,7 @@ globalThis.document = {
   },
 };
 
-const { estimateDepth, depthModelUrl, DEFAULT_ONNX_MODEL, BASE_ONNX_MODEL } = await load('../src/js/depth.js');
+const { estimateDepth, depthModelUrl, DEFAULT_ONNX_MODEL, BASE_ONNX_MODEL } = await import('../src/js/depth.js');
 assert.equal(depthModelUrl('onnx'), DEFAULT_ONNX_MODEL);
 assert.equal(depthModelUrl('onnx-base'), BASE_ONNX_MODEL);
 assert.notEqual(BASE_ONNX_MODEL, DEFAULT_ONNX_MODEL);

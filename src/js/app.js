@@ -10,6 +10,7 @@ import { AudioActivity } from './audio-activity.js';
 import { makeProceduralImage } from './sampler.js';
 import { buildCloud } from './cloud-builder.js';
 import { estimateDepth, depthModelUrl, identifyDepthImage, depthImageIdentity } from './depth.js';
+import {depthTuningKey} from './depth-refine.js';
 import { reconstructBackground } from './reconstruction.js';
 import {prepareObjectThickness} from './object-thickness.js';
 import { copySpectrumBands } from './spectrum-relay.js';
@@ -215,6 +216,8 @@ async function rebuildCloud() {
   activeReconstructionAbort=null;
   activeDepthAbort = null;
   const depthMode = get('depthMode');
+  const depthTuning={depthSmoothing:get('depthSmoothing'),depthSpikeCleanup:get('depthSpikeCleanup')};
+  const tuningKey=depthTuningKey(depthMode,depthTuning);
   const imageKey = currentImageUrl || 'procedural';
   const aiModelUrl = depthModelUrl(depthMode);
   const wantReconstruction=get('occludedBackground') && depthMode!=='flat';
@@ -224,16 +227,16 @@ async function rebuildCloud() {
   let depth = null;
   if (depthMode !== 'flat') {
     // wallpaper windows reuse the depth grid computed by the preview window
-    if (isWallpaperWindow && relayedDepth?.key === imageKey && relayedDepth.mode === depthMode) {
+    if (isWallpaperWindow && relayedDepth?.key === imageKey && relayedDepth.mode === depthMode && relayedDepth.tuningKey===tuningKey) {
       depth = { data: relayedDepth.data, w: relayedDepth.w, h: relayedDepth.h };
     } else if (isWallpaperWindow) {
       // relay hasn't arrived yet: show the fast heuristic now, upgrade when
       // the preview broadcasts the real grid
       awaitingRelay = true;
       bridge.requestDepthGrid(); // ask the preview to re-send its grid
-      // During an image change, retain the old scene until the final shared
-      // depth arrives. Avoid fading twice through a temporary heuristic cloud.
-      if(scene.points && currentImage!==displayedImage) return;
+      // Retain the old scene until matching shared depth arrives, including
+      // during tuning. Avoid a temporary heuristic cloud between adjustments.
+      if(scene.points) return;
       depth = await estimateDepth(currentImage, 'auto');
       if (token !== rebuildToken) return;
     } else {
@@ -244,7 +247,7 @@ async function rebuildCloud() {
         depth = await estimateDepth(currentImage, depthMode, aiModelUrl, (s) => {
           if(s==='running AI model…') ranDepthModel=true;
           if (aiModelUrl && s!=='using saved depth…' && token === rebuildToken) ui.toast(`Depth: ${s}`, '', 2500);
-        }, controller?.signal);
+        }, controller?.signal,depthTuning);
         if (token !== rebuildToken) return;
         if (ranDepthModel) ui.toast('AI depth ready', '', 2000);
       } catch (err) {
@@ -260,7 +263,7 @@ async function rebuildCloud() {
 
   if(wantReconstruction && depth){
     if(isWallpaperWindow){
-      if(relayedDepth?.key===imageKey && relayedDepth.mode===depthMode && relayedDepth.reconstructionReady){
+      if(relayedDepth?.key===imageKey && relayedDepth.mode===depthMode && relayedDepth.tuningKey===tuningKey && relayedDepth.reconstructionReady){
         reconstruction=relayedDepth.reconstruction;
       }else{
         awaitingRelay=true;bridge.requestDepthGrid();
@@ -287,7 +290,7 @@ async function rebuildCloud() {
   if(token!==rebuildToken)return;
   if(wantMasks && depth){
     if(isWallpaperWindow){
-      if(relayedDepth?.key===imageKey && relayedDepth.mode===depthMode && relayedDepth.objectMasksReady){
+      if(relayedDepth?.key===imageKey && relayedDepth.mode===depthMode && relayedDepth.tuningKey===tuningKey && relayedDepth.objectMasksReady){
         objectMasks=relayedDepth.objectMasks;
       }else{awaitingRelay=true;bridge.requestDepthGrid();return;}
     }else{
@@ -311,7 +314,7 @@ async function rebuildCloud() {
   // Relay the completed asset once, including to multiple monitors. Only
   // the preview prepares it; no model is loaded in wallpaper windows.
   if(depth && !isWallpaperWindow){
-    lastDepthGrid={key:imageKey,mode:depthMode,data:depth.data,w:depth.w,h:depth.h,
+    lastDepthGrid={key:imageKey,mode:depthMode,tuningKey,data:depth.data,w:depth.w,h:depth.h,
       reconstructionReady:!!wantReconstruction,reconstruction,objectMasksReady:!!wantMasks,objectMasks};
     bridge.sendDepthGrid(lastDepthGrid);
   }
@@ -377,10 +380,10 @@ if (isWallpaperWindow) {
   // window never loads the AI runtime
   bridge.onDepthGrid((payload) => {
     if (!payload || !payload.data) return;
-    relayedDepth = { key: payload.key, mode: payload.mode, data: new Float32Array(payload.data), w: payload.w, h: payload.h,
+    relayedDepth = { key: payload.key, mode: payload.mode,tuningKey:payload.tuningKey, data: new Float32Array(payload.data), w: payload.w, h: payload.h,
       reconstructionReady:payload.reconstructionReady,reconstruction:payload.reconstruction,
       objectMasksReady:payload.objectMasksReady,objectMasks:payload.objectMasks };
-    if (awaitingRelay && payload.mode === get('depthMode') && payload.key === (currentImageUrl || 'procedural')) {
+    if (awaitingRelay && payload.mode === get('depthMode') && payload.key === (currentImageUrl || 'procedural') && payload.tuningKey===depthTuningKey(get('depthMode'),{depthSmoothing:get('depthSmoothing'),depthSpikeCleanup:get('depthSpikeCleanup')})) {
       awaitingRelay = false;
       clearTimeout(countTimer);
       countTimer = setTimeout(() => rebuildCloud(), 120);
@@ -507,8 +510,9 @@ onChange((all, patch) => {
   else if((get('gapFill')>0 && ['bands','bandMap','bandDistribution','smartDepthBands','invertBands','gapFillPointLimit','gapFillDensity','gapFillRows','gapFillSpread','gapFillDepthLimit'].some(key=>key in patch))
     || (get('occludedBackground') && ['reconstructionPointLimit','reconstructionWidth','gapFillForegroundLimit'].some(key=>key in patch))
     || ['aiFillThickness','bandMap','cleanDepthEdges'].some(key=>key in patch)
+    || (depthModelUrl(get('depthMode')) && ['depthSmoothing','depthSpikeCleanup'].some(key=>key in patch))
     || ('surfaceCohesion' in patch && get('surfaceCohesion')>0 && !scene.surfaceMotion?.surfaceCount)){
-    clearTimeout(countTimer);countTimer=setTimeout(()=>rebuildCloud(),350);
+    clearTimeout(countTimer);countTimer=setTimeout(()=>rebuildCloud(),['depthSmoothing','depthSpikeCleanup'].some(key=>key in patch) ? 800:350);
   }
 });
 

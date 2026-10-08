@@ -9,9 +9,11 @@ async function model(){
   if(!response){response=await fetch(MODEL);if(!response.ok)throw Error(`Object model download failed (${response.status})`);try{await cache?.put(MODEL,response.clone());}catch{}}
   return response.arrayBuffer();
 }
-self.onmessage=async({data:{bitmap,depth,reconstruction}})=>{
+self.onmessage=async({data:{bitmap,depth,reconstruction,classifications}})=>{
   let session;
   try{
+    const reused=!!classifications;
+    if(!classifications){
     self.postMessage({status:'Loading object masks (4.5 MB first use)…'});
     const ort=await import('https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.wasm.min.mjs');ort.env.wasm.numThreads=1;
     session=await ort.InferenceSession.create(await model(),{executionProviders:['wasm'],graphOptimizationLevel:'all'});
@@ -23,10 +25,12 @@ self.onmessage=async({data:{bitmap,depth,reconstruction}})=>{
     const logits=output[session.outputNames[0]];
     const small=new OffscreenCanvas(depth.w,depth.h),smallCtx=small.getContext('2d',{willReadFrequently:true});smallCtx.drawImage(bitmap,0,0,depth.w,depth.h);
     const alpha=smallCtx.getImageData(0,0,depth.w,depth.h).data;
-    const {classes,confidence}=sceneClasses(logits.data,logits.dims,depth.w,depth.h,alpha);
+    classifications=sceneClasses(logits.data,logits.dims,depth.w,depth.h,alpha);
+    }else self.postMessage({status:'Updating surfaces from saved AI masks…'});
+    const {classes,confidence}=classifications;
     reconstruction ||= prepareOcclusion(depth,OCCLUSION_MAX_WIDTH);
     const objects=sceneObjects(classes,confidence,depth,reconstruction),field=estimateFillThickness(depth,reconstruction,objects);
-    self.postMessage({ok:true,result:{...field,labels:objects.labels,count:objects.count}},[field.thickness.buffer,field.edgeWeight.buffer,objects.labels.buffer]);
+    self.postMessage({ok:true,result:{...field,labels:objects.labels,count:objects.count},classifications:reused ? null:classifications},[field.thickness.buffer,field.edgeWeight.buffer,objects.labels.buffer,...(reused ? []:[classes.buffer,confidence.buffer])]);
   }catch(error){self.postMessage({ok:false,error:error.message});}
   finally{try{await session?.release();}catch{}bitmap?.close();}
 };
