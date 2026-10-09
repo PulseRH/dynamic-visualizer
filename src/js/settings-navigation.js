@@ -19,7 +19,7 @@ export class SettingsNavigation {
     const depth = byId('depthSeg').closest('section');
     const description = [...depth.querySelectorAll('p')].find(p => p.textContent.startsWith('AI fast uses'));
     if (description) byId('depthSeg').after(description);
-    group('Advanced depth', [byId('depthTuning'), row('depthShape'),
+    group('Advanced depth', [byId('depthTuning'), row('depthShape'), row('depthShapeMotion'),
       byId('occludedBackground').closest('details'), row('gapFill'), byId('gapFillRows').closest('details')]);
     group('Advanced colour & light', ['lightFollowMotion', 'preserveBoostColor', 'sizePulse',
       'vibrancyPulse', 'hueReaction', 'hueCycle', 'hueFocus'].map(row));
@@ -29,7 +29,7 @@ export class SettingsNavigation {
     group('Advanced motion & response', nodes.slice(nodes.indexOf(start)));
     this.dependencies = [
       [byId('depthTuning'), () => ['onnx', 'onnx-base'].includes(get('depthMode'))],
-      [row('depthShape'), () => get('depthScale') > 0],
+      [row('depthShapeMotion'), () => get('depthShape') > 0],
       [row('cleanDepthEdges'), () => get('depthMode') !== 'flat'],
       ...['reconstructionSideOcclusion', 'reconstructionPointLimit', 'reconstructionWidth', 'reconstructionBrightness']
         .map(id => [row(id), () => get('occludedBackground')]),

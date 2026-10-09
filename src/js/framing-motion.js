@@ -1,6 +1,11 @@
 import {surfaceAt} from './surface-motion.js';
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 export const shapedDepth=(near,amount=0)=>near+amount*near*(near-1);
+export function shapedMotionDepth(z, scale, amount=0) {
+  const reference=scale>0 ? scale:.33, t=z/reference, bounded=clamp(t,0,1);
+  const slope=t<0 ? Math.max(.05,1-amount):1+amount;
+  return (shapedDepth(bounded,amount)+(t-bounded)*slope)*reference;
+}
 export const curvatureDepth=(x,y,aspect,amount=0)=>amount*((x/aspect)**2+y*y);
 // A CPU copy of the positional vertex operations, evaluated on <=1024 samples
 // only. It uses the exact uploaded band levels and the shader's phase clocks.
@@ -48,6 +53,7 @@ export function animatedSample(x, y, near, rand, u, data, out, offset) {
   const depthRange = (0.35 + 0.65 * motionNear) * (1 - u.uEqualDepthMovement.value) + u.uEqualDepthMovement.value;
   const drive = amp * u.uIntensity.value * u.uDyn.value;
   let z = shapedDepth(near,u.uDepthShape?.value ?? 0) * u.uDepthScale.value + (direct + style / Math.max(1, total) * 0.65) * drive * u.uZMove.value * 0.11 * depthRange;
+  if(u.uDepthShapeMotion?.value>.5) z=shapedMotionDepth(near*u.uDepthScale.value+(direct+style/Math.max(1,total)*.65)*drive*u.uZMove.value*.11*depthRange,u.uDepthScale.value,u.uDepthShape?.value ?? 0);
   let px = x + Math.sin(xyTime * 3.1 + rand * 40) * drive * u.uXYMove.value * 0.006;
   let py = y + Math.cos(xyTime * 2.6 + rand * 30) * drive * u.uXYMove.value * 0.006;
   const layerDrive = amp * Math.min(u.uIntensity.value * u.uDyn.value, 1.5);

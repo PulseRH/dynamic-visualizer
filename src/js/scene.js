@@ -16,6 +16,7 @@ const VERT = /* glsl */ `
   uniform float uIntensity;
   uniform float uDepthScale;
   uniform float uDepthShape;
+  uniform float uDepthShapeMotion;
   uniform float uCurvature;
   uniform float uDepthShading;
   uniform float uDepthShadingMotion;
@@ -88,6 +89,15 @@ const VERT = /* glsl */ `
 
   float shapedDepth(float near) {
     return near + uDepthShape * near * (near - 1.0);
+  }
+  float shapedMotionDepth(float z) {
+    float reference = uDepthScale > 0.0 ? uDepthScale : 0.33;
+    float t = z / reference;
+    float bounded = clamp(t, 0.0, 1.0);
+    // Extend monotonically beyond the reference range; negative centered
+    // motion must never reverse direction or be clamped to a flat plane.
+    float slope = t < 0.0 ? max(0.05, 1.0-uDepthShape) : 1.0+uDepthShape;
+    return (shapedDepth(bounded) + (t-bounded)*slope)*reference;
   }
   float curvatureDepth(vec2 point) {
     vec2 uv = point / vec2(uAspect, 1.0);
@@ -173,6 +183,7 @@ const VERT = /* glsl */ `
     float disp = w * amp * uIntensity * uZMove * 0.11 * depthRange * uDyn;
 
     pos = vec3(pointPosition.xy, shapedDepth(near) * uDepthScale + disp);
+    if(uDepthShapeMotion>0.5) pos.z = shapedMotionDepth(near*uDepthScale+disp);
     pos.xy += vec2(sin(uXYTime * 3.1 + pointRand * 40.0), cos(uXYTime * 2.6 + pointRand * 30.0))
             * amp * 0.006 * uIntensity * uXYMove * uDyn;
     // Explicit layers have their own amounts; XY move controls the original
@@ -558,6 +569,7 @@ export class VisualScene {
       uIntensity: { value: 1 },
       uDepthScale: { value: 0.35 },
       uDepthShape: { value: 0 },
+      uDepthShapeMotion: { value: 0 },
       uCurvature: { value: 0 },
       uAspect: { value: 1 },
       uSize: { value: 2 },
@@ -881,6 +893,7 @@ export class VisualScene {
     this.uniforms.uIntensity.value = s.intensity;
     this.uniforms.uDepthScale.value = s.depthScale;
     this.uniforms.uDepthShape.value = Math.max(0,Math.min(1,s.depthShape ?? 0));
+    this.uniforms.uDepthShapeMotion.value = s.depthShapeMotion ? 1 : 0;
     this.uniforms.uDepthShading.value = Math.max(0,Math.min(1,s.depthShading || 0));
     this.uniforms.uDepthShadingMotion.value = s.depthShadingMotion ? 1 : 0;
     this.uniforms.uReconstructionBrightness.value=Math.max(0,Math.min(1,s.reconstructionBrightness ?? .7));

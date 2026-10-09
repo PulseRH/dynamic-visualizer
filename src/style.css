@@ -151,7 +151,7 @@ body.settings-only #closePanel { display: none; }
   border-top: 1px solid var(--border);
 }
 #panel h3 {
-  font-size: .94rem; font-weight: 700;
+  font-size: .72rem; font-weight: 700;
   text-transform: uppercase; letter-spacing: .12em;
   color: var(--text-dim);
   margin-bottom: 10px;
@@ -280,7 +280,7 @@ details.fold { margin-top: 12px; }
 details.fold summary {
   display: flex; align-items: center; gap: 5px; min-height: 30px;
   cursor: pointer; user-select: none;
-  font-size: .8rem; color: var(--text-dim);
+  font-size: .94rem; font-weight: 600; color: var(--text-dim);
   padding: 6px 2px;
   list-style: none;
 }
@@ -378,7 +378,7 @@ body.wallpaper #dropOverlay { display: none !important; }
 .settings-search { margin: 12px 0; }
 .settings-search input { width: 100%; padding: 9px 11px; color: var(--text); background: var(--bg-glass-2); border: 1px solid var(--border); border-radius: 8px; font: inherit; font-size: .85rem; }
 .settings-search input:focus { outline: 1px solid var(--accent); }
-.settings-tier > summary { font-size: .9rem; font-weight: 600; color: var(--text); }
+.settings-tier > summary { font-size: .94rem; font-weight: 600; color: var(--text); }
 .settings-tier > details { border-left: 1px solid var(--border); padding-left: 8px; }
 .resource-cost { display: inline-flex; align-items: center; justify-content: center; width: 13px; height: 13px; margin-left: 4px; flex: 0 0 13px; border: 1px solid currentColor; border-radius: 50%; color: #eaa34c; font-size: 10px; font-weight: 800; cursor: help; vertical-align: middle; }
 .resource-cost.high-cost { color: #f16b62; }

@@ -320,6 +320,7 @@ export class UI {
     $('preserveBoostColor').onchange = (e) => set({ preserveBoostColor: e.target.checked });
     $('lightFollowMotion').onchange = (e) => set({ lightFollowMotion: e.target.checked });
     $('depthShadingMotion').onchange = (e) => set({ depthShadingMotion: e.target.checked });
+    $('depthShapeMotion').onchange = (e) => set({ depthShapeMotion: e.target.checked });
     $('matchImageAccent').onchange = (e) => set({ matchImageAccent: e.target.checked });
     $('hideBackdrop').onchange = (e) => set({ hideBackdrop: e.target.checked });
     $('flybyExit').onchange = (e) => set({ flybyExit: e.target.checked });
@@ -665,6 +666,7 @@ export class UI {
     $('preserveBoostColor').checked = !!get('preserveBoostColor');
     $('lightFollowMotion').checked = !!get('lightFollowMotion');
     $('depthShadingMotion').checked = !!get('depthShadingMotion');
+    $('depthShapeMotion').checked = !!get('depthShapeMotion');
     $('hideBackdrop').checked = !!get('hideBackdrop');
     $('flybyExit').checked = !!get('flybyExit');
     $('cursorRipple').checked = !!get('cursorRipple');
