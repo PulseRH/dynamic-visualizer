@@ -10,6 +10,7 @@ import { backdropTextureSize } from './backdrop-size.js';
 import { DynamicFraming } from './dynamic-framing.js';
 import {depthBandLookup,DEPTH_BINS} from './depth-bands.js';
 import { MusicParallaxDirection } from './music-parallax.js';
+import { SideMask } from './side-mask.js';
 
 const VERT = /* glsl */ `
   uniform float uEnergy;
@@ -55,6 +56,7 @@ const VERT = /* glsl */ `
   attribute vec3 aColor;
   attribute float aRand;
   #ifdef OCCLUDED_BACKGROUND
+    #include <packing>
     attribute vec4 aOccluder;
     attribute vec2 aOutward;
     attribute vec2 aSideThickness;
@@ -63,6 +65,8 @@ const VERT = /* glsl */ `
     uniform float uReconstructionBrightness;
     uniform float uReconstructionSideOcclusion;
     uniform float uSideWallReferences;
+    uniform sampler2D uSideMask;
+    uniform float uSideMaskEnabled;
     uniform float uFillSpacing;
   #endif
   #ifdef GAP_FILL
@@ -86,6 +90,9 @@ const VERT = /* glsl */ `
 
   varying vec3 vColor;
   varying float vAmp;
+  #ifdef SIDE_MASK
+    varying float vMaskOpen;
+  #endif
 
   float shapedDepth(float near) {
     return near + uDepthShape * near * (near - 1.0);
@@ -396,6 +403,16 @@ const VERT = /* glsl */ `
         // by one original point spacing to avoid an additive bright outline.
         reveal=matchedSideReveal>=0.0 ? matchedSideReveal:smoothstep(spacing*.35,spacing*1.35,uncovered);
       }
+      // Another wall/slice can cover this point even when its own edge
+      // reference says it is exposed. Test all emitted walls in screen space.
+      if(reveal>0.0 && uSideMaskEnabled>.5 && uReconstructionSideOcclusion>.5 && hiddenClip.w>0.0){
+        vec2 uv=hiddenClip.xy/hiddenClip.w*.5+.5;
+        if(all(greaterThanEqual(uv,vec2(0.0))) && all(lessThanEqual(uv,vec2(1.0)))){
+          vec4 packed=texture2D(uSideMask,uv);
+          float depth=hiddenClip.z/hiddenClip.w*.5+.5;
+          if(any(greaterThan(packed,vec4(0.0))) && depth>unpackRGBAToDepth(packed)+.000002)reveal=0.0;
+        }
+      }
       gl_Position=hiddenClip;gl_PointSize=size;vAmp=amp;
       vColor*=reveal*uReconstructionBrightness;
       if(reveal==0.0){gl_Position=vec4(2.0,2.0,2.0,1.0);gl_PointSize=0.0;}
@@ -456,6 +473,11 @@ const VERT = /* glsl */ `
           float occupiedSpacing=extraSpacing*fillSpan;
           if (uFillOnlyOpen > 0.5) opening = smoothstep(0.15, 0.85, extraSpacing);
           if (uFillAdaptive > 0.0) {
+            #ifdef SIDE_MASK
+              // Density controls do not make a solid side transparent.
+              // Respect fully closed/inactive rows, then mask its surface.
+              if(uFillAdaptive>=.999)opening*=smoothstep(.5,2.5,extraSpacing);
+            #else
             // The pool is built once. Reveal a progressive, distributed subset
             // with one-point fades rather than drawing a full row in tiny gaps.
             // One initial coverage point, then a tunable ramp. Reserve the
@@ -471,10 +493,14 @@ const VERT = /* glsl */ `
             // Share the light over the available space rather than adding
             // full brightness from several points to a narrow seam.
             fillLight = mix(1.0, min(1.0, occupiedSpacing / max(visibleSamples, 1.0)), uFillAdaptive);
+            #endif
           }
         }
       }
       if(uFillThicknessManual>.5 && uFillThickness<=0.0)opening*=1.0-sidewallWeight;
+      #ifdef SIDE_MASK
+        vMaskOpen=sidewall && fillSpan>0.0 && opening>0.0 ? 1.0:0.0;
+      #endif
       gl_Position = projectionMatrix * (modelViewMatrix * vec4(pos, 1.0));
       gl_PointSize = mix(firstSize, lastSize, aFillT);
       vColor = mix(firstColour, lastColour, aFillT) * uFillBrightness * opening * fillLight;
@@ -635,6 +661,7 @@ export class VisualScene {
       uBands: { value: this.bandTex },
     };
 
+    this.sideMask = new SideMask(VERT,this.uniforms);
     this.material = new THREE.ShaderMaterial({
       uniforms: this.uniforms,
       vertexShader: VERT,
@@ -730,6 +757,7 @@ export class VisualScene {
 
   /** rebuild geometry from sampled cloud arrays */
   setCloud(cloud) {
+    this.sideMask.setGeometry(cloud.sideMask);
     this.depthHistogram=cloud.depthHistogram;
     this.surfaceMotion=cloud.surfaceMotion||null;
     this.surfaceTex.dispose();
@@ -813,6 +841,7 @@ export class VisualScene {
     if(this.points) this.points.visible=v>0;
     if(this.fillPoints) this.fillPoints.visible=v>0;
     if(this.reconstructionPoints)this.reconstructionPoints.visible=v>0 && this.reconstructionEnabled && this.uniforms.uReconstructionBrightness.value>0;
+    if(v<=0)this.sideMask.releaseTarget();
     if (this.backdrop && !this.backdrop.isDestroyed) {
       const base = this.hideBackdrop ? 0 : this.backdropBaseDim;
       const target = base + (1 - base) * (1 - v);
@@ -916,6 +945,7 @@ export class VisualScene {
     this.uniforms.uReconstructionSideOcclusion.value=s.reconstructionSideOcclusion && this.fillPoints && s.gapFill>0 && (s.gapFillPointLimit ?? 180000)>0 && s.gapFillBrightness>0 ? 1:0;
     this.reconstructionEnabled=!!s.occludedBackground;
     if(this.reconstructionPoints)this.reconstructionPoints.visible=this.uniforms.uVis.value>0 && this.reconstructionEnabled && this.uniforms.uReconstructionBrightness.value>0;
+    if(!this.reconstructionPoints?.visible || this.uniforms.uReconstructionSideOcclusion.value<.5)this.sideMask.releaseTarget();
     // Hold approximate light per bridge steady as rows/samples increase.
     this.uniforms.uFillBrightness.value = Math.max(0,Math.min(1,s.gapFillBrightness ?? .35))
       * Math.min(1,12/Math.max(3,s.gapFillDensity ?? 12))
@@ -1163,11 +1193,16 @@ export class VisualScene {
     }
 
     this._settleIdleCamera(hPx);
+    this.prepareSideMask();
     this.renderer.render(this.scene, this.camera);
     this.renderedIdleVis=this.idleVis ?? 1;
     this.renderedBackdropDim=this.backdropDim;
     this.drawCrossfade(performance.now());
     return dt;
+  }
+
+  prepareSideMask() {
+    this.sideMask.render(this.renderer,this.camera,!!(this.reconstructionPoints?.visible && this.uniforms.uReconstructionSideOcclusion.value>.5));
   }
 
   _settleIdleCamera(hPx) {
@@ -1194,6 +1229,7 @@ export class VisualScene {
     if (!this.points || !(seconds>0)) { this.endCrossfade(); return; }
     // Capture on the GPU immediately after drawing; the default framebuffer
     // is not preserved between frames. Include any unfinished prior blend.
+    this.prepareSideMask();
     this.renderer.render(this.scene,this.camera);
     this.drawCrossfade(performance.now());
     const size=this.renderer.getDrawingBufferSize(new THREE.Vector2());

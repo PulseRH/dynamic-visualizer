@@ -43,6 +43,12 @@ try{
   const worker=await buildCloud(image,depth,20000,1,{...mapping,cleanDepthEdges:true});
   for(const key of ['positions','fillThickness','fillForeground'])if(!worker[key].every((v,i)=>v===clean[key][i])||worker[key].length!==clean[key].length)throw Error('Worker mismatch: '+key);
   for(const key of ['sideFronts','sideRears','sideThickness'])if(!worker.reconstruction[key].every((v,i)=>v===clean.reconstruction[key][i]))throw Error('Worker lost side binding '+key);
+  if(!clean.sideMask?.indices.length || clean.sideMask.t.length%4 || clean.sideMask.indices.length!==clean.sideMask.t.length*1.5)throw Error('Missing sidewall mask quads');
+  for(const [key,array] of Object.entries(clean.sideMask)){
+    if(!array.every(Number.isFinite))throw Error('Invalid sidewall mask '+key);
+    if(worker.sideMask?.[key].length!==array.length || !worker.sideMask[key].every((v,i)=>v===array[i]))throw Error('Worker lost sidewall mask '+key);
+  }
+  if(withoutReconstruction.sideMask)throw Error('Mask generated without reconstruction');
   const restored=sampleImageToCloud(image,depth,20000,1,{...mapping,cleanDepthEdges:false});
   if(!restored.positions.every((v,i)=>v===raw.positions[i]))throw Error('Off failed to restore original depth');
   const scene=new VisualScene(document.querySelector('canvas'));scene.setCloud(clean);

@@ -51,6 +51,7 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
     thickness:new Float32Array(reconstruction.w*reconstruction.h*2),
     score:new Float32Array(reconstruction.w*reconstruction.h).fill(Infinity),
   }:null;
+  const sideMask=sideWalls ? {starts:[],ends:[],t:[],thickness:[],foreground:[],indices:[]}:null;
   const histogram=depthHistogram(depth);
   const lookup=mapping.smartDepthBands ? depthBandLookup(histogram,mapping.bands||64,mapping.bandDistribution||0):null;
   const bandAt=i=>{
@@ -217,6 +218,20 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
         }
         if(sideWalls && used>rowStart){
           const f=rowStart-baseCount,owner=reconstruction.owner[thicknessIndex];
+          if(fillThickness[f*2+1]>0 && Math.abs(positions[ai+2]-positions[bi+2])>.08){
+            // A narrow quad covers the actual emitted row's surface. It
+            // ends at the same live thickness fraction as the fill shader.
+            const halfWidth=Math.max(.25,fillRows>1 ? spread/(fillRows-1):1)*cell/H*.5;
+            const mx=-dy/length*halfWidth,my=dx/length*halfWidth,index=sideMask.t.length;
+            for(const [offset,t] of [[-1,0],[-1,1],[1,0],[1,1]]){
+              sideMask.starts.push(ax+mx*offset,ay+my*offset,positions[ai+2],rands[ai/3]);
+              sideMask.ends.push(bx+mx*offset,by+my*offset,positions[bi+2],rands[bi/3]);
+              sideMask.t.push(t);
+              sideMask.thickness.push(...fillThickness.subarray(f*2,f*2+2));
+              sideMask.foreground.push(...fillForeground.subarray(f*4,f*4+4));
+            }
+            sideMask.indices.push(index,index+1,index+2,index+2,index+1,index+3);
+          }
           if(owner>=0 && fillThickness[f*2+1]>0){
             const start=front===ai ? fillStarts:fillEnds,end=front===ai ? fillEnds:fillStarts;
             const ex=((owner%reconstruction.w+.5)/reconstruction.w-.5)*aspect;
@@ -244,6 +259,7 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
     cleanedEdgePixels:cleaned?.changed||0,
     surfaceMotion:mapping.surfaceCohesion===0 ? null:buildSurfaceMotion(depth,mapping.objectMasks),
     reconstruction: mapping.reconstruction ? sampleOcclusion(mapping.reconstruction,aspect,baseCount,{...mapping,sideWalls,fillSpacing:cell/H}):null,
+    sideMask:sideMask?.t.length ? Object.fromEntries(Object.entries(sideMask).map(([key,value])=>[key,key==='indices' ? new Uint32Array(value):new Float32Array(value)])):null,
     fillStarts:fillStarts?.subarray(0,(used-baseCount)*4),
     fillEnds:fillEnds?.subarray(0,(used-baseCount)*4),
     fillFractions:fillFractions?.subarray(0,used-baseCount),

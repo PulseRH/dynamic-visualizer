@@ -7,6 +7,7 @@ self.onmessage = ({ data: { bitmap, depth, count, gapFill, mapping } }) => {
     buffers.push(cloud.depthHistogram.buffer);
     if(cloud.surfaceMotion)buffers.push(cloud.surfaceMotion.data.buffer);
     if(cloud.reconstruction)for(const array of Object.values(cloud.reconstruction))buffers.push(array.buffer);
+    if(cloud.sideMask)for(const array of Object.values(cloud.sideMask))buffers.push(array.buffer);
     self.postMessage({ cloud }, buffers);
   } catch (error) {
     self.postMessage({ error: error.message });
