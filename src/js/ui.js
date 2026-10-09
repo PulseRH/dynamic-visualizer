@@ -247,7 +247,9 @@ export class UI {
     slider('gapFillDepthLimit','gapFillDepthLimit',v=>`${Math.round(v*100)}%`);
     slider('depthShading','depthShading',v=>`${Math.round(v*100)}%`);
     $('occludedBackground').onchange=e=>set({occludedBackground:e.target.checked});
+    $('reconstructionOcclusion').onchange=e=>set({reconstructionOcclusion:e.target.checked});
     $('reconstructionSideOcclusion').onchange=e=>set({reconstructionSideOcclusion:e.target.checked});
+    $('reconstructionSharedOcclusion').onchange=e=>set({reconstructionSharedOcclusion:e.target.checked});
     slider('reconstructionBrightness','reconstructionBrightness',v=>`${Math.round(v*100)}%`);
     slider('reconstructionPointLimit','reconstructionPointLimit',v=>`${Math.round(v/1000)}k`);
     slider('reconstructionWidth','reconstructionWidth',v=>`${v.toFixed(2)}×`);
@@ -470,7 +472,9 @@ export class UI {
       $(key).value=get(key);$(key).parentElement.querySelector('.val').textContent=fmt(get(key));
     }
     $('occludedBackground').checked=!!get('occludedBackground');
+    $('reconstructionOcclusion').checked=!!get('reconstructionOcclusion');
     $('reconstructionSideOcclusion').checked=!!get('reconstructionSideOcclusion');
+    $('reconstructionSharedOcclusion').checked=!!get('reconstructionSharedOcclusion');
     $('cleanDepthEdges').checked=!!get('cleanDepthEdges');
     $('cleanDepthEdges').disabled=get('depthMode')==='flat';
     for(const key of ['depthSmoothing','depthSpikeCleanup'])$(key).disabled=!['onnx','onnx-base'].includes(get('depthMode'));

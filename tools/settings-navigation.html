@@ -15,6 +15,11 @@ try {
  assert(document.querySelector('#gapFillRows').closest('details').classList.contains('dependency-hidden'),'Inactive fill visible');
  settings.gapFill=1;settings.occludedBackground=true;settings.gapFillManualLimit=true;nav.update();
  assert(!document.querySelector('#gapFillThickness').closest('label').classList.contains('dependency-hidden'),'Active thickness hidden');
+ const visible=id=>!document.getElementById(id).closest('label').classList.contains('dependency-hidden');
+ assert(visible('reconstructionOcclusion') && visible('reconstructionSideOcclusion') && !visible('reconstructionSharedOcclusion'),'Occlusion controls have incorrect dependencies');
+ settings.reconstructionSideOcclusion=true;nav.update();assert(visible('reconstructionSharedOcclusion'),'Shared wall toggle hidden with sides enabled');
+ settings.reconstructionOcclusion=false;nav.update();assert(visible('reconstructionOcclusion') && !visible('reconstructionSideOcclusion') && !visible('reconstructionSharedOcclusion'),'Master off did not hide dependent wall controls');
+ settings.reconstructionOcclusion=true;nav.update();
  nav.input.value='fill thickness';nav.update();
  assert(document.querySelector('#gapFillRows').closest('details').open,'Search did not open fine tuning');
  assert(document.querySelector('#gapFillRows').closest('.settings-tier').open,'Search did not open parent');

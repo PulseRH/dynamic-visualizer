@@ -26,6 +26,13 @@ try{
  if(!off.red||!off.blue||!off.green)throw Error('Fixture did not expose all three probes: '+JSON.stringify(off,(k,v)=>k==='pixels'?undefined:v));
  const on=draw({reconstructionSideOcclusion:true});
  if(on.red || !on.green || !on.blue)throw Error('Shared wall did not distinguish behind/outside/in-front points: '+JSON.stringify(on, (k,v)=>k==='pixels'?undefined:v));
+ const hiddenGeometry=scene.reconstructionPoints.geometry,wallGeometry=scene.sideMask.mesh.geometry;
+ const localOnly=draw({reconstructionSideOcclusion:true,reconstructionSharedOcclusion:false});
+ if(scene.sideMask.target || scene.uniforms.uReconstructionSideOcclusion.value!==1 || !localOnly.pixels.every((v,i)=>v===off.pixels[i]))throw Error('Shared off failed to restore local-only occlusion');
+ const noOcclusion=draw({reconstructionSideOcclusion:true,reconstructionOcclusion:false});
+ if(scene.sideMask.target || scene.uniforms.uReconstructionOcclusion.value || scene.uniforms.uReconstructionSideOcclusion.value || !scene.reconstructionPoints.visible || !noOcclusion.red || !noOcclusion.blue || !noOcclusion.green)throw Error('Master off failed to disable all occlusion while keeping reconstruction');
+ const enabledAgain=draw({reconstructionSideOcclusion:true});
+ if(!enabledAgain.pixels.every((v,i)=>v===on.pixels[i]) || scene.reconstructionPoints.geometry!==hiddenGeometry || scene.sideMask.mesh.geometry!==wallGeometry)throw Error('Re-enabling changed geometry or pixels');
  const target=scene.sideMask.target;if(!target)throw Error('Missing shared mask');
  // The blue probe is beyond the half-thickness rear edge, but inside a full wall.
  const full=draw({reconstructionSideOcclusion:true,gapFillThickness:1});
@@ -48,6 +55,6 @@ try{
  cameraTurn=Math.PI/4;
  const diagonal=draw({reconstructionSideOcclusion:true});if(diagonal.red||!diagonal.blue||!diagonal.green)throw Error('Diagonal shared wall leaked');
  scene.setCloud({...cloud,sideMask:null});draw({reconstructionSideOcclusion:true});if(scene.sideMask.target)throw Error('Removed walls retained the target');
- scene.renderer.dispose();document.querySelector('#result').textContent='PASS: neighbouring walls hide reconstructed points behind them; outside and in-front probes remain visible; diagonal walls, zero thickness, off restoration and target cleanup work.';
+ scene.renderer.dispose();document.querySelector('#result').textContent='PASS: neighbouring wall occlusion, independent shared/master toggles, cached geometry and pixel restoration, thickness limits, front/outside probes, diagonal walls and render-target cleanup.';
 }catch(error){document.querySelector('#result').textContent='FAIL: '+error.stack;}
 </script>

@@ -11,6 +11,11 @@ try{
  const gl=scene.renderer.getContext(),pixels=new Uint8Array(256*256*4);
  const draw=(x,depth,y=0)=>{scene.camera.position.set(x,y,2);scene.camera.lookAt(0,0,0);scene.camera.updateMatrixWorld();scene.uniforms.uDepthScale.value=depth;scene.renderer.render(scene.scene,scene.camera);gl.readPixels(0,0,256,256,gl.RGBA,gl.UNSIGNED_BYTE,pixels);let light=0;for(let i=0;i<pixels.length;i+=4)light+=pixels[i];if(gl.getError())throw Error('WebGL error');return light;};
  if(draw(0,0)!==0)throw Error('Hidden layer changed the flat/resting image');
+ const cachedGeometry=scene.reconstructionPoints.geometry;
+ scene.uniforms.uReconstructionOcclusion.value=0;
+ if(draw(0,0)<=0 || !scene.reconstructionPoints.visible || scene.reconstructionPoints.geometry!==cachedGeometry)throw Error('Master off did not reveal cached background behind the foreground');
+ scene.uniforms.uReconstructionOcclusion.value=1;
+ if(draw(0,0)!==0)throw Error('Master on did not restore foreground occlusion');
  const exposed=draw(.8,.8);if(exposed<=0)throw Error('Parallax failed to reveal background');
  if(draw(-.8,.8)!==0)throw Error('Wrong side of foreground revealed');
  const geometry=scene.reconstructionPoints.geometry;

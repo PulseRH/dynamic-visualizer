@@ -63,6 +63,7 @@ const VERT = /* glsl */ `
     attribute vec4 aSideFront;
     attribute vec4 aSideRear;
     uniform float uReconstructionBrightness;
+    uniform float uReconstructionOcclusion;
     uniform float uReconstructionSideOcclusion;
     uniform float uSideWallReferences;
     uniform sampler2D uSideMask;
@@ -323,94 +324,97 @@ const VERT = /* glsl */ `
     #ifdef OCCLUDED_BACKGROUND
       vec3 pos, edge, unusedColour;float amp,size,unusedAmp,unusedSize;
       evaluatePoint(position,aRand,aColor,pos,vColor,amp,size);
-      evaluatePoint(aOccluder.xyz,aOccluder.w,aColor,edge,unusedColour,unusedAmp,unusedSize);
       vec4 hiddenClip=projectionMatrix*(modelViewMatrix*vec4(pos,1.0));
-      vec4 edgeClip=projectionMatrix*(modelViewMatrix*vec4(edge,1.0));
-      vec4 axisClip=projectionMatrix*(modelViewMatrix*vec4(edge+vec3(aOutward*uFillSpacing,0.0),1.0));
-      float reveal=0.0;
-      if(min(min(hiddenClip.w,edgeClip.w),axisClip.w)>0.0){
-        vec2 metric=vec2(projectionMatrix[1][1]/projectionMatrix[0][0],1.0);
-        vec2 normal=(axisClip.xy/axisClip.w-edgeClip.xy/edgeClip.w)*metric;
-        float spacing=max(length(normal),0.000001);
-        float uncovered=dot((hiddenClip.xy/hiddenClip.w-edgeClip.xy/edgeClip.w)*metric,normal/spacing);
-        float matchedSideReveal=-1.0;
-        if(uReconstructionSideOcclusion>.5 && (uSideWallReferences<.5 || aSideRear.w>-1.5)){
-          vec3 rear, unusedRearColour;float unusedRearAmp,unusedRearSize;
-          // The same foreground boundary at this hidden slice's depth gives
-          // the rear direction under camera, audio and spatial-layer motion.
-          vec3 wallEdge=edge;
-          bool matchedWall=uSideWallReferences>.5 && aSideRear.w>=0.0;
-          vec3 restXY=vec3(0.0);
-          vec2 wallOffset=vec2(0.0);
-          if(matchedWall){
-            // Evaluate at this cell's position along the contour, rather
-            // than projecting a jittered row at a different height. Retain
-            // its normal offset, depth pair and random phases.
-            vec2 tangent=vec2(-aOutward.y,aOutward.x);
-            wallOffset=tangent*dot(aOccluder.xy-aSideFront.xy,tangent);
-            evaluatePoint(vec3(aSideFront.xy+wallOffset,aSideFront.z),aSideFront.w,aColor,wallEdge,unusedRearColour,unusedRearAmp,unusedRearSize);
-            evaluatePoint(vec3(aSideRear.xy+wallOffset,aSideRear.z),aSideRear.w,aColor,rear,unusedRearColour,unusedRearAmp,unusedRearSize);
-            restXY=vec3(aSideRear.xy-aSideFront.xy,0.0);
-          }else{
-            evaluatePoint(vec3(aOccluder.xy,position.z),aRand,aColor,rear,unusedRearColour,unusedRearAmp,unusedRearSize);
-          }
-          vec3 separation=rear-wallEdge-restXY;
-          float sideVisibility=1.0;
-          if(uFillOnlyOpen>.5 || uFillAdaptive>0.0){
-            vec3 restDelta=vec3(0.0,0.0,(shapedDepth(position.z)-shapedDepth(aOccluder.z))*uDepthScale);
-            if(matchedWall)restDelta=vec3(restXY.xy,
-              (shapedDepth(aSideRear.z)-shapedDepth(aSideFront.z))*uDepthScale
-              +curvatureDepth(aSideRear.xy+wallOffset)-curvatureDepth(aSideFront.xy+wallOffset));
-            vec3 centre=(wallEdge+rear)*.5;
-            vec4 wallFrontClip=projectionMatrix*(modelViewMatrix*vec4(wallEdge,1.0));
-            vec4 fullRearClip=projectionMatrix*(modelViewMatrix*vec4(rear,1.0));
-            vec4 restFront=projectionMatrix*(modelViewMatrix*vec4(centre-restDelta*.5,1.0));
-            vec4 restRear=projectionMatrix*(modelViewMatrix*vec4(centre+restDelta*.5,1.0));
-            if(min(min(fullRearClip.w,restFront.w),min(restRear.w,wallFrontClip.w))<=0.0)sideVisibility=0.0;
-            else{
-              float currentGap=length((fullRearClip.xy/fullRearClip.w-wallFrontClip.xy/wallFrontClip.w)*metric);
-              float restingGap=length((restRear.xy/restRear.w-restFront.xy/restFront.w)*metric);
-              float centreW=(restFront.w+restRear.w)*.5;
-              float referenceGap=max(restingGap,projectionMatrix[1][1]*uFillSpacing/centreW);
-              float extraSpacing=max(0.0,(currentGap-restingGap)/max(referenceGap,.000001));
-              if(uFillOnlyOpen>.5)sideVisibility=smoothstep(.15,.85,extraSpacing);
-              sideVisibility*=mix(1.0,smoothstep(.5,2.5,extraSpacing),uFillAdaptive);
+      float reveal=1.0;
+      if(uReconstructionOcclusion>.5){
+        evaluatePoint(aOccluder.xyz,aOccluder.w,aColor,edge,unusedColour,unusedAmp,unusedSize);
+        vec4 edgeClip=projectionMatrix*(modelViewMatrix*vec4(edge,1.0));
+        vec4 axisClip=projectionMatrix*(modelViewMatrix*vec4(edge+vec3(aOutward*uFillSpacing,0.0),1.0));
+        reveal=0.0;
+        if(min(min(hiddenClip.w,edgeClip.w),axisClip.w)>0.0){
+          vec2 metric=vec2(projectionMatrix[1][1]/projectionMatrix[0][0],1.0);
+          vec2 normal=(axisClip.xy/axisClip.w-edgeClip.xy/edgeClip.w)*metric;
+          float spacing=max(length(normal),0.000001);
+          float uncovered=dot((hiddenClip.xy/hiddenClip.w-edgeClip.xy/edgeClip.w)*metric,normal/spacing);
+          float matchedSideReveal=-1.0;
+          if(uReconstructionSideOcclusion>.5 && (uSideWallReferences<.5 || aSideRear.w>-1.5)){
+            vec3 rear, unusedRearColour;float unusedRearAmp,unusedRearSize;
+            // The same foreground boundary at this hidden slice's depth gives
+            // the rear direction under camera, audio and spatial-layer motion.
+            vec3 wallEdge=edge;
+            bool matchedWall=uSideWallReferences>.5 && aSideRear.w>=0.0;
+            vec3 restXY=vec3(0.0);
+            vec2 wallOffset=vec2(0.0);
+            if(matchedWall){
+              // Evaluate at this cell's position along the contour, rather
+              // than projecting a jittered row at a different height. Retain
+              // its normal offset, depth pair and random phases.
+              vec2 tangent=vec2(-aOutward.y,aOutward.x);
+              wallOffset=tangent*dot(aOccluder.xy-aSideFront.xy,tangent);
+              evaluatePoint(vec3(aSideFront.xy+wallOffset,aSideFront.z),aSideFront.w,aColor,wallEdge,unusedRearColour,unusedRearAmp,unusedRearSize);
+              evaluatePoint(vec3(aSideRear.xy+wallOffset,aSideRear.z),aSideRear.w,aColor,rear,unusedRearColour,unusedRearAmp,unusedRearSize);
+              restXY=vec3(aSideRear.xy-aSideFront.xy,0.0);
+            }else{
+              evaluatePoint(vec3(aOccluder.xy,position.z),aRand,aColor,rear,unusedRearColour,unusedRearAmp,unusedRearSize);
+            }
+            vec3 separation=rear-wallEdge-restXY;
+            float sideVisibility=1.0;
+            if(uFillOnlyOpen>.5 || uFillAdaptive>0.0){
+              vec3 restDelta=vec3(0.0,0.0,(shapedDepth(position.z)-shapedDepth(aOccluder.z))*uDepthScale);
+              if(matchedWall)restDelta=vec3(restXY.xy,
+                (shapedDepth(aSideRear.z)-shapedDepth(aSideFront.z))*uDepthScale
+                +curvatureDepth(aSideRear.xy+wallOffset)-curvatureDepth(aSideFront.xy+wallOffset));
+              vec3 centre=(wallEdge+rear)*.5;
+              vec4 wallFrontClip=projectionMatrix*(modelViewMatrix*vec4(wallEdge,1.0));
+              vec4 fullRearClip=projectionMatrix*(modelViewMatrix*vec4(rear,1.0));
+              vec4 restFront=projectionMatrix*(modelViewMatrix*vec4(centre-restDelta*.5,1.0));
+              vec4 restRear=projectionMatrix*(modelViewMatrix*vec4(centre+restDelta*.5,1.0));
+              if(min(min(fullRearClip.w,restFront.w),min(restRear.w,wallFrontClip.w))<=0.0)sideVisibility=0.0;
+              else{
+                float currentGap=length((fullRearClip.xy/fullRearClip.w-wallFrontClip.xy/wallFrontClip.w)*metric);
+                float restingGap=length((restRear.xy/restRear.w-restFront.xy/restFront.w)*metric);
+                float centreW=(restFront.w+restRear.w)*.5;
+                float referenceGap=max(restingGap,projectionMatrix[1][1]*uFillSpacing/centreW);
+                float extraSpacing=max(0.0,(currentGap-restingGap)/max(referenceGap,.000001));
+                if(uFillOnlyOpen>.5)sideVisibility=smoothstep(.15,.85,extraSpacing);
+                sideVisibility*=mix(1.0,smoothstep(.5,2.5,extraSpacing),uFillAdaptive);
+              }
+            }
+            float fraction=limitedFillSpan(length(separation),aSideThickness);
+            vec4 rearClip=projectionMatrix*(modelViewMatrix*vec4(wallEdge+restXY+separation*fraction,1.0));
+            if(rearClip.w>0.0){
+              // A wall pointing inward must never uncover the original front.
+              float sideExtent=max(0.0,dot((rearClip.xy/rearClip.w-edgeClip.xy/edgeClip.w)*metric,normal/spacing));
+              if(matchedWall && fraction>0.0){
+                // The old depth-map silhouette may be slightly in front of
+                // the actual emitted face. Use the real wall's local front
+                // and end for its whole mask, rather than multiplying by that
+                // older silhouette (which over-cuts short walls).
+                vec4 frontClip=projectionMatrix*(modelViewMatrix*vec4(wallEdge,1.0));
+                vec4 wallAxis=projectionMatrix*(modelViewMatrix*vec4(wallEdge+vec3(aOutward*uFillSpacing,0.0),1.0));
+                if(min(frontClip.w,wallAxis.w)>0.0){
+                  vec2 wallNormal=(wallAxis.xy/wallAxis.w-frontClip.xy/frontClip.w)*metric;
+                  float wallSpacing=max(length(wallNormal),.000001);
+                  float wallExtent=dot((rearClip.xy/rearClip.w-frontClip.xy/frontClip.w)*metric,wallNormal/wallSpacing);
+                  float wallUncovered=dot((hiddenClip.xy/hiddenClip.w-frontClip.xy/frontClip.w)*metric,wallNormal/wallSpacing);
+                  if(wallExtent>0.0)matchedSideReveal=mix(smoothstep(spacing*.35,spacing*1.35,uncovered),smoothstep(-wallSpacing*.5,wallSpacing*.5,wallUncovered-wallExtent),sideVisibility);
+                }
+              }else if(!matchedWall)uncovered-=sideExtent*sideVisibility;
             }
           }
-          float fraction=limitedFillSpan(length(separation),aSideThickness);
-          vec4 rearClip=projectionMatrix*(modelViewMatrix*vec4(wallEdge+restXY+separation*fraction,1.0));
-          if(rearClip.w>0.0){
-            // A wall pointing inward must never uncover the original front.
-            float sideExtent=max(0.0,dot((rearClip.xy/rearClip.w-edgeClip.xy/edgeClip.w)*metric,normal/spacing));
-            if(matchedWall && fraction>0.0){
-              // The old depth-map silhouette may be slightly in front of
-              // the actual emitted face. Use the real wall's local front
-              // and end for its whole mask, rather than multiplying by that
-              // older silhouette (which over-cuts short walls).
-              vec4 frontClip=projectionMatrix*(modelViewMatrix*vec4(wallEdge,1.0));
-              vec4 wallAxis=projectionMatrix*(modelViewMatrix*vec4(wallEdge+vec3(aOutward*uFillSpacing,0.0),1.0));
-              if(min(frontClip.w,wallAxis.w)>0.0){
-                vec2 wallNormal=(wallAxis.xy/wallAxis.w-frontClip.xy/frontClip.w)*metric;
-                float wallSpacing=max(length(wallNormal),.000001);
-                float wallExtent=dot((rearClip.xy/rearClip.w-frontClip.xy/frontClip.w)*metric,wallNormal/wallSpacing);
-                float wallUncovered=dot((hiddenClip.xy/hiddenClip.w-frontClip.xy/frontClip.w)*metric,wallNormal/wallSpacing);
-                if(wallExtent>0.0)matchedSideReveal=mix(smoothstep(spacing*.35,spacing*1.35,uncovered),smoothstep(-wallSpacing*.5,wallSpacing*.5,wallUncovered-wallExtent),sideVisibility);
-              }
-            }else if(!matchedWall)uncovered-=sideExtent*sideVisibility;
-          }
+          // Behind the object remains invisible. Feather the exposed boundary
+          // by one original point spacing to avoid an additive bright outline.
+          reveal=matchedSideReveal>=0.0 ? matchedSideReveal:smoothstep(spacing*.35,spacing*1.35,uncovered);
         }
-        // Behind the object remains invisible. Feather the exposed boundary
-        // by one original point spacing to avoid an additive bright outline.
-        reveal=matchedSideReveal>=0.0 ? matchedSideReveal:smoothstep(spacing*.35,spacing*1.35,uncovered);
-      }
-      // Another wall/slice can cover this point even when its own edge
-      // reference says it is exposed. Test all emitted walls in screen space.
-      if(reveal>0.0 && uSideMaskEnabled>.5 && uReconstructionSideOcclusion>.5 && hiddenClip.w>0.0){
-        vec2 uv=hiddenClip.xy/hiddenClip.w*.5+.5;
-        if(all(greaterThanEqual(uv,vec2(0.0))) && all(lessThanEqual(uv,vec2(1.0)))){
-          vec4 packed=texture2D(uSideMask,uv);
-          float depth=hiddenClip.z/hiddenClip.w*.5+.5;
-          if(any(greaterThan(packed,vec4(0.0))) && depth>unpackRGBAToDepth(packed)+.000002)reveal=0.0;
+        // Another wall/slice can cover this point even when its own edge
+        // reference says it is exposed. Test all emitted walls in screen space.
+        if(reveal>0.0 && uSideMaskEnabled>.5 && uReconstructionSideOcclusion>.5 && hiddenClip.w>0.0){
+          vec2 uv=hiddenClip.xy/hiddenClip.w*.5+.5;
+          if(all(greaterThanEqual(uv,vec2(0.0))) && all(lessThanEqual(uv,vec2(1.0)))){
+            vec4 packed=texture2D(uSideMask,uv);
+            float depth=hiddenClip.z/hiddenClip.w*.5+.5;
+            if(any(greaterThan(packed,vec4(0.0))) && depth>unpackRGBAToDepth(packed)+.000002)reveal=0.0;
+          }
         }
       }
       gl_Position=hiddenClip;gl_PointSize=size;vAmp=amp;
@@ -623,6 +627,7 @@ export class VisualScene {
       uDepthShadingMotion: { value: 0 },
       uFillBrightness: { value: .35 },
       uReconstructionBrightness: { value: .7 },
+      uReconstructionOcclusion: { value: 1 },
       uReconstructionSideOcclusion: { value: 0 },
       uSideWallReferences: { value: 0 },
       uFillOnlyOpen: { value: 1 },
@@ -942,10 +947,12 @@ export class VisualScene {
     this.uniforms.uDepthShading.value = Math.max(0,Math.min(1,s.depthShading || 0));
     this.uniforms.uDepthShadingMotion.value = s.depthShadingMotion ? 1 : 0;
     this.uniforms.uReconstructionBrightness.value=Math.max(0,Math.min(1,s.reconstructionBrightness ?? .7));
-    this.uniforms.uReconstructionSideOcclusion.value=s.reconstructionSideOcclusion && this.fillPoints && s.gapFill>0 && (s.gapFillPointLimit ?? 180000)>0 && s.gapFillBrightness>0 ? 1:0;
+    this.uniforms.uReconstructionOcclusion.value=s.reconstructionOcclusion===false ? 0:1;
+    this.sharedSideOcclusion=s.reconstructionSharedOcclusion!==false;
+    this.uniforms.uReconstructionSideOcclusion.value=this.uniforms.uReconstructionOcclusion.value && s.reconstructionSideOcclusion && this.fillPoints && s.gapFill>0 && (s.gapFillPointLimit ?? 180000)>0 && s.gapFillBrightness>0 ? 1:0;
     this.reconstructionEnabled=!!s.occludedBackground;
     if(this.reconstructionPoints)this.reconstructionPoints.visible=this.uniforms.uVis.value>0 && this.reconstructionEnabled && this.uniforms.uReconstructionBrightness.value>0;
-    if(!this.reconstructionPoints?.visible || this.uniforms.uReconstructionSideOcclusion.value<.5)this.sideMask.releaseTarget();
+    if(!this.reconstructionPoints?.visible || this.uniforms.uReconstructionSideOcclusion.value<.5 || !this.sharedSideOcclusion)this.sideMask.releaseTarget();
     // Hold approximate light per bridge steady as rows/samples increase.
     this.uniforms.uFillBrightness.value = Math.max(0,Math.min(1,s.gapFillBrightness ?? .35))
       * Math.min(1,12/Math.max(3,s.gapFillDensity ?? 12))
@@ -1202,7 +1209,7 @@ export class VisualScene {
   }
 
   prepareSideMask() {
-    this.sideMask.render(this.renderer,this.camera,!!(this.reconstructionPoints?.visible && this.uniforms.uReconstructionSideOcclusion.value>.5));
+    this.sideMask.render(this.renderer,this.camera,!!(this.reconstructionPoints?.visible && this.uniforms.uReconstructionSideOcclusion.value>.5 && this.sharedSideOcclusion));
   }
 
   _settleIdleCamera(hPx) {

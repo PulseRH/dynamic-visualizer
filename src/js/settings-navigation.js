@@ -31,8 +31,10 @@ export class SettingsNavigation {
       [byId('depthTuning'), () => ['onnx', 'onnx-base'].includes(get('depthMode'))],
       [row('depthShapeMotion'), () => get('depthShape') > 0],
       [row('cleanDepthEdges'), () => get('depthMode') !== 'flat'],
-      ...['reconstructionSideOcclusion', 'reconstructionPointLimit', 'reconstructionWidth', 'reconstructionBrightness']
+      ...['reconstructionOcclusion', 'reconstructionPointLimit', 'reconstructionWidth', 'reconstructionBrightness']
         .map(id => [row(id), () => get('occludedBackground')]),
+      [row('reconstructionSideOcclusion'), () => get('occludedBackground') && get('reconstructionOcclusion') && get('gapFill')>0],
+      [row('reconstructionSharedOcclusion'), () => get('occludedBackground') && get('reconstructionOcclusion') && get('reconstructionSideOcclusion') && get('gapFill')>0],
       [byId('gapFillRows').closest('details'), () => get('gapFill') > 0],
       [row('gapFillThickness'), () => get('occludedBackground') && get('gapFillManualLimit')],
       [row('gapFillThicknessBias'), () => get('occludedBackground') && get('gapFillForegroundLimit')],
@@ -55,6 +57,7 @@ export class SettingsNavigation {
     badge('depthSeg', 'Preparation cost: AI depth downloads a model and uses extra memory while preparing an image. No continuous AI processing.');
     badge('aiFillThickness', 'Preparation cost: object masks run when needed for an image; results are cached.');
     badge('occludedBackground', 'Preparation and rendering cost: reconstructs hidden layers, then draws extra points while enabled.');
+    badge('reconstructionSharedOcclusion', 'Rendering cost: one reduced-resolution GPU wall mask. Its render target is released when off or idle. No extra AI inference.');
     badge('pointCount', 'Rendering cost: more points use more GPU work and memory. Red indicates 300k or more.', () => get('pointCount') >= 300000);
     badge('gapFillPointLimit', 'Rendering cost: extra fill points use GPU work and memory. Red indicates 300k or more.', () => get('gapFillPointLimit') >= 300000);
     badge('reconstructionPointLimit', 'Rendering cost: hidden points add GPU work and memory. Red indicates 150k or more.', () => get('reconstructionPointLimit') >= 150000);
