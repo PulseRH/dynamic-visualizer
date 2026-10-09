@@ -55,20 +55,20 @@ const VERT = /* glsl */ `
 
   attribute vec3 aColor;
   attribute float aRand;
+  #include <packing>
+  uniform float uReconstructionOcclusion;
+  uniform float uReconstructionSideOcclusion;
+  uniform sampler2D uSideMask;
+  uniform float uSideMaskEnabled;
+  uniform float uFillSpacing;
   #ifdef OCCLUDED_BACKGROUND
-    #include <packing>
     attribute vec4 aOccluder;
     attribute vec2 aOutward;
     attribute vec2 aSideThickness;
     attribute vec4 aSideFront;
     attribute vec4 aSideRear;
     uniform float uReconstructionBrightness;
-    uniform float uReconstructionOcclusion;
-    uniform float uReconstructionSideOcclusion;
     uniform float uSideWallReferences;
-    uniform sampler2D uSideMask;
-    uniform float uSideMaskEnabled;
-    uniform float uFillSpacing;
   #endif
   #ifdef GAP_FILL
     attribute vec4 aFillStart;
@@ -78,7 +78,6 @@ const VERT = /* glsl */ `
     attribute vec4 aFillForeground;
     uniform float uFillBrightness;
     uniform float uFillSamples;
-    uniform float uFillSpacing;
   #endif
   #if defined(GAP_FILL) || defined(OCCLUDED_BACKGROUND)
     uniform float uFillOnlyOpen;
@@ -93,6 +92,23 @@ const VERT = /* glsl */ `
   varying float vAmp;
   #ifdef SIDE_MASK
     varying float vMaskOpen;
+  #endif
+
+  #ifndef SIDE_MASK
+  bool wallOccludes(vec4 pointClip) {
+    bool covered=false;
+    if(uSideMaskEnabled>.5 && uReconstructionOcclusion>.5 && uReconstructionSideOcclusion>.5 && pointClip.w>0.0){
+      vec2 uv=pointClip.xy/pointClip.w*.5+.5;
+      if(all(greaterThanEqual(uv,vec2(0.0))) && all(lessThanEqual(uv,vec2(1.0)))){
+        vec4 packed=texture2D(uSideMask,uv);
+        float depth=pointClip.z/pointClip.w*.5+.5;
+        // Keep coplanar wall points despite depth interpolation/rounding.
+        float bias=max(.000002,uFillSpacing*abs(projectionMatrix[3][2])/(2.0*pointClip.w*pointClip.w));
+        covered=any(greaterThan(packed,vec4(0.0))) && depth>unpackRGBAToDepth(packed)+bias;
+      }
+    }
+    return covered;
+  }
   #endif
 
   float shapedDepth(float near) {
@@ -408,14 +424,7 @@ const VERT = /* glsl */ `
         }
         // Another wall/slice can cover this point even when its own edge
         // reference says it is exposed. Test all emitted walls in screen space.
-        if(reveal>0.0 && uSideMaskEnabled>.5 && uReconstructionSideOcclusion>.5 && hiddenClip.w>0.0){
-          vec2 uv=hiddenClip.xy/hiddenClip.w*.5+.5;
-          if(all(greaterThanEqual(uv,vec2(0.0))) && all(lessThanEqual(uv,vec2(1.0)))){
-            vec4 packed=texture2D(uSideMask,uv);
-            float depth=hiddenClip.z/hiddenClip.w*.5+.5;
-            if(any(greaterThan(packed,vec4(0.0))) && depth>unpackRGBAToDepth(packed)+.000002)reveal=0.0;
-          }
-        }
+        if(reveal>0.0 && wallOccludes(hiddenClip))reveal=0.0;
       }
       gl_Position=hiddenClip;gl_PointSize=size;vAmp=amp;
       vColor*=reveal*uReconstructionBrightness;
@@ -514,6 +523,11 @@ const VERT = /* glsl */ `
         vAmp=mix(vAmp,foregroundFirst ? firstAmp:lastAmp,sidewallWeight);
         gl_PointSize=mix(gl_PointSize,foregroundFirst ? firstSize:lastSize,sidewallWeight);
       }
+      #ifndef SIDE_MASK
+        // The foreground shell supplies the opaque wall. Mask only ordinary
+        // background seam fill, never remove the wall filling itself.
+        if(!sidewall && wallOccludes(gl_Position))opening=0.0;
+      #endif
       if (opening == 0.0) {
         gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
         gl_PointSize = 0.0;
@@ -523,6 +537,9 @@ const VERT = /* glsl */ `
       evaluatePoint(position, aRand, aColor, pos, vColor, amp, size);
       gl_Position = projectionMatrix * (modelViewMatrix * vec4(pos, 1.0));
       gl_PointSize = size; vAmp = amp;
+      // Ordinary far-layer particles can also show through an additive wall,
+      // even when the reconstructed layer is completely hidden.
+      if(wallOccludes(gl_Position)){gl_Position=vec4(2.0,2.0,2.0,1.0);gl_PointSize=0.0;}
     #endif
   }
 
@@ -952,7 +969,7 @@ export class VisualScene {
     this.uniforms.uReconstructionSideOcclusion.value=this.uniforms.uReconstructionOcclusion.value && s.reconstructionSideOcclusion && this.fillPoints && s.gapFill>0 && (s.gapFillPointLimit ?? 180000)>0 && s.gapFillBrightness>0 ? 1:0;
     this.reconstructionEnabled=!!s.occludedBackground;
     if(this.reconstructionPoints)this.reconstructionPoints.visible=this.uniforms.uVis.value>0 && this.reconstructionEnabled && this.uniforms.uReconstructionBrightness.value>0;
-    if(!this.reconstructionPoints?.visible || this.uniforms.uReconstructionSideOcclusion.value<.5 || !this.sharedSideOcclusion)this.sideMask.releaseTarget();
+    if(!this.points?.visible || !this.reconstructionEnabled || this.uniforms.uReconstructionSideOcclusion.value<.5 || !this.sharedSideOcclusion)this.sideMask.releaseTarget();
     // Hold approximate light per bridge steady as rows/samples increase.
     this.uniforms.uFillBrightness.value = Math.max(0,Math.min(1,s.gapFillBrightness ?? .35))
       * Math.min(1,12/Math.max(3,s.gapFillDensity ?? 12))
@@ -1209,7 +1226,7 @@ export class VisualScene {
   }
 
   prepareSideMask() {
-    this.sideMask.render(this.renderer,this.camera,!!(this.reconstructionPoints?.visible && this.uniforms.uReconstructionSideOcclusion.value>.5 && this.sharedSideOcclusion));
+    this.sideMask.render(this.renderer,this.camera,!!(this.points?.visible && this.reconstructionEnabled && this.uniforms.uReconstructionSideOcclusion.value>.5 && this.sharedSideOcclusion));
   }
 
   _settleIdleCamera(hPx) {

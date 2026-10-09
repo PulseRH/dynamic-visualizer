@@ -5,6 +5,8 @@ import {DEFAULTS} from '../src/js/settings.js';
 import * as THREE from '../src/vendor/three.module.js';
 try{
  const scene=new VisualScene(document.querySelector('canvas'));
+ const shaderErrors=[];
+ scene.renderer.debug.onShaderError=(gl,p,v,f)=>shaderErrors.push({lost:gl.isContextLost(),program:gl.getProgramInfoLog(p),vertex:gl.getShaderInfoLog(v),fragment:gl.getShaderInfoLog(f),vertexCompiled:gl.getShaderParameter(v,gl.COMPILE_STATUS),fragmentCompiled:gl.getShaderParameter(f,gl.COMPILE_STATUS)});
  scene.renderer.setSize(320,320,false);scene.camera.aspect=1;scene.camera.position.set(0,0,2);scene.camera.lookAt(0,0,0);scene.camera.updateProjectionMatrix();scene.camera.updateMatrixWorld();
  const sideMask={starts:[],ends:[],t:[0,1,0,1],thickness:[],foreground:[],indices:[0,1,2,2,1,3]};
  for(const y of [-.12,-.12,.12,.12]){sideMask.starts.push(0,y,.8,.5);sideMask.ends.push(0,y,.2,.5);sideMask.thickness.push(.3,1);sideMask.foreground.push(1,0,0,2);}
@@ -19,7 +21,7 @@ try{
   scene.applySettings({...settings,...patch});scene.uniforms.uSize.value=8;scene.uniforms.uCamZ.value=2;scene.uniforms.uFillSpacing.value=.008;
   scene.camera.position.set(.4*Math.cos(cameraTurn),.4*Math.sin(cameraTurn),2);scene.camera.lookAt(0,0,.5);scene.camera.updateProjectionMatrix();scene.camera.updateMatrixWorld();
   scene.prepareSideMask();scene.renderer.render(scene.scene,scene.camera);gl.readPixels(0,0,320,320,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
-  if(gl.getError())throw Error('WebGL error');
+  const error=gl.getError();if(error)throw Error('WebGL error '+error+' '+JSON.stringify(shaderErrors));
   let red=0,green=0,blue=0;for(let i=0;i<pixels.length;i+=4){red+=pixels[i];green+=pixels[i+1];blue+=pixels[i+2];}return {red,green,blue,pixels:pixels.slice()};
  };
  const off=draw({reconstructionSideOcclusion:false});
@@ -48,6 +50,30 @@ try{
  if(scene.sideMask.target || !restored.pixels.every((v,i)=>v===off.pixels[i]))throw Error('Off did not release target or restore pixels');
  draw({reconstructionSideOcclusion:true});scene.setIdleVis(0);if(scene.sideMask.target)throw Error('Idle retained mask target');scene.setIdleVis(1);
  draw({reconstructionSideOcclusion:true});scene.applySettings({...settings,reconstructionSideOcclusion:false});if(scene.sideMask.target)throw Error('Off retained target until next render');
+ // Original background points must use the mask too, even with the hidden
+ // layer dimmed to zero. These were the remaining see-through wall patches.
+ const baseCloud={...cloud,count:4,baseCount:3,
+  positions:new Float32Array([...cloud.reconstruction.positions,0,0,.5]),
+  colors:new Float32Array([...cloud.reconstruction.colors,0,0,0]),rands:new Float32Array(4).fill(.5)};
+ scene.setCloud(baseCloud);
+ const originalOff=draw({reconstructionSideOcclusion:false,reconstructionBrightness:0});
+ const originalOn=draw({reconstructionSideOcclusion:true,reconstructionBrightness:0});
+ if(!originalOff.red || originalOn.red || !originalOn.green || !originalOn.blue || !scene.sideMask.target || scene.reconstructionPoints.visible)throw Error('Original background still leaked with hidden brightness zero');
+ const originalSharedOff=draw({reconstructionSideOcclusion:true,reconstructionSharedOcclusion:false,reconstructionBrightness:0});
+ const originalMasterOff=draw({reconstructionSideOcclusion:true,reconstructionOcclusion:false,reconstructionBrightness:0});
+ if(!originalSharedOff.pixels.every((v,i)=>v===originalOff.pixels[i]) || !originalMasterOff.pixels.every((v,i)=>v===originalOff.pixels[i]))throw Error('Off failed to restore original particles');
+ baseCloud.positions.set([0,0,.65],0);scene.setCloud(baseCloud);
+ if(!draw({reconstructionSideOcclusion:true,reconstructionBrightness:0}).red)throw Error('Wall mask removed its coplanar foreground points');
+ const fillCloud={...cloud,count:4,baseCount:1,positions:new Float32Array(12),colors:new Float32Array([0,0,0,...cloud.reconstruction.colors]),rands:new Float32Array(4).fill(.5),fillStarts:new Float32Array(12),fillEnds:new Float32Array(12),fillFractions:new Float32Array(3).fill(.5),fillThickness:new Float32Array(6),fillForeground:new Float32Array(12)};
+ for(let i=0;i<3;i++){fillCloud.fillStarts.set([...cloud.reconstruction.positions.subarray(i*3,i*3+3),.5],i*4);fillCloud.fillEnds.set(fillCloud.fillStarts.subarray(i*4,i*4+4),i*4);}
+ scene.setCloud(fillCloud);
+ const seamsOff=draw({reconstructionSideOcclusion:false,reconstructionBrightness:0}),seamsOn=draw({reconstructionSideOcclusion:true,reconstructionBrightness:0});
+ if(!seamsOff.red || seamsOn.red || !seamsOn.green || !seamsOn.blue)throw Error('Background gap-fill particles still leaked through a sidewall');
+ fillCloud.fillThickness.set([.3,1]);fillCloud.fillForeground.set([1,0,0,2]);scene.setCloud(fillCloud);
+ if(!draw({reconstructionSideOcclusion:true,reconstructionBrightness:0}).red)throw Error('Shared mask removed foreground shell fill');
+ fillCloud.fillStarts.set([0,0,.8,.5]);fillCloud.fillEnds.set([0,0,.2,.5]);fillCloud.fillThickness.set([.3,1]);fillCloud.fillForeground.set([1,0,0,2]);scene.setCloud(fillCloud);
+ if(!draw({reconstructionSideOcclusion:true,reconstructionBrightness:0}).red)throw Error('Wall mask hid the wall filling itself');
+ scene.setCloud(cloud);
  // Rotate the wall and all probes together: the shared mask has no preferred axis.
  const rotate=(array,stride)=>{for(let i=0;i<array.length;i+=stride){const x=array[i],y=array[i+1];array[i]=(x-y)*Math.SQRT1_2;array[i+1]=(x+y)*Math.SQRT1_2;}};
  for(const data of [sideMask.starts,sideMask.ends])rotate(data,4);
@@ -55,6 +81,6 @@ try{
  cameraTurn=Math.PI/4;
  const diagonal=draw({reconstructionSideOcclusion:true});if(diagonal.red||!diagonal.blue||!diagonal.green)throw Error('Diagonal shared wall leaked');
  scene.setCloud({...cloud,sideMask:null});draw({reconstructionSideOcclusion:true});if(scene.sideMask.target)throw Error('Removed walls retained the target');
- scene.renderer.dispose();document.querySelector('#result').textContent='PASS: neighbouring wall occlusion, independent shared/master toggles, cached geometry and pixel restoration, thickness limits, front/outside probes, diagonal walls and render-target cleanup.';
+ scene.renderer.dispose();document.querySelector('#result').textContent='PASS: shared walls occlude original, seam-fill and reconstructed background; coplanar wall points survive; hidden brightness zero, independent toggles, thickness limits, cached geometry, diagonal walls and target cleanup.';
 }catch(error){document.querySelector('#result').textContent='FAIL: '+error.stack;}
 </script>
