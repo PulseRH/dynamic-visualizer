@@ -2,7 +2,7 @@
 <script type="module">
 import {VisualScene} from '../src/js/scene.js';
 import {Vector3} from '../src/vendor/three.module.js';
-import {getAll} from '../src/js/settings.js';
+import {DEFAULTS} from '../src/js/settings.js';
 try {
   const scene=new VisualScene(document.querySelector('canvas'));
   scene.renderer.setSize(256,256,false);scene.camera.aspect=1;
@@ -12,7 +12,7 @@ try {
     reconstruction:{positions:new Float32Array([-.1,0,.15,-.01,.08,.15]),colors:new Float32Array([1,0,0,0,0,1]),rands:new Float32Array([.5,.5]),
       occluders:new Float32Array([0,0,.9,.5,0,.08,.9,.5]),normals:new Float32Array([1,0,1,0]),sideThickness:new Float32Array([.4,1,.4,1])}};
   scene.setCloud(cloud);
-  const settings={...getAll(),bands:4,bandMap:'depth',bandDistribution:0,invertBands:false,smartDepthBands:false,equalDepthMovement:false,occludedBackground:true,reconstructionBrightness:1,reconstructionSideOcclusion:false,gapFill:1,gapFillPointLimit:1000,gapFillBrightness:1,gapFillOnlyOpen:false,gapFillAdaptive:0,gapFillForegroundLimit:true,gapFillManualLimit:false,gapFillThicknessBias:1,depthScale:.8,depthShape:0,audioCurvature:0,dollyZoom:0,boost:0,sizePulse:0,intensity:0,depthShading:0,hueReaction:0,hueCycle:0,motionWave:0,motionRipple:0,motionBands:0,motionDrift:0,motionSwirl:0,motionBreathe:0,motionSweep:0,motionBandShake:0};
+  const settings={...DEFAULTS,bands:4,bandMap:'depth',bandDistribution:0,invertBands:false,smartDepthBands:false,equalDepthMovement:false,occludedBackground:true,reconstructionBrightness:1,reconstructionSideOcclusion:false,gapFill:1,gapFillPointLimit:1000,gapFillBrightness:1,gapFillOnlyOpen:false,gapFillAdaptive:0,gapFillForegroundLimit:true,gapFillManualLimit:false,gapFillThicknessBias:1,depthScale:.8,depthShape:0,audioCurvature:0,dollyZoom:0,boost:0,sizePulse:0,intensity:0,depthShading:0,hueReaction:0,hueCycle:0,motionWave:0,motionRipple:0,motionBands:0,motionDrift:0,motionSwirl:0,motionBreathe:0,motionSweep:0,motionBandShake:0};
   const gl=scene.renderer.getContext(),pixels=new Uint8Array(256*256*4);
   const draw=(patch={},x=.8,y=0)=>{
     scene.applySettings({...settings,...patch});scene.uniforms.uSize.value=4;scene.uniforms.uFillSpacing.value=.008;
@@ -81,6 +81,43 @@ try {
   scene.setCloud(boundCloud);
   const matched=draw({reconstructionSideOcclusion:true,gapFillForegroundLimit:false,gapFillManualLimit:true,gapFillThickness:.61});
   if(matched.red || !matched.blue)throw Error('Actual side boundary over/under-occludes its inside/outside probes: '+JSON.stringify([matched.red,matched.blue]));
+  // A shared wall row at y=0 must mask the LOCAL boundary higher/lower
+  // along the contour, even with a camera tilted on both axes.
+  let legacyFailures=0;
+  for(const y of [-.3,.3]){
+    scene.camera.position.set(.8,.7,2);scene.camera.lookAt(0,0,0);scene.camera.updateMatrixWorld();
+    const end=new Vector3(.01,y,.72+(.12-.72)*.61).project(scene.camera);
+    const localProbe=offset=>{
+      const a=new Vector3(end.x+offset/128,end.y,-1).unproject(scene.camera),b=new Vector3(end.x+offset/128,end.y,1).unproject(scene.camera);
+      const t=(.12-a.z)/(b.z-a.z);return [a.x+(b.x-a.x)*t,a.y+(b.y-a.y)*t,.15];
+    };
+    boundCloud.reconstruction.positions.set([...localProbe(-3),...localProbe(3)]);
+    boundCloud.reconstruction.occluders.set([0,y,.97,.1,0,y,.97,.9]);scene.setCloud(boundCloud);
+    const material=scene.reconstructionMaterial,shader=material.vertexShader;
+    material.vertexShader=shader.replace('wallOffset=tangent*dot(aOccluder.xy-aSideFront.xy,tangent);','wallOffset=vec2(0.0);');material.needsUpdate=true;
+    const old=draw({reconstructionSideOcclusion:true,gapFillForegroundLimit:false,gapFillManualLimit:true,gapFillThickness:.61},.8,.7);
+    if(old.red || !old.blue)legacyFailures++;
+    material.vertexShader=shader;material.needsUpdate=true;
+    const local=draw({reconstructionSideOcclusion:true,gapFillForegroundLimit:false,gapFillManualLimit:true,gapFillThickness:.61},.8,.7);
+    if(local.red || !local.blue)throw Error('Local contour boundary over/under-occludes: '+JSON.stringify([y,local.red,local.blue]));
+  }
+  if(!legacyFailures)throw Error("Local-boundary fixture did not reproduce the original error");
+  // A coarse original silhouette can lie beyond a very short actual wall.
+  // It must not continue masking background past that wall's real end.
+  for(const thickness of [.03,.1]){
+    scene.camera.position.set(.8,0,2);scene.camera.lookAt(0,0,0);scene.camera.updateMatrixWorld();
+    const end=new Vector3(.01,0,.72+(.12-.72)*thickness).project(scene.camera);
+    const thinProbe=offset=>{
+      const a=new Vector3(end.x+offset/128,end.y,-1).unproject(scene.camera),b=new Vector3(end.x+offset/128,end.y,1).unproject(scene.camera);
+      const t=(.12-a.z)/(b.z-a.z);return [a.x+(b.x-a.x)*t,a.y+(b.y-a.y)*t,.15];
+    };
+    boundCloud.reconstruction.positions.set([...thinProbe(-2),...thinProbe(2)]);
+    boundCloud.reconstruction.occluders.set([0,0,.8,.1,0,0,.8,.9]);scene.setCloud(boundCloud);
+    const thin=draw({reconstructionSideOcclusion:true,gapFillForegroundLimit:false,gapFillManualLimit:true,gapFillThickness:thickness});
+    if(thin.red || !thin.blue)throw Error('Old silhouette over-cut the short actual wall: '+JSON.stringify([thickness,thin.red,thin.blue]));
+  }
+  boundCloud.reconstruction.positions.set([...probe(-5),...probe(5)]);
+  boundCloud.reconstruction.occluders.set([0,0,.97,.1,0,0,.97,.9]);
   boundCloud.reconstruction.sideRears[3]=-2;boundCloud.reconstruction.sideRears[7]=-2;scene.setCloud(boundCloud);
   const unmatched=draw({reconstructionSideOcclusion:true,gapFillForegroundLimit:false,gapFillManualLimit:true,gapFillThickness:.61});
   if(!unmatched.red||!unmatched.blue)throw Error('A missing sidewall occluded the reconstructed background');

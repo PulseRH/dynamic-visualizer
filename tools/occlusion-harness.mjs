@@ -2,12 +2,24 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 const occlusionSource=await readFile(new URL('../src/js/occlusion.js',import.meta.url),'utf8');
 const occlusionUrl=`data:text/javascript;base64,${Buffer.from(occlusionSource).toString('base64')}`;
-const {prepareOcclusion,sampleOcclusion}=await import(occlusionUrl);
+const {prepareOcclusion,sampleOcclusion,resolveSideWalls}=await import(occlusionUrl);
 const thicknessSource=await readFile(new URL('../src/js/fill-thickness.js',import.meta.url),'utf8');
 const {estimateFillThickness}=await import(`data:text/javascript;base64,${Buffer.from(thicknessSource).toString('base64')}`);
 const depth={w:128,h:96,data:new Float32Array(128*96).fill(.15)};
 for(let y=20;y<76;y++)for(let x=40;x<88;x++)depth.data[y*128+x]=.9;
 const prepared=prepareOcclusion(depth);assert.ok(prepared.count>1000);
+// Sparse rows should cover a small channel in the same contour, without
+// borrowing across a corner or a different foreground/background pair.
+const size=25,edgeField={w:5,h:5,owner:new Int32Array(size).fill(-1),front:new Float32Array(size).fill(.9),back:new Float32Array(size).fill(.15),normalX:new Int8Array(size).fill(1),normalY:new Int8Array(size)};
+for(const edge of [7,12,17,13])edgeField.owner[edge]=edge;
+const walls={front:new Float32Array(size*4),rear:new Float32Array(size*4),score:new Float32Array(size).fill(Infinity)};
+walls.score[7]=0;walls.front.set([0,.2,.9,.5],28);walls.rear.set([.01,.2,.15,.5],28);
+let bindings=resolveSideWalls(edgeField,walls,1,.2);
+assert.equal(bindings[12],7,'A one-cell channel did not bind to its nearby wall');
+edgeField.normalX[13]=0;edgeField.normalY[13]=1;edgeField.front[17]=.6;
+bindings=resolveSideWalls(edgeField,walls,1,.2);
+assert.equal(bindings[13],-1,'Borrowed a wall around a corner');
+assert.equal(bindings[17],-1,'Borrowed a wall from another depth pair');
 for(let i=0;i<prepared.owner.length;i++)if(prepared.owner[i]>=0){
   assert.ok(depth.data[i]>.8,'hidden geometry must be inside the foreground');
   assert.ok(prepared.back[i]<.2,'hidden geometry must receive background depth');

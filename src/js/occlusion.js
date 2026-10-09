@@ -85,9 +85,39 @@ export function prepareOcclusion(depth, width=1) {
   return {w,h,owner,back,front,normalX,normalY,distance,mask,count};
 }
 
+// Resolve sparse wall rows onto the same nearby silhouette. An owner ID is
+// an image-grid cell, not a continuous surface: requiring an exact ID leaves
+// one-cell channels. Never borrow across corners or distinct depth pairs.
+export function resolveSideWalls(reconstruction, walls, aspect, spacing) {
+  const {w,h,owner,front,back,normalX,normalY}=reconstruction;
+  const result=new Int32Array(w*h).fill(-1);
+  const radius=Math.max(1,Math.min(4,Math.ceil(spacing*h*1.5)));
+  const maxDistance2=((radius+1.5)*Math.max(aspect/w,1/h))**2;
+  for(let edge=0;edge<owner.length;edge++){
+    if(owner[edge]!==edge)continue;
+    const x=edge%w,y=Math.floor(edge/w);
+    const ex=((x+.5+normalX[edge]*.5)/w-.5)*aspect;
+    const ey=.5-(y+.5-normalY[edge]*.5)/h;
+    let score=Infinity;
+    for(let dy=-radius;dy<=radius;dy++)for(let dx=-radius;dx<=radius;dx++){
+      if(dx*dx+dy*dy>radius*radius || x+dx<0 || x+dx>=w || y+dy<0 || y+dy>=h)continue;
+      const candidate=(y+dy)*w+x+dx;
+      if(!Number.isFinite(walls.score[candidate]) || normalX[candidate]!==normalX[edge] || normalY[candidate]!==normalY[edge])continue;
+      const j=candidate*4;
+      if(Math.abs(walls.front[j+2]-front[edge])>.045 || Math.abs(walls.rear[j+2]-back[edge])>.045)continue;
+      const distance=(walls.front[j]-ex)**2+(walls.front[j+1]-ey)**2;
+      if(distance>maxDistance2)continue;
+      if(distance<score){score=distance;result[edge]=candidate;}
+    }
+  }
+  return result;
+}
+
 export function sampleOcclusion(reconstruction, aspect, count, options={}) {
   if(!reconstruction?.count)return null;
   const {w,h,owner,back,front,normalX,normalY,rgb,distance}=reconstruction;
+  const walls=options.sideWalls;
+  const bindings=walls ? resolveSideWalls(reconstruction,walls,aspect,options.fillSpacing || 1/h):null;
   const limit=occlusionPointLimit(options.reconstructionPointLimit);
   const maxDistance=Math.round(OCCLUSION_WIDTH*(Math.max(w,h)>256 ? w/256:1)*occlusionWidth(options.reconstructionWidth));
   // Preserve base-cloud density, rather than adding multiple rows to a seam.
@@ -126,13 +156,13 @@ export function sampleOcclusion(reconstruction, aspect, count, options={}) {
     // does. No AI, image processing or geometry rebuild on toggle/bias changes.
     sideThickness[j*2]=reconstruction.thickness?.[edge] || 0;
     sideThickness[j*2+1]=reconstruction.edgeWeight?.[edge] || 0;
-    const walls=options.sideWalls;
     // -2: sampler checked but no actual wall; -1: legacy/unbound geometry.
     sideRears[j*4+3]=walls ? -2:-1;
-    if(walls && Number.isFinite(walls.score[edge])){
-      sideFronts.set(walls.front.subarray(edge*4,edge*4+4),j*4);
-      sideRears.set(walls.rear.subarray(edge*4,edge*4+4),j*4);
-      sideThickness.set(walls.thickness.subarray(edge*2,edge*2+2),j*2);
+    const bound=bindings?.[edge] ?? -1;
+    if(bound>=0){
+      sideFronts.set(walls.front.subarray(bound*4,bound*4+4),j*4);
+      sideRears.set(walls.rear.subarray(bound*4,bound*4+4),j*4);
+      sideThickness.set(walls.thickness.subarray(bound*2,bound*2+2),j*2);
     }
   }
   return {positions,colors,rands,occluders,normals,sideThickness,sideFronts,sideRears};

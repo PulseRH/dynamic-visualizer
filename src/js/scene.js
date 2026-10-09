@@ -326,7 +326,7 @@ const VERT = /* glsl */ `
         vec2 normal=(axisClip.xy/axisClip.w-edgeClip.xy/edgeClip.w)*metric;
         float spacing=max(length(normal),0.000001);
         float uncovered=dot((hiddenClip.xy/hiddenClip.w-edgeClip.xy/edgeClip.w)*metric,normal/spacing);
-        float matchedSideReveal=1.0;
+        float matchedSideReveal=-1.0;
         if(uReconstructionSideOcclusion>.5 && (uSideWallReferences<.5 || aSideRear.w>-1.5)){
           vec3 rear, unusedRearColour;float unusedRearAmp,unusedRearSize;
           // The same foreground boundary at this hidden slice's depth gives
@@ -334,9 +334,15 @@ const VERT = /* glsl */ `
           vec3 wallEdge=edge;
           bool matchedWall=uSideWallReferences>.5 && aSideRear.w>=0.0;
           vec3 restXY=vec3(0.0);
+          vec2 wallOffset=vec2(0.0);
           if(matchedWall){
-            evaluatePoint(aSideFront.xyz,aSideFront.w,aColor,wallEdge,unusedRearColour,unusedRearAmp,unusedRearSize);
-            evaluatePoint(aSideRear.xyz,aSideRear.w,aColor,rear,unusedRearColour,unusedRearAmp,unusedRearSize);
+            // Evaluate at this cell's position along the contour, rather
+            // than projecting a jittered row at a different height. Retain
+            // its normal offset, depth pair and random phases.
+            vec2 tangent=vec2(-aOutward.y,aOutward.x);
+            wallOffset=tangent*dot(aOccluder.xy-aSideFront.xy,tangent);
+            evaluatePoint(vec3(aSideFront.xy+wallOffset,aSideFront.z),aSideFront.w,aColor,wallEdge,unusedRearColour,unusedRearAmp,unusedRearSize);
+            evaluatePoint(vec3(aSideRear.xy+wallOffset,aSideRear.z),aSideRear.w,aColor,rear,unusedRearColour,unusedRearAmp,unusedRearSize);
             restXY=vec3(aSideRear.xy-aSideFront.xy,0.0);
           }else{
             evaluatePoint(vec3(aOccluder.xy,position.z),aRand,aColor,rear,unusedRearColour,unusedRearAmp,unusedRearSize);
@@ -347,7 +353,7 @@ const VERT = /* glsl */ `
             vec3 restDelta=vec3(0.0,0.0,(shapedDepth(position.z)-shapedDepth(aOccluder.z))*uDepthScale);
             if(matchedWall)restDelta=vec3(restXY.xy,
               (shapedDepth(aSideRear.z)-shapedDepth(aSideFront.z))*uDepthScale
-              +curvatureDepth(aSideRear.xy)-curvatureDepth(aSideFront.xy));
+              +curvatureDepth(aSideRear.xy+wallOffset)-curvatureDepth(aSideFront.xy+wallOffset));
             vec3 centre=(wallEdge+rear)*.5;
             vec4 wallFrontClip=projectionMatrix*(modelViewMatrix*vec4(wallEdge,1.0));
             vec4 fullRearClip=projectionMatrix*(modelViewMatrix*vec4(rear,1.0));
@@ -369,16 +375,26 @@ const VERT = /* glsl */ `
           if(rearClip.w>0.0){
             // A wall pointing inward must never uncover the original front.
             float sideExtent=max(0.0,dot((rearClip.xy/rearClip.w-edgeClip.xy/edgeClip.w)*metric,normal/spacing));
-            if(matchedWall && sideExtent>0.0 && fraction>0.0){
-              // Centre the side's feather on its actual end; the original
-              // positive front feather otherwise adds another empty strip.
-              matchedSideReveal=mix(1.0,smoothstep(-spacing*.5,spacing*.5,uncovered-sideExtent),sideVisibility);
+            if(matchedWall && fraction>0.0){
+              // The old depth-map silhouette may be slightly in front of
+              // the actual emitted face. Use the real wall's local front
+              // and end for its whole mask, rather than multiplying by that
+              // older silhouette (which over-cuts short walls).
+              vec4 frontClip=projectionMatrix*(modelViewMatrix*vec4(wallEdge,1.0));
+              vec4 wallAxis=projectionMatrix*(modelViewMatrix*vec4(wallEdge+vec3(aOutward*uFillSpacing,0.0),1.0));
+              if(min(frontClip.w,wallAxis.w)>0.0){
+                vec2 wallNormal=(wallAxis.xy/wallAxis.w-frontClip.xy/frontClip.w)*metric;
+                float wallSpacing=max(length(wallNormal),.000001);
+                float wallExtent=dot((rearClip.xy/rearClip.w-frontClip.xy/frontClip.w)*metric,wallNormal/wallSpacing);
+                float wallUncovered=dot((hiddenClip.xy/hiddenClip.w-frontClip.xy/frontClip.w)*metric,wallNormal/wallSpacing);
+                if(wallExtent>0.0)matchedSideReveal=mix(smoothstep(spacing*.35,spacing*1.35,uncovered),smoothstep(-wallSpacing*.5,wallSpacing*.5,wallUncovered-wallExtent),sideVisibility);
+              }
             }else if(!matchedWall)uncovered-=sideExtent*sideVisibility;
           }
         }
         // Behind the object remains invisible. Feather the exposed boundary
         // by one original point spacing to avoid an additive bright outline.
-        reveal=smoothstep(spacing*.35,spacing*1.35,uncovered)*matchedSideReveal;
+        reveal=matchedSideReveal>=0.0 ? matchedSideReveal:smoothstep(spacing*.35,spacing*1.35,uncovered);
       }
       gl_Position=hiddenClip;gl_PointSize=size;vAmp=amp;
       vColor*=reveal*uReconstructionBrightness;

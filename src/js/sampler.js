@@ -243,7 +243,7 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
     depthHistogram:histogram,
     cleanedEdgePixels:cleaned?.changed||0,
     surfaceMotion:mapping.surfaceCohesion===0 ? null:buildSurfaceMotion(depth,mapping.objectMasks),
-    reconstruction: mapping.reconstruction ? sampleOcclusion(mapping.reconstruction,aspect,baseCount,{...mapping,sideWalls}):null,
+    reconstruction: mapping.reconstruction ? sampleOcclusion(mapping.reconstruction,aspect,baseCount,{...mapping,sideWalls,fillSpacing:cell/H}):null,
     fillStarts:fillStarts?.subarray(0,(used-baseCount)*4),
     fillEnds:fillEnds?.subarray(0,(used-baseCount)*4),
     fillFractions:fillFractions?.subarray(0,used-baseCount),
