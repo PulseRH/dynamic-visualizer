@@ -16,6 +16,7 @@ export const DEFAULTS = {
   gapFillAdaptive: 1,      // 0 constant fill -> 1 strict matching to opening width
   gapFillDepthLimit: .06,  // maximum nearness difference allowed across a bridge
   depthShading: 0,         // dim distant surfaces while retaining foreground highlights
+  depthShadingMotion: false, // optionally shade the animated depth, including audio motion
   pointCount: 160000,
   pointSize: 1.0,
   glow: 1.1,

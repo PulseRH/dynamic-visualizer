@@ -18,6 +18,7 @@ const VERT = /* glsl */ `
   uniform float uDepthShape;
   uniform float uCurvature;
   uniform float uDepthShading;
+  uniform float uDepthShadingMotion;
   uniform float uAspect;
   uniform float uSize;
   uniform float uCamZ;
@@ -273,7 +274,13 @@ const VERT = /* glsl */ `
     lit *= uSizeComp;
     // points nearer the camera cover more screen: dim them the same way
     lit /= sqrt(max(uCamZ / -mv.z, 0.5));
-    if(uDepthShading>0.0) lit *= 1.0-uDepthShading*.45*(1.0-near);
+    if(uDepthShading>0.0) {
+      // A stable depth reference avoids brightness pumping from frame-wise
+      // min/max normalisation. Motion-only scenes still have a usable range.
+      float shadeNear = near;
+      if(uDepthShadingMotion>0.5) shadeNear = clamp(pos.z / max(uDepthScale, 0.33), 0.0, 1.0);
+      lit *= 1.0-uDepthShading*.45*(1.0-shadeNear);
+    }
     if (uHueEnabled > 0.5 && amp > 0.0) {
       float c = bandSample.g * 2.0 - 1.0;
       float h = bandSample.b * 2.0 - 1.0;
@@ -559,6 +566,7 @@ export class VisualScene {
       uExtraLayers: { value: new THREE.Vector4() },
       uBandMap: { value: 1 },
       uDepthShading: { value: 0 },
+      uDepthShadingMotion: { value: 0 },
       uFillBrightness: { value: .35 },
       uReconstructionBrightness: { value: .7 },
       uReconstructionSideOcclusion: { value: 0 },
@@ -874,6 +882,7 @@ export class VisualScene {
     this.uniforms.uDepthScale.value = s.depthScale;
     this.uniforms.uDepthShape.value = Math.max(0,Math.min(1,s.depthShape ?? 0));
     this.uniforms.uDepthShading.value = Math.max(0,Math.min(1,s.depthShading || 0));
+    this.uniforms.uDepthShadingMotion.value = s.depthShadingMotion ? 1 : 0;
     this.uniforms.uReconstructionBrightness.value=Math.max(0,Math.min(1,s.reconstructionBrightness ?? .7));
     this.uniforms.uReconstructionSideOcclusion.value=s.reconstructionSideOcclusion && this.fillPoints && s.gapFill>0 && (s.gapFillPointLimit ?? 180000)>0 && s.gapFillBrightness>0 ? 1:0;
     this.reconstructionEnabled=!!s.occludedBackground;

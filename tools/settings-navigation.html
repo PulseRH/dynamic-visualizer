@@ -1,0 +1,29 @@
+<!doctype html><meta charset="utf-8"><pre id="result">RUNNING</pre>
+<script type="module">
+import {SettingsNavigation} from '../src/js/settings-navigation.js';
+import {DEFAULTS} from '../src/js/settings.js';
+try {
+ const html=await (await fetch('../src/index.html')).text();
+ const source=new DOMParser().parseFromString(html,'text/html');
+ document.body.append(source.querySelector('#panel'));
+ const settings={...DEFAULTS}, panel=document.querySelector('#panel');
+ const nav=new SettingsNavigation(panel,key=>settings[key]);
+ const assert=(value,message)=>{if(!value)throw Error(message);};
+ nav.update();
+ assert(panel.querySelectorAll('.settings-tier').length===3,'Missing advanced groups');
+ assert(document.querySelector('#depthSeg').nextElementSibling.textContent.startsWith('AI fast uses'),'Model description misplaced');
+ assert(document.querySelector('#gapFillRows').closest('details').classList.contains('dependency-hidden'),'Inactive fill visible');
+ settings.gapFill=1;settings.occludedBackground=true;settings.gapFillManualLimit=true;nav.update();
+ assert(!document.querySelector('#gapFillThickness').closest('label').classList.contains('dependency-hidden'),'Active thickness hidden');
+ nav.input.value='fill thickness';nav.update();
+ assert(document.querySelector('#gapFillRows').closest('details').open,'Search did not open fine tuning');
+ assert(document.querySelector('#gapFillRows').closest('.settings-tier').open,'Search did not open parent');
+ assert(!document.querySelector('#processUsage').open,'Search activated monitor');
+ nav.input.value='';nav.update();
+ assert(!document.querySelector('#gapFillRows').closest('.settings-tier').open,'Search did not restore fold state');
+ nav.input.value='unfindablexyz';nav.update();assert(nav.status.textContent==='No matching settings.','No results missing');
+ settings.pointCount=400000;nav.update();
+ assert(document.querySelector('#pointCount').closest('label').querySelector('.high-cost'),'High cost marker missing');
+ document.querySelector('#result').textContent='PASS: tiers, dependency visibility, model description, search and fold restoration, resource badges; monitor stays closed.';
+} catch(error) {document.querySelector('#result').textContent='FAIL: '+error.stack;}
+</script>

@@ -9,6 +9,7 @@ import { responsePlots } from './response-plots.js';
 import { easingBendAt, constrainBezier, moveBezierControl, DEFAULT_BEZIER } from './easing.js';
 import { BAND_CHOICES, bandChoiceIndex } from './band-choices.js';
 import { imageAccent, PURPLE_ACCENT } from './ui-accent.js';
+import { SettingsNavigation } from './settings-navigation.js';
 
 const $ = (sel) => document.getElementById(sel.replace(/^#/, ''));
 
@@ -21,6 +22,7 @@ export class UI {
     this.levelBar = $('levelBar');
     this.hint = $('audioHint');
 
+    this.navigation = new SettingsNavigation($('panel'), get);
     this._wirePresets();
     this._wirePanel();
     this._wireProcessUsage();
@@ -169,7 +171,8 @@ export class UI {
         }));
       },
     });
-    const sync = () => monitor.setActive(isElectron && fold.open && $('panel').classList.contains('open') && nativeVisible && !document.hidden);
+    const sync = () => monitor.setActive(isElectron && fold.open && !fold.closest('.search-hidden') && $('panel').classList.contains('open') && nativeVisible && !document.hidden);
+    $('panel').addEventListener('settings-visibility', sync);
     fold.addEventListener('toggle', sync);
     const observer = new MutationObserver(sync);
     observer.observe($('panel'), {attributes:true, attributeFilter:['class']});
@@ -316,6 +319,7 @@ export class UI {
     $('invertBands').onchange = (e) => set({ invertBands: e.target.checked });
     $('preserveBoostColor').onchange = (e) => set({ preserveBoostColor: e.target.checked });
     $('lightFollowMotion').onchange = (e) => set({ lightFollowMotion: e.target.checked });
+    $('depthShadingMotion').onchange = (e) => set({ depthShadingMotion: e.target.checked });
     $('matchImageAccent').onchange = (e) => set({ matchImageAccent: e.target.checked });
     $('hideBackdrop').onchange = (e) => set({ hideBackdrop: e.target.checked });
     $('flybyExit').onchange = (e) => set({ flybyExit: e.target.checked });
@@ -460,6 +464,7 @@ export class UI {
   }
 
   _syncAll() {
+    this.navigation.update();
     for(const [key,fmt] of [['gapFillPointLimit',v=>v===0 ? 'Off':`${Math.round(v/1000)}k`],['reconstructionPointLimit',v=>`${Math.round(v/1000)}k`],['reconstructionWidth',v=>`${v.toFixed(2)}×`],['gapFillThicknessBias',v=>`${v.toFixed(2)}×`]]){
       $(key).value=get(key);$(key).parentElement.querySelector('.val').textContent=fmt(get(key));
     }
@@ -659,6 +664,7 @@ export class UI {
     $('invertBands').checked = !!get('invertBands');
     $('preserveBoostColor').checked = !!get('preserveBoostColor');
     $('lightFollowMotion').checked = !!get('lightFollowMotion');
+    $('depthShadingMotion').checked = !!get('depthShadingMotion');
     $('hideBackdrop').checked = !!get('hideBackdrop');
     $('flybyExit').checked = !!get('flybyExit');
     $('cursorRipple').checked = !!get('cursorRipple');

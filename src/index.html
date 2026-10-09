@@ -141,6 +141,7 @@
         <span class="val"></span>
       </label>
       <label class="slider-row"><span class="lbl">Depth shading<span class="q" data-tip="Gently darken distant layers to give the foreground more separation. Keeps near-layer brightness and highlights intact. Zero preserves the original colours."></span></span><input type="range" id="depthShading" min="0" max="1" step="0.01" /><span class="val"></span></label>
+      <label class="check-row"><input type="checkbox" id="depthShadingMotion" /> Follow motion depth<span class="q" data-tip="Shade the actual animated depth, including music movement, curvature and cursor ripple. Works with Depth strength at zero. Off uses the original image depth; on brings forward-moving points out of shadow."></span></label>
       <label class="slider-row"><span class="lbl">Light pulse<span class="q" data-tip="Extra particle brightness as each frequency band gets louder. 0 turns off the brightness reaction; Glow sets the base light level."></span></span>
         <input type="range" id="boost" min="0" max="3" step="0.05" />
         <span class="val"></span>
