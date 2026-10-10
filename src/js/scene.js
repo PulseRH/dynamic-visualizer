@@ -61,6 +61,14 @@ const VERT = /* glsl */ `
   uniform sampler2D uSideMask;
   uniform float uSideMaskEnabled;
   uniform float uFillSpacing;
+  uniform float uSideMaskDepthTolerance;
+  #ifdef SIDE_MASK
+    uniform float uSideMaskWallCoverage;
+    uniform float uSideMaskFaceCoverage;
+    uniform float uSideMaskFaceSpacing;
+    uniform float uSideMaskHeight;
+    attribute vec2 aMaskOffset;
+  #endif
   #ifdef OCCLUDED_BACKGROUND
     attribute vec4 aOccluder;
     attribute vec2 aOutward;
@@ -103,7 +111,7 @@ const VERT = /* glsl */ `
         vec4 packed=texture2D(uSideMask,uv);
         float depth=pointClip.z/pointClip.w*.5+.5;
         // Keep coplanar wall points despite depth interpolation/rounding.
-        float bias=max(.000002,uFillSpacing*abs(projectionMatrix[3][2])/(2.0*pointClip.w*pointClip.w));
+        float bias=max(.000002,uSideMaskDepthTolerance*uFillSpacing*abs(projectionMatrix[3][2])/(2.0*pointClip.w*pointClip.w));
         covered=any(greaterThan(packed,vec4(0.0))) && depth>unpackRGBAToDepth(packed)+bias;
       }
     }
@@ -515,6 +523,11 @@ const VERT = /* glsl */ `
         vMaskOpen=sidewall && fillSpan>0.0 && opening>0.0 ? 1.0:0.0;
       #endif
       gl_Position = projectionMatrix * (modelViewMatrix * vec4(pos, 1.0));
+      #ifdef SIDE_MASK
+        // Expand across neighbouring wall rows only, never past the rear cap.
+        gl_Position.xy+=vec2(projectionMatrix[0][0],projectionMatrix[1][1])
+          *(modelViewMatrix*vec4(aMaskOffset*(uSideMaskWallCoverage-1.0),0.0,0.0)).xy;
+      #endif
       gl_PointSize = mix(firstSize, lastSize, aFillT);
       vColor = mix(firstColour, lastColour, aFillT) * uFillBrightness * opening * fillLight;
       vAmp = mix(firstAmp, lastAmp, aFillT);
@@ -539,7 +552,14 @@ const VERT = /* glsl */ `
       gl_PointSize = size; vAmp = amp;
       // Ordinary far-layer particles can also show through an additive wall,
       // even when the reconstructed layer is completely hidden.
-      if(wallOccludes(gl_Position)){gl_Position=vec4(2.0,2.0,2.0,1.0);gl_PointSize=0.0;}
+      #ifdef SIDE_MASK
+        vMaskOpen=uSideMaskFaceCoverage>0.0 ? 1.0:0.0;
+        // Coverage follows the sampled surface, independent of particle size/light.
+        gl_PointSize=clamp(uSideMaskFaceSpacing*uSideMaskFaceCoverage*projectionMatrix[1][1]
+          *uSideMaskHeight/max(gl_Position.w,.000001),1.0,64.0);
+      #else
+        if(wallOccludes(gl_Position)){gl_Position=vec4(2.0,2.0,2.0,1.0);gl_PointSize=0.0;}
+      #endif
     #endif
   }
 
@@ -647,6 +667,11 @@ export class VisualScene {
       uReconstructionOcclusion: { value: 1 },
       uReconstructionSideOcclusion: { value: 0 },
       uSideWallReferences: { value: 0 },
+      uSideMaskDepthTolerance: {value:1},
+      uSideMaskWallCoverage: {value:1},
+      uSideMaskFaceCoverage: {value:0},
+      uSideMaskFaceSpacing: {value:0},
+      uSideMaskHeight: {value:1},
       uFillOnlyOpen: { value: 1 },
       uFillAdaptive: { value: 1 },
       uFillSamples: { value: 12 },
@@ -780,6 +805,7 @@ export class VisualScene {
   /** rebuild geometry from sampled cloud arrays */
   setCloud(cloud) {
     this.sideMask.setGeometry(cloud.sideMask);
+    this.sideMask.setFaces(cloud);
     this.depthHistogram=cloud.depthHistogram;
     this.surfaceMotion=cloud.surfaceMotion||null;
     this.surfaceTex.dispose();
@@ -966,6 +992,9 @@ export class VisualScene {
     this.uniforms.uReconstructionBrightness.value=Math.max(0,Math.min(1,s.reconstructionBrightness ?? .7));
     this.uniforms.uReconstructionOcclusion.value=s.reconstructionOcclusion===false ? 0:1;
     this.sharedSideOcclusion=s.reconstructionSharedOcclusion!==false;
+    this.uniforms.uSideMaskFaceCoverage.value=Math.max(0,Math.min(3,s.reconstructionFaceCoverage ?? 0));
+    this.uniforms.uSideMaskWallCoverage.value=Math.max(.5,Math.min(3,s.reconstructionWallCoverage ?? 1));
+    this.uniforms.uSideMaskDepthTolerance.value=Math.max(0,Math.min(3,s.reconstructionDepthTolerance ?? 1));
     this.uniforms.uReconstructionSideOcclusion.value=this.uniforms.uReconstructionOcclusion.value && s.reconstructionSideOcclusion && this.fillPoints && s.gapFill>0 && (s.gapFillPointLimit ?? 180000)>0 && s.gapFillBrightness>0 ? 1:0;
     this.reconstructionEnabled=!!s.occludedBackground;
     if(this.reconstructionPoints)this.reconstructionPoints.visible=this.uniforms.uVis.value>0 && this.reconstructionEnabled && this.uniforms.uReconstructionBrightness.value>0;

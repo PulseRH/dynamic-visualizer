@@ -250,6 +250,9 @@ export class UI {
     $('reconstructionOcclusion').onchange=e=>set({reconstructionOcclusion:e.target.checked});
     $('reconstructionSideOcclusion').onchange=e=>set({reconstructionSideOcclusion:e.target.checked});
     $('reconstructionSharedOcclusion').onchange=e=>set({reconstructionSharedOcclusion:e.target.checked});
+    slider('reconstructionFaceCoverage','reconstructionFaceCoverage',v=>v===0 ? 'Off':`${v.toFixed(2)}×`);
+    slider('reconstructionWallCoverage','reconstructionWallCoverage',v=>`${v.toFixed(2)}×`);
+    slider('reconstructionDepthTolerance','reconstructionDepthTolerance',v=>`${v.toFixed(2)}×`);
     slider('reconstructionBrightness','reconstructionBrightness',v=>`${Math.round(v*100)}%`);
     slider('reconstructionPointLimit','reconstructionPointLimit',v=>`${Math.round(v/1000)}k`);
     slider('reconstructionWidth','reconstructionWidth',v=>`${v.toFixed(2)}×`);
@@ -522,6 +525,10 @@ export class UI {
       }
     };
     setSlider('depthScale', get('depthScale'));
+    for(const key of ['reconstructionFaceCoverage','reconstructionWallCoverage','reconstructionDepthTolerance']){
+      setSlider(key,get(key));
+      $(key).parentElement.querySelector('.val').textContent=key==='reconstructionFaceCoverage' && get(key)===0 ? 'Off':`${Number(get(key)).toFixed(2)}×`;
+    }
     $('gapFillOnlyOpen').checked=get('gapFillOnlyOpen')!==false;
     for(const key of ['depthSmoothing','depthSpikeCleanup','depthShape','gapFill','depthShading','gapFillBrightness','gapFillDepthLimit','gapFillAdaptive','reconstructionBrightness']){
       setSlider(key,get(key));

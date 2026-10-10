@@ -35,6 +35,7 @@ export class SettingsNavigation {
         .map(id => [row(id), () => get('occludedBackground')]),
       [row('reconstructionSideOcclusion'), () => get('occludedBackground') && get('reconstructionOcclusion') && get('gapFill')>0],
       [row('reconstructionSharedOcclusion'), () => get('occludedBackground') && get('reconstructionOcclusion') && get('reconstructionSideOcclusion') && get('gapFill')>0],
+      [byId('occlusionTuning'), () => get('occludedBackground') && get('reconstructionOcclusion') && get('reconstructionSideOcclusion') && get('reconstructionSharedOcclusion') && get('gapFill')>0],
       [byId('gapFillRows').closest('details'), () => get('gapFill') > 0],
       [row('gapFillThickness'), () => get('occludedBackground') && get('gapFillManualLimit')],
       [row('gapFillThicknessBias'), () => get('occludedBackground') && get('gapFillForegroundLimit')],
@@ -58,6 +59,7 @@ export class SettingsNavigation {
     badge('aiFillThickness', 'Preparation cost: object masks run when needed for an image; results are cached.');
     badge('occludedBackground', 'Preparation and rendering cost: reconstructs hidden layers, then draws extra points while enabled.');
     badge('reconstructionSharedOcclusion', 'Rendering cost: one reduced-resolution GPU wall mask. Its render target is released when off or idle. No extra AI inference.');
+    badge('reconstructionFaceCoverage', 'Rendering cost when above zero: one extra draw of up to 60k cached surface points in the existing mask. Wider footprints add pixel work. No extra AI run.', () => get('reconstructionFaceCoverage')>=2);
     badge('pointCount', 'Rendering cost: more points use more GPU work and memory. Red indicates 300k or more.', () => get('pointCount') >= 300000);
     badge('gapFillPointLimit', 'Rendering cost: extra fill points use GPU work and memory. Red indicates 300k or more.', () => get('gapFillPointLimit') >= 300000);
     badge('reconstructionPointLimit', 'Rendering cost: hidden points add GPU work and memory. Red indicates 150k or more.', () => get('reconstructionPointLimit') >= 150000);

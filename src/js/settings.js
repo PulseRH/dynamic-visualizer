@@ -78,6 +78,9 @@ export const DEFAULTS = {
   reconstructionOcclusion: true, // master: hide generated points behind faces and sides
   reconstructionSideOcclusion: false, // filled side shells also hide reconstructed background
   reconstructionSharedOcclusion: true, // shared screen-space wall mask, independently switchable
+  reconstructionFaceCoverage: 0, // optional bounded front-surface depth splats; zero keeps earlier mask
+  reconstructionWallCoverage: 1, // mask strip width, independent of the visible side thickness
+  reconstructionDepthTolerance: 1, // coplanar depth allowance in original point spacings
   reconstructionPointLimit: 40000,
   reconstructionWidth: 1,
   gapFillForegroundLimit: false, // automatic shell estimate near foreground outlines
