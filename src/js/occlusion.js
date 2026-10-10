@@ -142,7 +142,7 @@ export function sampleOcclusion(reconstruction, aspect, count, options={}) {
     candidates[candidatesUsed*3]=u;candidates[candidatesUsed*3+1]=v;candidates[candidatesUsed*3+2]=i;candidatesUsed++;
   }
   const used=Math.min(candidatesUsed,budget),step=Math.max(1,candidatesUsed/Math.max(1,budget));
-  const positions=new Float32Array(used*3),colors=new Float32Array(used*3),rands=new Float32Array(used),occluders=new Float32Array(used*4),normals=new Float32Array(used*2),sideThickness=new Float32Array(used*2);
+  const positions=new Float32Array(used*3),colors=new Float32Array(used*3),rands=new Float32Array(used),occluders=new Float32Array(used*4),normals=new Float32Array(used*2),sideThickness=new Float32Array(used*3);
   const sideFronts=new Float32Array(used*4),sideRears=new Float32Array(used*4);
   for(let j=0;j<used;j++){
     const k=Math.floor(j*step)*3,x=candidates[k],y=candidates[k+1],i=candidates[k+2],edge=owner[i];
@@ -154,15 +154,16 @@ export function sampleOcclusion(reconstruction, aspect, count, options={}) {
     normals[j*2]=normalX[i];normals[j*2+1]=normalY[i];
     // Use one cached estimate at the foreground boundary, just as Gap fill
     // does. No AI, image processing or geometry rebuild on toggle/bias changes.
-    sideThickness[j*2]=reconstruction.thickness?.[edge] || 0;
-    sideThickness[j*2+1]=reconstruction.edgeWeight?.[edge] || 0;
+    sideThickness[j*3]=reconstruction.thickness?.[edge] || 0;
+    sideThickness[j*3+1]=reconstruction.edgeWeight?.[edge] || 0;
+    sideThickness[j*3+2]=reconstruction.sizeRatio?.[edge] || 1;
     // -2: sampler checked but no actual wall; -1: legacy/unbound geometry.
     sideRears[j*4+3]=walls ? -2:-1;
     const bound=bindings?.[edge] ?? -1;
     if(bound>=0){
       sideFronts.set(walls.front.subarray(bound*4,bound*4+4),j*4);
       sideRears.set(walls.rear.subarray(bound*4,bound*4+4),j*4);
-      sideThickness.set(walls.thickness.subarray(bound*2,bound*2+2),j*2);
+      sideThickness.set(walls.thickness.subarray(bound*3,bound*3+3),j*3);
     }
   }
   return {positions,colors,rands,occluders,normals,sideThickness,sideFronts,sideRears};

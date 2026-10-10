@@ -2,7 +2,7 @@ import {reconstructionKey} from './reconstruction.js';
 import {OBJECT_MASK_VERSION,MAX_OBJECT_MASKS} from './object-mask-utils.js';
 import {depthImageIdentity} from './depth.js';
 
-const CACHE='dv-object-thickness-v2',memory=new WeakMap();
+const CACHE='dv-object-thickness-v3',memory=new WeakMap();
 // Class inference depends on the image, while connected surfaces/thickness
 // depend on depth. Tuning depth recomputes only those inexpensive derived fields.
 const CLASSES_CACHE='dv-object-classes-v1',classesMemory=new WeakMap();
@@ -22,19 +22,20 @@ export function unpackObjectClasses(buffer,w,h){
   return {classes,confidence};
 }
 export function packObjectThickness(result,w,h){
-  const n=w*h,buffer=new ArrayBuffer(16+n*10);
+  const n=w*h,buffer=new ArrayBuffer(16+n*14);
   new Uint32Array(buffer,0,4).set([OBJECT_MASK_VERSION,w,h,result.count]);
   new Uint8Array(buffer,16,n*4).set(new Uint8Array(result.thickness.buffer,result.thickness.byteOffset,n*4));
   new Uint8Array(buffer,16+n*4,n*4).set(new Uint8Array(result.edgeWeight.buffer,result.edgeWeight.byteOffset,n*4));
-  new Uint8Array(buffer,16+n*8,n*2).set(new Uint8Array(result.labels.buffer,result.labels.byteOffset,n*2));
+  new Uint8Array(buffer,16+n*8,n*4).set(new Uint8Array(result.sizeRatio.buffer,result.sizeRatio.byteOffset,n*4));
+  new Uint8Array(buffer,16+n*12,n*2).set(new Uint8Array(result.labels.buffer,result.labels.byteOffset,n*2));
   return buffer;
 }
 export function unpackObjectThickness(buffer,w,h){
-  if(buffer.byteLength!==16+w*h*10)throw Error('Invalid object thickness cache');
+  if(buffer.byteLength!==16+w*h*14)throw Error('Invalid object thickness cache');
   const [version,width,height,count]=new Uint32Array(buffer,0,4);
   if(version!==OBJECT_MASK_VERSION||width!==w||height!==h||count>MAX_OBJECT_MASKS)throw Error('Outdated object thickness cache');
   const n=w*h;
-  return {count,thickness:new Float32Array(buffer.slice(16,16+n*4)),edgeWeight:new Float32Array(buffer.slice(16+n*4,16+n*8)),labels:new Uint16Array(buffer.slice(16+n*8))};
+  return {count,thickness:new Float32Array(buffer.slice(16,16+n*4)),edgeWeight:new Float32Array(buffer.slice(16+n*4,16+n*8)),sizeRatio:new Float32Array(buffer.slice(16+n*8,16+n*12)),labels:new Uint16Array(buffer.slice(16+n*12))};
 }
 export async function prepareObjectThickness(bitmap,depth,reconstruction,onStatus=()=>{},signal){
   if(signal?.aborted)throw new DOMException('Object masks cancelled','AbortError');

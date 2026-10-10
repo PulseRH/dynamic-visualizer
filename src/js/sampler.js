@@ -39,7 +39,7 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
   // Local world thickness and outline influence, prepared with reconstruction.
   // Bias changes live without another model, rebuild or draw pass.
   const reconstruction=mapping.reconstruction;
-  const fillThickness=extraCapacity && (reconstruction?.thickness || cleaned?.edgePixels) ? new Float32Array(extraCapacity*2):null;
+  const fillThickness=extraCapacity && (reconstruction?.thickness || cleaned?.edgePixels) ? new Float32Array(extraCapacity*3):null;
   // RGB and endpoint ownership for foreground sidewalls. Kept separate from
   // midpoint colours so ordinary interior seams preserve their image samples.
   const fillForeground=fillThickness ? new Float32Array(extraCapacity*4):null;
@@ -48,7 +48,7 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
   const sideWalls=reconstruction && fillThickness ? {
     front:new Float32Array(reconstruction.w*reconstruction.h*4),
     rear:new Float32Array(reconstruction.w*reconstruction.h*4),
-    thickness:new Float32Array(reconstruction.w*reconstruction.h*2),
+    thickness:new Float32Array(reconstruction.w*reconstruction.h*3),
     score:new Float32Array(reconstruction.w*reconstruction.h).fill(Infinity),
   }:null;
   const sideMask=sideWalls ? {starts:[],ends:[],t:[],thickness:[],foreground:[],indices:[]}:null;
@@ -209,16 +209,19 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
           fillEnds.set([bx,by,positions[bi+2],rands[bi/3]],f*4);
           fillFractions[f]=t;rands[used]=(sample-1)/samplesPerEdge;used++;
           if(fillThickness){
-            fillThickness[f*2]=reconstruction?.thickness?.[thicknessIndex] ?? 1;
-            fillThickness[f*2+1]=cleanSide ? 1:(reconstruction?.edgeWeight?.[thicknessIndex] ?? 0);
-            if(fillThickness[f*2+1]>0){
+            // Side fraction, outline influence, size relative to the image's
+            // typical object (live Size balance). No estimate keeps full sides.
+            fillThickness[f*3]=reconstruction?.thickness?.[thicknessIndex] ?? 1;
+            fillThickness[f*3+1]=cleanSide ? 1:(reconstruction?.edgeWeight?.[thicknessIndex] ?? 0);
+            fillThickness[f*3+2]=reconstruction?.sizeRatio?.[thicknessIndex] || 1;
+            if(fillThickness[f*3+1]>0){
               fillForeground.set([colors[front],colors[front+1],colors[front+2],(front===ai ? 1:-1)*(cleanSide ? 2:1)],f*4);
             }
           }
         }
         if(sideWalls && used>rowStart){
           const f=rowStart-baseCount,owner=reconstruction.owner[thicknessIndex];
-          if(fillThickness[f*2+1]>0 && Math.abs(positions[ai+2]-positions[bi+2])>.08){
+          if(fillThickness[f*3+1]>0 && Math.abs(positions[ai+2]-positions[bi+2])>.08){
             // A narrow quad covers the actual emitted row's surface. It
             // ends at the same live thickness fraction as the fill shader.
             const halfWidth=Math.max(.25,fillRows>1 ? spread/(fillRows-1):1)*cell/H*.5;
@@ -227,12 +230,12 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
               sideMask.starts.push(ax+mx*offset,ay+my*offset,positions[ai+2],rands[ai/3]);
               sideMask.ends.push(bx+mx*offset,by+my*offset,positions[bi+2],rands[bi/3]);
               sideMask.t.push(t);
-              sideMask.thickness.push(...fillThickness.subarray(f*2,f*2+2));
+              sideMask.thickness.push(...fillThickness.subarray(f*3,f*3+3));
               sideMask.foreground.push(...fillForeground.subarray(f*4,f*4+4));
             }
             sideMask.indices.push(index,index+1,index+2,index+2,index+1,index+3);
           }
-          if(owner>=0 && fillThickness[f*2+1]>0){
+          if(owner>=0 && fillThickness[f*3+1]>0){
             const start=front===ai ? fillStarts:fillEnds,end=front===ai ? fillEnds:fillStarts;
             const ex=((owner%reconstruction.w+.5)/reconstruction.w-.5)*aspect;
             const ey=.5-(Math.floor(owner/reconstruction.w)+.5)/reconstruction.h;
@@ -241,7 +244,7 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
               sideWalls.score[owner]=score;
               sideWalls.front.set(start.subarray(f*4,f*4+4),owner*4);
               sideWalls.rear.set(end.subarray(f*4,f*4+4),owner*4);
-              sideWalls.thickness.set(fillThickness.subarray(f*2,f*2+2),owner*2);
+              sideWalls.thickness.set(fillThickness.subarray(f*3,f*3+3),owner*3);
             }
           }
         }
@@ -263,7 +266,7 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
     fillStarts:fillStarts?.subarray(0,(used-baseCount)*4),
     fillEnds:fillEnds?.subarray(0,(used-baseCount)*4),
     fillFractions:fillFractions?.subarray(0,used-baseCount),
-    fillThickness:fillThickness?.subarray(0,(used-baseCount)*2),
+    fillThickness:fillThickness?.subarray(0,(used-baseCount)*3),
     fillForeground:fillForeground?.subarray(0,(used-baseCount)*4),
     aspect,
   };

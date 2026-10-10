@@ -18,18 +18,18 @@ const reconstruction=prepareOcclusion(depth,2.5);reconstruction.rgb=new Uint8Arr
 Object.assign(reconstruction,estimateFillThickness(depth,reconstruction));
 const classified=sampleImageToCloud(image,depth,12000,1,{reconstruction});
 for(const key of ['positions','colors','rands','fillStarts','fillEnds','fillFractions'])assert.deepEqual(classified[key],filled[key],'foreground classification must not alter existing geometry');
-assert.equal(classified.fillThickness.length,classified.fillFractions.length*2);
+assert.equal(classified.fillThickness.length,classified.fillFractions.length*3);
 assert.equal(classified.fillForeground.length,classified.fillFractions.length*4);
 const rowEstimates=new Map();
 for(let f=0;f<classified.fillFractions.length;f++){
  const key=Array.from(classified.fillStarts.subarray(f*4,f*4+4)).join(',')+'|'+Array.from(classified.fillEnds.subarray(f*4,f*4+4)).join(',');
- const estimate=[...classified.fillThickness.subarray(f*2,f*2+2),...classified.fillForeground.subarray(f*4,f*4+4)];
+ const estimate=[...classified.fillThickness.subarray(f*3,f*3+3),...classified.fillForeground.subarray(f*4,f*4+4)];
  if(rowEstimates.has(key))assert.deepEqual(estimate,rowEstimates.get(key),'one bridge must not change thickness or owner between samples');
  else rowEstimates.set(key,estimate);
 }
 let edges=0,interior=0;
 for(let f=0;f<classified.fillFractions.length;f++){
- const near=classified.positions[(classified.baseCount+f)*3+2],limit=classified.fillThickness[f*2],weight=classified.fillThickness[f*2+1];
+ const near=classified.positions[(classified.baseCount+f)*3+2],limit=classified.fillThickness[f*3],weight=classified.fillThickness[f*3+1];
  if(near<.55){assert.equal(limit,0);assert.equal(weight,0);}
  else if(weight>0)edges++;else interior++;
 }

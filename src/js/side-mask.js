@@ -33,7 +33,7 @@ export class SideMask {
     if(!data?.t.length){this.releaseTarget();return;}
     const geometry=new THREE.BufferGeometry();
     geometry.setAttribute('position',new THREE.BufferAttribute(new Float32Array(data.t.length*3),3));
-    for(const [name,key,size] of [['aFillStart','starts',4],['aFillEnd','ends',4],['aFillT','t',1],['aFillThickness','thickness',2],['aFillForeground','foreground',4]])geometry.setAttribute(name,new THREE.BufferAttribute(data[key],size));
+    for(const [name,key,size] of [['aFillStart','starts',4],['aFillEnd','ends',4],['aFillT','t',1],['aFillThickness','thickness',3],['aFillForeground','foreground',4]])geometry.setAttribute(name,new THREE.BufferAttribute(data[key],size));
     const offsets=new Float32Array(data.t.length*2);
     for(let q=0;q<data.t.length;q+=4){
       const cx=(data.starts[q*4]+data.starts[(q+2)*4])*.5,cy=(data.starts[q*4+1]+data.starts[(q+2)*4+1])*.5;

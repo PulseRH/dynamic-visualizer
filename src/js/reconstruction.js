@@ -3,10 +3,10 @@ import {OCCLUSION_VERSION} from './occlusion.js';
 
 const RESULTS=`dv-hidden-background-v${OCCLUSION_VERSION}`,memory=new WeakMap();
 const FIELDS={owner:Int32Array,back:Float32Array,front:Float32Array,normalX:Int8Array,normalY:Int8Array,distance:Uint8Array,rgb:Uint8Array};
-const THICKNESS_FIELDS={thickness:Float32Array,edgeWeight:Float32Array};
+const THICKNESS_FIELDS={thickness:Float32Array,edgeWeight:Float32Array,sizeRatio:Float32Array};
 // Version the derived estimate separately, so changing it cannot rerun AI.
-const THICKNESS_VERSION=2;
-const fieldsFor=result=>result.thickness&&result.edgeWeight ? {...FIELDS,...THICKNESS_FIELDS}:FIELDS;
+const THICKNESS_VERSION=3;
+const fieldsFor=result=>result.thickness&&result.edgeWeight&&result.sizeRatio ? {...FIELDS,...THICKNESS_FIELDS}:FIELDS;
 // Binary cache avoids turning large typed grids into JS object/JSON trees.
 export function packReconstruction(result){
   if(!result)return new ArrayBuffer(12);
@@ -22,12 +22,13 @@ export function unpackReconstruction(buffer){
   if(buffer.byteLength<12)throw Error('Incomplete reconstruction cache');
   const [w,h,count]=new Uint32Array(buffer,0,3);if(!w&&!h&&buffer.byteLength===12)return null;
   if(!w||!h||w*h>2000000)throw Error('Invalid reconstruction grid');
-  const n=w*h,legacy=buffer.byteLength===12+n*18,versioned=buffer.byteLength===16+n*26;
-  if(!legacy&&!versioned&&buffer.byteLength!==12+n*26)throw Error('Incomplete reconstruction grid');
-  const fields=legacy ? FIELDS:{...FIELDS,...THICKNESS_FIELDS};
-  const result={w,h,count};let offset=versioned ? 16:12;
+  // Earlier thickness layouts (two fields, 26 bytes/cell) are stale: keep the
+  // AI reconstruction, recompute only the inexpensive thickness estimate.
+  const n=w*h,current=buffer.byteLength===16+n*30&&new Uint32Array(buffer,0,4)[3]===THICKNESS_VERSION;
+  if(!current&&![12+n*18,12+n*26,16+n*26,16+n*30].includes(buffer.byteLength))throw Error('Incomplete reconstruction grid');
+  const fields=current ? {...FIELDS,...THICKNESS_FIELDS}:FIELDS;
+  const result={w,h,count};let offset=buffer.byteLength===12+n*18||buffer.byteLength===12+n*26 ? 12:16;
   for(const [key,Type] of Object.entries(fields)){const length=n*(key==='rgb' ? 3:1),bytes=length*Type.BYTES_PER_ELEMENT;result[key]=new Type(buffer.slice(offset,offset+bytes));offset+=bytes;}
-  if(!legacy&&(!versioned||new Uint32Array(buffer,0,4)[3]!==THICKNESS_VERSION)){delete result.thickness;delete result.edgeWeight;}
   return result;
 }
 export async function reconstructionKey(bitmap,depth){
@@ -72,7 +73,7 @@ export async function reconstructBackground(bitmap,depth,onStatus=()=>{},signal)
   }catch(err){if(err.name==='AbortError')throw err;}
   if(savedResult!==undefined){
     if(signal?.aborted)throw new DOMException('Reconstruction cancelled','AbortError');
-    if(savedResult&&!savedResult.thickness){onStatus('Estimating foreground thickness…');await upgradeThickness(depth,savedResult,signal);saveResult(key,savedResult);}
+    if(savedResult&&!savedResult.sizeRatio){onStatus('Estimating foreground thickness…');await upgradeThickness(depth,savedResult,signal);saveResult(key,savedResult);}
     memory.set(bitmap,{depth,result:savedResult});onStatus('Using saved hidden background');return savedResult;
   }
   const copy=await createImageBitmap(bitmap);

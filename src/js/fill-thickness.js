@@ -1,5 +1,6 @@
 // A visual shell estimate from one relative-depth image, not recovered geometry.
 // Prepared once alongside reconstruction and cached; audio bands are not inputs.
+import {depthRatio} from './object-mask-utils.js';
 export function estimateFillThickness(depth,reconstruction,objects=null){
   const {w,h,data}=depth,n=w*h;
   const surface=new Float32Array(n),labels=new Int32Array(n),queue=new Int32Array(n);
@@ -61,18 +62,45 @@ export function estimateFillThickness(depth,reconstruction,objects=null){
       ||(value>=up&&value>=down&&(value>up+.01||value>down+.01))){radius[i]=value;queue[tail++]=i;}
   }
   while(head<tail){const i=queue[head++];neighbours(i,j=>{if(labels[j]===labels[i]&&!radius[j]){radius[j]=radius[i];queue[tail++]=j;}});}
-  const thickness=new Float32Array(n),edgeWeight=new Float32Array(n);
-  for(let i=0;i<n;i++)if(labels[i]&&boundary[i]>=0){
-    const gap=Math.max(0,surface[i]-background[boundary[i]]),r=radius[i]||distance[i];
-    // A fraction of the side span, like the manual Fill thickness: assume an
-    // object is about as deep as it is wide (image-plane width vs relative
-    // depth gap). A building keeps most of its wall, a person or pole a thin
-    // shell. Independent of Depth scale and audio motion, which stretch the
-    // span but not the percentage. Tiny depth noise and frame boundaries
-    // without a real background are not object edges; leave them untouched.
-    thickness[i]=gap>=.08 ? Math.min(1,Math.max(.05,2*r/h/gap)):0;
-    const t=Math.min(1,Math.max(0,(distance[i]-.5)/Math.max(1,r*.65)));
-    edgeWeight[i]=thickness[i]>0 ? 1-t*t*(3-2*t):0;
+  // One depth estimate per object, not per outline pixel: jagged real edges
+  // create tiny medial spurs that made local widths collapse to a pixel or two.
+  // The inscribed diameter is robust to that noise; the AI class scales it by
+  // a typical depth/width ratio, and the object's own depth slope (a building
+  // seen at an angle) sets a floor. All linear passes, cached with the result.
+  const maxDistance=new Float32Array(label+1),deepest=new Int32Array(label+1).fill(-1);
+  const bins=32,histogram=new Uint32Array((label+1)*bins),members=new Uint32Array(label+1),edges=new Uint32Array(label+1);
+  for(let i=0;i<n;i++)if(labels[i]){
+    const L=labels[i];members[L]++;histogram[L*bins+Math.min(bins-1,Math.floor(surface[i]*bins))]++;
+    if(distance[i]>maxDistance[L]&&Number.isFinite(distance[i])){maxDistance[L]=distance[i];deepest[L]=i;}
   }
-  return {thickness,edgeWeight};
+  const quantile=(L,q)=>{let target=members[L]*q,sum=0;for(let b=0;b<bins;b++){sum+=histogram[L*bins+b];if(sum>=target)return (b+.5)/bins;}return 1;};
+  const classes=objects?.classes?.length===n ? objects.classes:null;
+  const objectDepth=new Float32Array(label+1);
+  for(let L=1;L<=label;L++){
+    const width=2*maxDistance[L]/h,ratio=classes&&deepest[L]>=0 ? depthRatio(classes[deepest[L]]):1;
+    // Ignore slope on small regions, where depth noise dominates.
+    const slope=members[L]>=64 ? Math.max(0,quantile(L,.9)-quantile(L,.1)):0;
+    objectDepth[L]=Math.max(width*ratio,slope);
+  }
+  const thickness=new Float32Array(n),edgeWeight=new Float32Array(n),sizeRatio=new Float32Array(n);
+  for(let i=0;i<n;i++)if(labels[i]&&boundary[i]>=0){
+    const gap=Math.max(0,surface[i]-background[boundary[i]]);
+    // Tiny depth noise and frame boundaries without a real background are
+    // not object edges; leave them untouched.
+    if(gap<.08)continue;
+    // A fraction of the side span, like the manual Fill thickness, so Depth
+    // scale and audio motion stretch the wall without changing its share.
+    // Above 1 is kept so Thickness bias below 1× can still shorten it.
+    thickness[i]=Math.min(8,Math.max(.02,objectDepth[labels[i]]/gap));edges[labels[i]]++;
+    const r=Math.min(radius[i]||distance[i],maxDistance[labels[i]]);
+    const t=Math.min(1,Math.max(0,(distance[i]-.5)/Math.max(1,r*.65)));
+    edgeWeight[i]=1-t*t*(3-2*t);
+  }
+  // Size relative to the image's typical object (outline-weighted geometric
+  // mean). Size balance raises it to a live power in the shader.
+  let logSum=0,weight=0;
+  for(let L=1;L<=label;L++)if(edges[L]&&objectDepth[L]>0){logSum+=Math.log(objectDepth[L])*edges[L];weight+=edges[L];}
+  const reference=weight ? Math.exp(logSum/weight):1;
+  for(let i=0;i<n;i++)if(thickness[i])sizeRatio[i]=objectDepth[labels[i]]/reference;
+  return {thickness,edgeWeight,sizeRatio};
 }

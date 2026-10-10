@@ -74,10 +74,14 @@ a few percent CPU and holds a steady frame rate without spinning fans.
   points (180k default). The Gap fill percentage scales that budget, with a
   150% of Count ceiling. Higher budgets add GPU work and memory. **Auto
   thickness** works like Fill thickness with a different percentage per
-  object: local width versus depth gap, so a broad building keeps most of its
-  wall and a person or pole a thin shell. **Thickness bias** multiplies those
-  percentages. Depth scale and audio motion stretch walls without changing
-  their share, and samples are redistributed instead of deleting whole seams.
+  object. Each object gets one depth estimate: its inscribed width, scaled by
+  its AI object type when AI object masks are on (buildings deep, people and
+  poles thin, vehicles long), with any depth slope across it as a minimum.
+  **Thickness bias** multiplies every percentage; **Size balance** sets how
+  strongly size matters (Equal gives every object the image's typical depth,
+  100% uses the estimate, 200% exaggerates). Both update live. Depth scale and
+  audio motion stretch walls without changing their share, and samples are
+  redistributed instead of deleting whole seams.
   Each seam uses one estimate at its foreground endpoint; outline influence
   blends continuously into unchanged interior seams without separate wall or
   outline geometry. Object-edge fill uses the original foreground endpoint's

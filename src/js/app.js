@@ -300,7 +300,7 @@ async function rebuildCloud() {
         const objects=await prepareObjectThickness(currentImage,depth,reconstruction,status=>{if(token===rebuildToken)ui.setObjectMaskStatus(status);},controller.signal);
         if(token!==rebuildToken)return;
         objectMasks={labels:objects.labels,count:objects.count};
-        if(reconstruction && get('gapFillForegroundLimit'))reconstruction={...reconstruction,thickness:objects.thickness,edgeWeight:objects.edgeWeight};
+        if(reconstruction && get('gapFillForegroundLimit'))reconstruction={...reconstruction,thickness:objects.thickness,edgeWeight:objects.edgeWeight,sizeRatio:objects.sizeRatio};
       }catch(error){
         if(controller.signal.aborted||token!==rebuildToken)return;
         console.warn('Object masks unavailable',error);

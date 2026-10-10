@@ -10,7 +10,7 @@ try {
     positions:new Float32Array([0,0,.9,.01,0,.85,.005,0,.875]),colors:new Float32Array(9),rands:new Float32Array([.5,.5,.5]),
     fillStarts:new Float32Array([0,0,.9,.5]),fillEnds:new Float32Array([.01,0,.85,.5]),fillFractions:new Float32Array([.5]),
     reconstruction:{positions:new Float32Array([-.1,0,.15,-.01,.08,.15]),colors:new Float32Array([1,0,0,0,0,1]),rands:new Float32Array([.5,.5]),
-      occluders:new Float32Array([0,0,.9,.5,0,.08,.9,.5]),normals:new Float32Array([1,0,1,0]),sideThickness:new Float32Array([2/3,1,2/3,1])}};
+      occluders:new Float32Array([0,0,.9,.5,0,.08,.9,.5]),normals:new Float32Array([1,0,1,0]),sideThickness:new Float32Array([2/3,1,1,2/3,1,1])}};
   scene.setCloud(cloud);
   const settings={...DEFAULTS,bands:4,bandMap:'depth',bandDistribution:0,invertBands:false,smartDepthBands:false,equalDepthMovement:false,occludedBackground:true,reconstructionBrightness:1,reconstructionSideOcclusion:false,gapFill:1,gapFillPointLimit:1000,gapFillBrightness:1,gapFillOnlyOpen:false,gapFillAdaptive:0,gapFillForegroundLimit:true,gapFillManualLimit:false,gapFillThicknessBias:1,depthScale:.8,depthShape:0,audioCurvature:0,dollyZoom:0,boost:0,sizePulse:0,intensity:0,depthShading:0,hueReaction:0,hueCycle:0,motionWave:0,motionRipple:0,motionBands:0,motionDrift:0,motionSwirl:0,motionBreathe:0,motionSweep:0,motionBandShake:0};
   const gl=scene.renderer.getContext(),pixels=new Uint8Array(256*256*4);

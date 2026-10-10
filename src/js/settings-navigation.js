@@ -38,7 +38,7 @@ export class SettingsNavigation {
       [byId('occlusionTuning'), () => get('occludedBackground') && get('reconstructionOcclusion') && get('reconstructionSideOcclusion') && get('reconstructionSharedOcclusion') && get('gapFill')>0],
       [byId('gapFillRows').closest('details'), () => get('gapFill') > 0],
       [row('gapFillThickness'), () => get('occludedBackground') && get('gapFillManualLimit')],
-      [row('gapFillThicknessBias'), () => get('occludedBackground') && get('gapFillForegroundLimit')],
+      ...['gapFillThicknessBias', 'gapFillThicknessBalance'].map(id => [row(id), () => get('occludedBackground') && get('gapFillForegroundLimit')]),
       ...['gapFillManualLimit', 'gapFillForegroundLimit'].map(id => [row(id), () => get('occludedBackground')]),
       ...['lightFollowMotion', 'preserveBoostColor'].map(id => [row(id), () => get('boost') > 0]),
       [row('hueFocus'), () => get('hueReaction') !== 0],

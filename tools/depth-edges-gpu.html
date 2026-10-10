@@ -20,7 +20,7 @@ try{
   let sides=0;
   for(let i=0;i<clean.fillFractions.length;i++)if(Math.abs(clean.fillStarts[i*4+1])<.4 && Math.abs(clean.fillStarts[i*4+2]-clean.fillEnds[i*4+2])>.3){
     sides++;
-    if(Math.abs(clean.fillForeground[i*4+3])!==2 || clean.fillThickness[i*2+1]!==1)throw Error('Cleaned edge lost foreground ownership or thickness control');
+    if(Math.abs(clean.fillForeground[i*4+3])!==2 || clean.fillThickness[i*3+1]!==1)throw Error('Cleaned edge lost foreground ownership or thickness control');
     if(clean.fillForeground[i*4]<.8 || clean.fillForeground[i*4+2]>.2)throw Error('Sidewall uses background instead of red foreground');
   }
   if(sides<50)throw Error('Cleaned edge removed the foreground sidewall: '+sides);
@@ -31,13 +31,13 @@ try{
   for(let i=0;i<clean.fillFractions.length;i++){
     const foreground=clean.fillForeground[i*4+3];if(!foreground)continue;
     const first=foreground>0 ? clean.fillStarts:clean.fillEnds,last=foreground>0 ? clean.fillEnds:clean.fillStarts;
-    walls.add([...first.subarray(i*4,i*4+4),...last.subarray(i*4,i*4+4),...clean.fillThickness.subarray(i*2,i*2+2)].join(','));
+    walls.add([...first.subarray(i*4,i*4+4),...last.subarray(i*4,i*4+4),...clean.fillThickness.subarray(i*3,i*3+3)].join(','));
   }
   let bound=0;
   const hidden=clean.reconstruction;
   for(let i=0;i<hidden.rands.length;i++)if(hidden.sideRears[i*4+3]>=0){
     bound++;
-    if(!walls.has([...hidden.sideFronts.subarray(i*4,i*4+4),...hidden.sideRears.subarray(i*4,i*4+4),...hidden.sideThickness.subarray(i*2,i*2+2)].join(',')))throw Error('Occlusion references a wall that was not emitted');
+    if(!walls.has([...hidden.sideFronts.subarray(i*4,i*4+4),...hidden.sideRears.subarray(i*4,i*4+4),...hidden.sideThickness.subarray(i*3,i*3+3)].join(',')))throw Error('Occlusion references a wall that was not emitted');
   }
   if(!bound)throw Error('No hidden points matched real wall endpoints');
   const worker=await buildCloud(image,depth,20000,1,{...mapping,cleanDepthEdges:true});

@@ -5,6 +5,15 @@ export const MAX_OBJECT_MASKS=64;
 const STRUCTURE=new Set([0,1,8,14,25,38,42,43,48,58,63,79,84,86,95,100,106,123,144]);
 const PLANTS=new Set([4,17,66,72]);
 const BACKGROUND=new Set([2,3,5,6,9,11,13,16,21,26,29,46,52,54,60,68,91,94,109,113,128]);
+// Typical depth/width of each surface group (ADE20K ids + 3) for Auto
+// thickness: walls of buildings run deep, people and poles are thin, vehicles
+// are longer than their visible width. Unknown objects use 1.
+const DEPTH_RATIOS=new Map([[1,1.5],[2,.8],
+  ...[12,126].map(id=>[id+3,.6]),
+  ...[93,87,136,149,36,98,135].map(id=>[id+3,.4]),
+  ...[22,27,18,130,141,143,89,32].map(id=>[id+3,.2]),
+  ...[20,80,83,102,76,103,90,116,127].map(id=>[id+3,2])]);
+export const depthRatio=group=>DEPTH_RATIOS.get(group) ?? 1;
 export function surfaceClass(id){return BACKGROUND.has(id) ? 0:STRUCTURE.has(id) ? 1:PLANTS.has(id) ? 2:id+3;}
 export function sceneClasses(logits,dims,w,h,alpha){
   const [,channels,height,width]=dims;

@@ -9,11 +9,11 @@ try{
  scene.renderer.debug.onShaderError=(gl,p,v,f)=>shaderErrors.push({lost:gl.isContextLost(),program:gl.getProgramInfoLog(p),vertex:gl.getShaderInfoLog(v),fragment:gl.getShaderInfoLog(f),vertexCompiled:gl.getShaderParameter(v,gl.COMPILE_STATUS),fragmentCompiled:gl.getShaderParameter(f,gl.COMPILE_STATUS)});
  scene.renderer.setSize(320,320,false);scene.camera.aspect=1;scene.camera.position.set(0,0,2);scene.camera.lookAt(0,0,0);scene.camera.updateProjectionMatrix();scene.camera.updateMatrixWorld();
  const sideMask={starts:[],ends:[],t:[0,1,0,1],thickness:[],foreground:[],indices:[0,1,2,2,1,3]};
- for(const y of [-.12,-.12,.12,.12]){sideMask.starts.push(0,y,.8,.5);sideMask.ends.push(0,y,.2,.5);sideMask.thickness.push(.3,1);sideMask.foreground.push(1,0,0,2);}
+ for(const y of [-.12,-.12,.12,.12]){sideMask.starts.push(0,y,.8,.5);sideMask.ends.push(0,y,.2,.5);sideMask.thickness.push(.3,1,1);sideMask.foreground.push(1,0,0,2);}
  for(const key of Object.keys(sideMask))sideMask[key]=key==='indices'?new Uint32Array(sideMask[key]):new Float32Array(sideMask[key]);
- const cloud={aspect:1,count:3,baseCount:2,positions:new Float32Array(9),colors:new Float32Array(9),rands:new Float32Array(3).fill(.5),fillStarts:new Float32Array([0,0,.8,.5]),fillEnds:new Float32Array([0,0,.2,.5]),fillFractions:new Float32Array([.5]),fillThickness:new Float32Array([.3,1]),fillForeground:new Float32Array([0,0,0,2]),sideMask,
+ const cloud={aspect:1,count:3,baseCount:2,positions:new Float32Array(9),colors:new Float32Array(9),rands:new Float32Array(3).fill(.5),fillStarts:new Float32Array([0,0,.8,.5]),fillEnds:new Float32Array([0,0,.2,.5]),fillFractions:new Float32Array([.5]),fillThickness:new Float32Array([.3,1,1]),fillForeground:new Float32Array([0,0,0,2]),sideMask,
  // Rays from camera (.4,0,2) cross the wall at z=.65 (red/green), z=.35 (blue).
- reconstruction:{positions:new Float32Array([-.06,0,.4475,-.06,0,.1025,.06,0,.8525]),colors:new Float32Array([1,0,0,0,0,1,0,1,0]),rands:new Float32Array(3).fill(.5),occluders:new Float32Array([-.3,0,.9,.5,-.3,0,.9,.5,-.3,0,.9,.5]),normals:new Float32Array([1,0,1,0,1,0]),sideFronts:new Float32Array(12),sideRears:new Float32Array([0,0,0,-2,0,0,0,-2,0,0,0,-2]),sideThickness:new Float32Array(6)}};
+ reconstruction:{positions:new Float32Array([-.06,0,.4475,-.06,0,.1025,.06,0,.8525]),colors:new Float32Array([1,0,0,0,0,1,0,1,0]),rands:new Float32Array(3).fill(.5),occluders:new Float32Array([-.3,0,.9,.5,-.3,0,.9,.5,-.3,0,.9,.5]),normals:new Float32Array([1,0,1,0,1,0]),sideFronts:new Float32Array(12),sideRears:new Float32Array([0,0,0,-2,0,0,0,-2,0,0,0,-2]),sideThickness:new Float32Array(9)}};
  scene.setCloud(cloud);
  const settings={...DEFAULTS,depthScale:1,occludedBackground:true,reconstructionBrightness:1,gapFill:1,gapFillBrightness:1,gapFillOnlyOpen:false,gapFillAdaptive:0,gapFillManualLimit:true,gapFillThickness:.5,intensity:0,boost:0,sizePulse:0,glow:1,pointSize:1};
  const gl=scene.renderer.getContext(),pixels=new Uint8Array(320*320*4);let cameraTurn=0;
@@ -75,14 +75,14 @@ try{
  if(strict.red || !tolerant.red)throw Error('Depth tolerance did not change near-surface allowance');
  baseCloud.positions.set([0,0,.65],0);scene.setCloud(baseCloud);
  if(!draw({reconstructionSideOcclusion:true,reconstructionBrightness:0}).red)throw Error('Wall mask removed its coplanar foreground points');
- const fillCloud={...cloud,count:4,baseCount:1,positions:new Float32Array(12),colors:new Float32Array([0,0,0,...cloud.reconstruction.colors]),rands:new Float32Array(4).fill(.5),fillStarts:new Float32Array(12),fillEnds:new Float32Array(12),fillFractions:new Float32Array(3).fill(.5),fillThickness:new Float32Array(6),fillForeground:new Float32Array(12)};
+ const fillCloud={...cloud,count:4,baseCount:1,positions:new Float32Array(12),colors:new Float32Array([0,0,0,...cloud.reconstruction.colors]),rands:new Float32Array(4).fill(.5),fillStarts:new Float32Array(12),fillEnds:new Float32Array(12),fillFractions:new Float32Array(3).fill(.5),fillThickness:new Float32Array(9),fillForeground:new Float32Array(12)};
  for(let i=0;i<3;i++){fillCloud.fillStarts.set([...cloud.reconstruction.positions.subarray(i*3,i*3+3),.5],i*4);fillCloud.fillEnds.set(fillCloud.fillStarts.subarray(i*4,i*4+4),i*4);}
  scene.setCloud(fillCloud);
  const seamsOff=draw({reconstructionSideOcclusion:false,reconstructionBrightness:0}),seamsOn=draw({reconstructionSideOcclusion:true,reconstructionBrightness:0});
  if(!seamsOff.red || seamsOn.red || !seamsOn.green || !seamsOn.blue)throw Error('Background gap-fill particles still leaked through a sidewall');
- fillCloud.fillThickness.set([.3,1]);fillCloud.fillForeground.set([1,0,0,2]);scene.setCloud(fillCloud);
+ fillCloud.fillThickness.set([.3,1,1]);fillCloud.fillForeground.set([1,0,0,2]);scene.setCloud(fillCloud);
  if(!draw({reconstructionSideOcclusion:true,reconstructionBrightness:0}).red)throw Error('Shared mask removed foreground shell fill');
- fillCloud.fillStarts.set([0,0,.8,.5]);fillCloud.fillEnds.set([0,0,.2,.5]);fillCloud.fillThickness.set([.3,1]);fillCloud.fillForeground.set([1,0,0,2]);scene.setCloud(fillCloud);
+ fillCloud.fillStarts.set([0,0,.8,.5]);fillCloud.fillEnds.set([0,0,.2,.5]);fillCloud.fillThickness.set([.3,1,1]);fillCloud.fillForeground.set([1,0,0,2]);scene.setCloud(fillCloud);
  if(!draw({reconstructionSideOcclusion:true,reconstructionBrightness:0}).red)throw Error('Wall mask hid the wall filling itself');
  scene.setCloud(cloud);
  // Rotate the wall and all probes together: the shared mask has no preferred axis.
@@ -101,7 +101,7 @@ try{
  const faceCloud={...cloud,count:65,baseCount:65,positions:new Float32Array(facePositions),colors:new Float32Array(faceColours),rands:new Float32Array(facePhases),sideMask:null,fillFractions:null};
  // A dummy fill keeps the side-occlusion feature active; no wall mask geometry.
  faceCloud.count=66;faceCloud.positions=new Float32Array([...facePositions,0,0,0]);faceCloud.colors=new Float32Array([...faceColours,0,0,0]);faceCloud.rands=new Float32Array([...facePhases,.5]);
- faceCloud.fillFractions=new Float32Array([.5]);faceCloud.fillThickness=new Float32Array(2);faceCloud.fillForeground=new Float32Array(4);
+ faceCloud.fillFractions=new Float32Array([.5]);faceCloud.fillThickness=new Float32Array(3);faceCloud.fillForeground=new Float32Array(4);
  scene.setCloud(faceCloud);
  const faceOff=draw({reconstructionSideOcclusion:true,reconstructionBrightness:0});
  if(!faceOff.blue || scene.sideMask.faces)throw Error('Off allocated front geometry or background fixture invisible');

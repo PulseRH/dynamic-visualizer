@@ -264,6 +264,7 @@ export class UI {
     slider('gapFillThickness','gapFillThickness',v=>`${Math.round(v*100)}%`);
     $('aiFillThickness').onchange=e=>set({aiFillThickness:e.target.checked});
     slider('gapFillThicknessBias','gapFillThicknessBias',v=>`${v.toFixed(2)}×`);
+    slider('gapFillThicknessBalance','gapFillThicknessBalance',v=>v===0 ? 'Equal':`${Math.round(v*100)}%`);
     slider('pointCount', 'pointCount', (v) => `${Math.round(v / 1000)}k`);
     slider('pointSize', 'pointSize', (v) => v.toFixed(1));
     slider('glow', 'glow', (v) => v.toFixed(2));
@@ -471,7 +472,7 @@ export class UI {
 
   _syncAll() {
     this.navigation.update();
-    for(const [key,fmt] of [['gapFillPointLimit',v=>v===0 ? 'Off':`${Math.round(v/1000)}k`],['reconstructionPointLimit',v=>`${Math.round(v/1000)}k`],['reconstructionWidth',v=>`${v.toFixed(2)}×`],['gapFillThicknessBias',v=>`${v.toFixed(2)}×`]]){
+    for(const [key,fmt] of [['gapFillPointLimit',v=>v===0 ? 'Off':`${Math.round(v/1000)}k`],['reconstructionPointLimit',v=>`${Math.round(v/1000)}k`],['reconstructionWidth',v=>`${v.toFixed(2)}×`],['gapFillThicknessBias',v=>`${v.toFixed(2)}×`],['gapFillThicknessBalance',v=>v===0 ? 'Equal':`${Math.round(v*100)}%`]]){
       $(key).value=get(key);$(key).parentElement.querySelector('.val').textContent=fmt(get(key));
     }
     $('occludedBackground').checked=!!get('occludedBackground');

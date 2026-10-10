@@ -72,7 +72,7 @@ const VERT = /* glsl */ `
   #ifdef OCCLUDED_BACKGROUND
     attribute vec4 aOccluder;
     attribute vec2 aOutward;
-    attribute vec2 aSideThickness;
+    attribute vec3 aSideThickness;
     attribute vec4 aSideFront;
     attribute vec4 aSideRear;
     uniform float uReconstructionBrightness;
@@ -82,7 +82,7 @@ const VERT = /* glsl */ `
     attribute vec4 aFillStart;
     attribute vec4 aFillEnd;
     attribute float aFillT;
-    attribute vec2 aFillThickness;
+    attribute vec3 aFillThickness;
     attribute vec4 aFillForeground;
     uniform float uFillBrightness;
     uniform float uFillSamples;
@@ -92,6 +92,7 @@ const VERT = /* glsl */ `
     uniform float uFillAdaptive;
     uniform float uFillThicknessAuto;
     uniform float uFillThicknessBias;
+    uniform float uFillThicknessBalance;
     uniform float uFillThicknessManual;
     uniform float uFillThickness;
   #endif
@@ -337,9 +338,12 @@ const VERT = /* glsl */ `
     }
   }
   #if defined(GAP_FILL) || defined(OCCLUDED_BACKGROUND)
-  float limitedFillSpan(float span, vec2 thickness) {
+  float limitedFillSpan(float span, vec3 thickness) {
     float fraction=1.0;
-    if(uFillThicknessAuto>.5)fraction=min(1.0,thickness.x*uFillThicknessBias);
+    // Size balance: 1 keeps each object's estimate, 0 gives every object the
+    // image's typical depth, above 1 exaggerates small/large differences.
+    float size=thickness.z>0.0 ? thickness.z:1.0;
+    if(uFillThicknessAuto>.5)fraction=min(1.0,thickness.x*uFillThicknessBias*pow(size,uFillThicknessBalance-1.0));
     if(uFillThicknessManual>.5)fraction=min(fraction,uFillThickness);
     return mix(1.0,fraction,clamp(thickness.y,0.0,1.0));
   }
@@ -678,6 +682,7 @@ export class VisualScene {
       uFillSpacing: { value: 1 / 300 },
       uFillThicknessAuto: { value: 0 },
       uFillThicknessBias: { value: 1 },
+      uFillThicknessBalance: { value: 1 },
       uFillThicknessManual: { value: 0 },
       uFillThickness: { value: .6 },
       uSmartDepthBands: {value:0},
@@ -838,20 +843,20 @@ export class VisualScene {
     this.uniforms.uSideWallReferences.value=hidden?.sideRears ? 1:0;
     if(hidden?.rands.length){
       this.reconstructionMaterial ||= new THREE.ShaderMaterial({uniforms:this.uniforms,defines:{OCCLUDED_BACKGROUND:1},vertexShader:VERT,fragmentShader:FRAG,blending:THREE.AdditiveBlending,depthTest:false,depthWrite:false,transparent:true});
-      this.reconstructionMaterial.defaultAttributeValues.aSideThickness=[0,0];
+      this.reconstructionMaterial.defaultAttributeValues.aSideThickness=[0,0,1];
       this.reconstructionMaterial.defaultAttributeValues.aSideFront=[0,0,0,0];
       this.reconstructionMaterial.defaultAttributeValues.aSideRear=[0,0,0,-1];
       const geometry=new THREE.BufferGeometry();
       for(const [name,key,size] of [['position','positions',3],['aColor','colors',3],['aRand','rands',1],['aOccluder','occluders',4],['aOutward','normals',2]])geometry.setAttribute(name,new THREE.BufferAttribute(hidden[key],size));
       if(hidden.sideFronts)geometry.setAttribute('aSideFront',new THREE.BufferAttribute(hidden.sideFronts,4));
       if(hidden.sideRears)geometry.setAttribute('aSideRear',new THREE.BufferAttribute(hidden.sideRears,4));
-      if(hidden.sideThickness)geometry.setAttribute('aSideThickness',new THREE.BufferAttribute(hidden.sideThickness,2));
+      if(hidden.sideThickness)geometry.setAttribute('aSideThickness',new THREE.BufferAttribute(hidden.sideThickness,3));
       this.reconstructionPoints=new THREE.Points(geometry,this.reconstructionMaterial);
       this.reconstructionPoints.frustumCulled=false;this.scene.add(this.reconstructionPoints);
     }
     if(cloud.fillFractions?.length){
       this.fillMaterial ||= new THREE.ShaderMaterial({uniforms:this.uniforms,defines:{GAP_FILL:1},vertexShader:VERT,fragmentShader:FRAG,blending:THREE.AdditiveBlending,depthTest:false,depthWrite:false,transparent:true});
-      this.fillMaterial.defaultAttributeValues.aFillThickness=[0,0];
+      this.fillMaterial.defaultAttributeValues.aFillThickness=[0,0,1];
       this.fillMaterial.defaultAttributeValues.aFillForeground=[0,0,0,0];
       const fill=new THREE.BufferGeometry();
       fill.setAttribute('position',new THREE.BufferAttribute(cloud.positions.subarray(baseCount*3),3));
@@ -860,7 +865,7 @@ export class VisualScene {
       fill.setAttribute('aFillStart',new THREE.BufferAttribute(cloud.fillStarts,4));
       fill.setAttribute('aFillEnd',new THREE.BufferAttribute(cloud.fillEnds,4));
       fill.setAttribute('aFillT',new THREE.BufferAttribute(cloud.fillFractions,1));
-      if(cloud.fillThickness)fill.setAttribute('aFillThickness',new THREE.BufferAttribute(cloud.fillThickness,2));
+      if(cloud.fillThickness)fill.setAttribute('aFillThickness',new THREE.BufferAttribute(cloud.fillThickness,3));
       if(cloud.fillForeground)fill.setAttribute('aFillForeground',new THREE.BufferAttribute(cloud.fillForeground,4));
       this.fillPoints=new THREE.Points(fill,this.fillMaterial);this.fillPoints.frustumCulled=false;
       this.scene.add(this.fillPoints);
@@ -1008,6 +1013,7 @@ export class VisualScene {
     this.uniforms.uFillSamples.value = Math.max(3,Math.min(24,s.gapFillDensity ?? 12));
     this.uniforms.uFillThicknessAuto.value=s.occludedBackground && s.gapFillForegroundLimit ? 1:0;
     this.uniforms.uFillThicknessBias.value=Math.max(.25,Math.min(2.5,s.gapFillThicknessBias ?? 1));
+    this.uniforms.uFillThicknessBalance.value=Math.max(0,Math.min(2,s.gapFillThicknessBalance ?? 1));
     this.uniforms.uFillThicknessManual.value=s.occludedBackground && s.gapFillManualLimit ? 1:0;
     this.uniforms.uFillThickness.value=Math.max(0,Math.min(1,s.gapFillThickness ?? .6));
     const depthBandKey=`${s.bands}/${s.bandDistribution||0}`;

@@ -14,7 +14,7 @@ try{
  scene.applySettings(base);scene.uniforms.uSize.value=3;scene.uniforms.uCursor.value.set(0,0,0);
  const positions=[-.12,0,.7,.12,0,.3],starts=[],ends=[],fractions=[.2,.4,.6,.8];
  for(const [i,t] of fractions.entries()){const y=(i-1.5)*.08;positions.push(-.12+.24*t,y,.7-.4*t);starts.push(-.12,y,.7,.2);ends.push(.12,y,.3,.8);}
- scene.setCloud({count:6,baseCount:2,aspect:1,positions:new Float32Array(positions),colors:new Float32Array(Array.from({length:18},(_,i)=>i%3===2 ? .6:0)),rands:new Float32Array([.2,.8,.1,.2,.3,.4]),fillStarts:new Float32Array(starts),fillEnds:new Float32Array(ends),fillFractions:new Float32Array(fractions),fillThickness:new Float32Array([.5,1,.5,1,.5,1,.5,1]),fillForeground:new Float32Array([.6,0,0,1,.6,0,0,1,.6,0,0,1,.6,0,0,1])});
+ scene.setCloud({count:6,baseCount:2,aspect:1,positions:new Float32Array(positions),colors:new Float32Array(Array.from({length:18},(_,i)=>i%3===2 ? .6:0)),rands:new Float32Array([.2,.8,.1,.2,.3,.4]),fillStarts:new Float32Array(starts),fillEnds:new Float32Array(ends),fillFractions:new Float32Array(fractions),fillThickness:new Float32Array([.5,1,1,.5,1,1,.5,1,1,.5,1,1]),fillForeground:new Float32Array([.6,0,0,1,.6,0,0,1,.6,0,0,1,.6,0,0,1])});
  scene.uniforms.uFillSpacing.value=.004;
  scene.points.visible=false;
  const geometry=scene.fillPoints.geometry,gl=scene.renderer.getContext(),pixels=new Uint8Array(300*300*4);
@@ -45,6 +45,13 @@ try{
  scene.applySettings({...base,depthScale:.8});verifyPositions(.56,.24,.5);
  scene.applySettings({...base,gapFillThicknessBias:.5});verifyPositions(.28,.12,.25);
  scene.applySettings({...base,gapFillThicknessBias:2});verifyPositions(.28,.12,1);
+ // Size balance: an object four times the image's typical size.
+ {const size=geometry.attributes.aFillThickness;for(let i=0;i<4;i++)size.array[i*3+2]=4;size.needsUpdate=true;
+  scene.applySettings({...base,gapFillThicknessBalance:1});verifyPositions(.28,.12,.5);
+  scene.applySettings({...base,gapFillThicknessBalance:0});verifyPositions(.28,.12,.125);
+  scene.applySettings({...base,gapFillThicknessBalance:.5});verifyPositions(.28,.12,.25);
+  scene.applySettings({...base,gapFillThicknessBalance:2});verifyPositions(.28,.12,1);
+  for(let i=0;i<4;i++)size.array[i*3+2]=1;size.needsUpdate=true;}
  scene.applySettings({...base,gapFillForegroundLimit:false,gapFillManualLimit:true,gapFillThickness:.6});verifyPositions(.28,.12,.6);
  scene.applySettings({...base,gapFillForegroundLimit:false,gapFillManualLimit:true,gapFillThickness:1});verifyPositions(.28,.12,1);
  scene.applySettings({...base,gapFillManualLimit:true,gapFillThickness:.25});verifyPositions(.28,.12,.25);
@@ -67,20 +74,20 @@ try{
  for(let i=0;i<4;i++){begin.array[i*4+2]=.7;end.array[i*4+2]=.3;foreground.array[i*4+3]=1;}
  begin.needsUpdate=end.needsUpdate=foreground.needsUpdate=true;
  const shell=geometry.attributes.aFillThickness;
- for(let i=0;i<4;i++)shell.array[i*2]=.1;shell.needsUpdate=true;
+ for(let i=0;i<4;i++)shell.array[i*3]=.1;shell.needsUpdate=true;
  verifyPositions(.28,.12,.1);
- for(let i=0;i<4;i++){shell.array[i*2]=.5;shell.array[i*2+1]=.5;}shell.needsUpdate=true;
+ for(let i=0;i<4;i++){shell.array[i*3]=.5;shell.array[i*3+1]=.5;}shell.needsUpdate=true;
  verifyPositions(.28,.12,.5,.5);
  for(const weight of [.009,.011]){
-   for(let i=0;i<4;i++)shell.array[i*2+1]=weight;shell.needsUpdate=true;
+   for(let i=0;i<4;i++)shell.array[i*3+1]=weight;shell.needsUpdate=true;
    verifyPositions(.28,.12,.5,weight);
  }
- for(let i=0;i<4;i++){shell.array[i*2]=.5;shell.array[i*2+1]=0;}shell.needsUpdate=true;
+ for(let i=0;i<4;i++){shell.array[i*3]=.5;shell.array[i*3+1]=0;}shell.needsUpdate=true;
  if(counts().join()!=='1,1,1,1')throw Error('Interior band seams were cut');
  scene.applySettings({...base,gapFillManualLimit:true,gapFillThickness:0});if(counts().join()!=='1,1,1,1')throw Error('Manual limit hid unclassified interior seams');scene.applySettings(base);
- shell.array.fill(0);shell.needsUpdate=true;
+ for(let i=0;i<4;i++){shell.array[i*3]=0;shell.array[i*3+1]=0;}shell.needsUpdate=true;
  if(counts().join()!=='1,1,1,1')throw Error('Background fill was shortened');
- for(let i=0;i<4;i++){shell.array[i*2]=.5;shell.array[i*2+1]=1;}shell.needsUpdate=true;geometry.setDrawRange(0,4);
+ for(let i=0;i<4;i++){shell.array[i*3]=.5;shell.array[i*3+1]=1;}shell.needsUpdate=true;geometry.setDrawRange(0,4);
  scene.applySettings({...base,gapFillForegroundLimit:false});draw();const neutral=pixels.slice();
  if(!(channels()[2]>0&&channels()[0]===0))throw Error('Disabled Auto thickness changed ordinary seam colour');
  scene.applySettings({...base,occludedBackground:false});draw();if(!pixels.every((v,i)=>v===neutral[i]))throw Error('Disabled reconstruction affected fill');

@@ -3,8 +3,7 @@ import {readFile} from 'node:fs/promises';
 const occlusionSource=await readFile(new URL('../src/js/occlusion.js',import.meta.url),'utf8');
 const occlusionUrl=`data:text/javascript;base64,${Buffer.from(occlusionSource).toString('base64')}`;
 const {prepareOcclusion,sampleOcclusion,resolveSideWalls}=await import(occlusionUrl);
-const thicknessSource=await readFile(new URL('../src/js/fill-thickness.js',import.meta.url),'utf8');
-const {estimateFillThickness}=await import(`data:text/javascript;base64,${Buffer.from(thicknessSource).toString('base64')}`);
+const {estimateFillThickness}=await import('../src/js/fill-thickness.js');
 const depth={w:128,h:96,data:new Float32Array(128*96).fill(.15)};
 for(let y=20;y<76;y++)for(let x=40;x<88;x++)depth.data[y*128+x]=.9;
 const prepared=prepareOcclusion(depth);assert.ok(prepared.count>1000);
@@ -70,10 +69,10 @@ wide.rgb=new Uint8Array(wide.w*wide.h*3).fill(96);delete wide.mask;
 wide.thickness=new Float32Array(wide.w*wide.h).fill(.123);
 wide.edgeWeight=new Float32Array(wide.w*wide.h).fill(.65);
 const baseline=sampleOcclusion(wide,2,400000),more=sampleOcclusion(wide,2,400000,{reconstructionPointLimit:120000,reconstructionWidth:2.5});
-assert.equal(more.sideThickness.length,more.rands.length*2);
+assert.equal(more.sideThickness.length,more.rands.length*3);
 for(let i=0;i<more.rands.length;i++){
-  assert.equal(more.sideThickness[i*2],Math.fround(.123));
-  assert.equal(more.sideThickness[i*2+1],Math.fround(.65));
+  assert.equal(more.sideThickness[i*3],Math.fround(.123));
+  assert.equal(more.sideThickness[i*3+1],Math.fround(.65));
 }
 assert.equal(baseline.rands.length,40000);assert.equal(more.rands.length,120000,'explicit point budget must exceed both 40k and the old 20% cap');
 const furthest=cloud=>{let max=0;for(let i=0;i<cloud.rands.length;i++){const x=(cloud.positions[i*3]/2+.5)*256,y=(.5-cloud.positions[i*3+1])*128;max=Math.max(max,Math.min(x-48,208-x,y-16,112-y));}return max;};
@@ -99,6 +98,12 @@ assert.deepEqual(unpackReconstruction(packReconstruction(prepared)),prepared);
 assert.deepEqual(unpackReconstruction(packReconstruction(legacy)),legacy,'existing 18-byte-per-pixel caches must remain readable');
 const outdated=packReconstruction(prepared);new Uint32Array(outdated,0,4)[3]=0;
 assert.deepEqual(unpackReconstruction(outdated),legacy,'outdated thickness must drop only the estimate, keeping cached AI colours and geometry');
+{
+  // The previous two-field thickness layout must also drop to the AI-only fields.
+  const {sizeRatio,...twoField}=prepared,n=prepared.w*prepared.h,old=new Uint8Array(16+n*26),fresh=new Uint8Array(packReconstruction(prepared));
+  old.set(fresh.subarray(0,16+n*26));new Uint32Array(old.buffer,0,4)[3]=2;
+  assert.deepEqual(unpackReconstruction(old.buffer),legacy,'two-field thickness caches must be re-estimated');
+}
 assert.equal(unpackReconstruction(packReconstruction(null)),null);
 assert.throws(()=>unpackReconstruction(new ArrayBuffer(17)));
 const bitmap={hash:'same'};assert.equal(await reconstructBackground(bitmap,depth),prepared);

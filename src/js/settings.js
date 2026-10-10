@@ -89,6 +89,7 @@ export const DEFAULTS = {
   surfaceCohesion: .75,    // shared audio motion on confident AI wall surfaces; geometry stays original
   smartDepthBands: false, // snap audio cuts toward valleys in the image depth distribution
   gapFillThicknessBias: 1, // multiplier of each object's automatic percentage
+  gapFillThicknessBalance: 1, // 0 = same depth for all objects, 1 = estimate, 2 = exaggerated size contrast
   gapFillManualLimit: false, // optional uniform percentage cap, alongside Auto thickness
   gapFillThickness: .6,    // retained foreground side span when manual limiting is on
   pinWallpaperSelector: false, // keep image selection visible while scrolling settings

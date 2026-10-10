@@ -29,8 +29,8 @@ self.onmessage=async({data:{bitmap,depth,reconstruction,classifications}})=>{
     }else self.postMessage({status:'Updating surfaces from saved AI masks…'});
     const {classes,confidence}=classifications;
     reconstruction ||= prepareOcclusion(depth,OCCLUSION_MAX_WIDTH);
-    const objects=sceneObjects(classes,confidence,depth,reconstruction),field=estimateFillThickness(depth,reconstruction,objects);
-    self.postMessage({ok:true,result:{...field,labels:objects.labels,count:objects.count},classifications:reused ? null:classifications},[field.thickness.buffer,field.edgeWeight.buffer,objects.labels.buffer,...(reused ? []:[classes.buffer,confidence.buffer])]);
+    const objects=sceneObjects(classes,confidence,depth,reconstruction),field=estimateFillThickness(depth,reconstruction,{...objects,classes});
+    self.postMessage({ok:true,result:{...field,labels:objects.labels,count:objects.count},classifications:reused ? null:classifications},[field.thickness.buffer,field.edgeWeight.buffer,field.sizeRatio.buffer,objects.labels.buffer,...(reused ? []:[classes.buffer,confidence.buffer])]);
   }catch(error){self.postMessage({ok:false,error:error.message});}
   finally{try{await session?.release();}catch{}bitmap?.close();}
 };
