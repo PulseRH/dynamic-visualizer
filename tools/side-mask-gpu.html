@@ -103,10 +103,15 @@ try{
  faceCloud.count=66;faceCloud.positions=new Float32Array([...facePositions,0,0,0]);faceCloud.colors=new Float32Array([...faceColours,0,0,0]);faceCloud.rands=new Float32Array([...facePhases,.5]);
  faceCloud.fillFractions=new Float32Array([.5]);faceCloud.fillThickness=new Float32Array(3);faceCloud.fillForeground=new Float32Array(4);
  scene.setCloud(faceCloud);
+ // The extra blue probe represents another layer moving behind this face.
+ // Keep it outside the foreground source grid used to test its mask topology.
+ scene.sideMask.setFaces({...faceCloud,baseCount:64});
  const faceOff=draw({reconstructionSideOcclusion:true,reconstructionBrightness:0});
  if(!faceOff.blue || scene.sideMask.faces)throw Error('Off allocated front geometry or background fixture invisible');
  const faceOn=draw({reconstructionSideOcclusion:true,reconstructionBrightness:0,reconstructionFaceCoverage:1});
  if(faceOn.blue || !faceOn.red || !scene.sideMask.target)throw Error('Front face coverage did not hide background or hid its surface');
+ const strongFace=draw({reconstructionSideOcclusion:true,reconstructionBrightness:0,reconstructionFaceCoverage:3});
+ if(!strongFace.pixels.every((v,i)=>v===faceOn.pixels[i]))throw Error('Higher continuity expanded a flat silhouette');
  const faceGeometry=scene.sideMask.faces.geometry;
  const faceRestored=draw({reconstructionSideOcclusion:true,reconstructionBrightness:0,reconstructionFaceCoverage:0});
  if(scene.sideMask.target || !faceRestored.pixels.every((v,i)=>v===faceOff.pixels[i]))throw Error('Face off failed to restore pixels/release mask');
@@ -115,10 +120,26 @@ try{
  for(let i=0;i<64;i++)faceCloud.positions[i*3+2]=.7+faceCloud.positions[i*3]*.15;
  const roofDepth=.7+.0625*.15,roofRay=1.8/(2-roofDepth);
  faceCloud.positions.set([.4+(.0625-.4)*roofRay,.0625*roofRay,.2],64*3);scene.setCloud(faceCloud);
+ scene.sideMask.setFaces({...faceCloud,baseCount:64});
  const slopeOff=draw({reconstructionSideOcclusion:true,reconstructionBrightness:0,reconstructionFaceCoverage:0});
  const slopeOn=draw({reconstructionSideOcclusion:true,reconstructionBrightness:0,reconstructionFaceCoverage:1});
  if(!slopeOff.blue || slopeOn.blue || !slopeOn.red)throw Error('Sloped front coverage failed');
+ // Background immediately outside the projected face must stay visible even
+ // at maximum continuity (the circular footprint previously swallowed it).
+ faceCloud.positions.set([.4+(.48-.4)*1.8/1.3,.0625*1.8/1.3,.2],64*3);
+ for(let i=0;i<64;i++)faceCloud.positions[i*3+2]=.7;
+ scene.setCloud(faceCloud);scene.sideMask.setFaces({...faceCloud,baseCount:64});
+ const outside=draw({reconstructionSideOcclusion:true,reconstructionBrightness:0,reconstructionFaceCoverage:3});
+ if(!outside.blue || !outside.red)throw Error('Face mask created an exterior black outline');
+ // Preserve a real parallax opening between two abruptly separated depths.
+ for(let i=0;i<64;i++)faceCloud.positions[i*3+2]=faceCloud.positions[i*3]<0 ? .7:.2;
+ const left=new THREE.Vector3(-.0625,.0625,.7).project(scene.camera),right=new THREE.Vector3(.0625,.0625,.2).project(scene.camera);
+ const ray=new THREE.Vector3((left.x+right.x)*.5,(left.y+right.y)*.5,.5).unproject(scene.camera).sub(scene.camera.position);
+ const probe=scene.camera.position.clone().addScaledVector(ray,(.05-scene.camera.position.z)/ray.z);
+ faceCloud.positions.set(probe.toArray(),64*3);scene.setCloud(faceCloud);scene.sideMask.setFaces({...faceCloud,baseCount:64});
+ const separated=draw({reconstructionSideOcclusion:true,reconstructionBrightness:0,reconstructionFaceCoverage:3});
+ if(!separated.blue)throw Error('Face mesh bridged a genuine depth opening');
  scene.setIdleVis(0);if(scene.sideMask.target)throw Error('Idle face mask retained target');
- scene.renderer.dispose();document.querySelector('#result').textContent='PASS: original/seam/reconstructed background occlusion, wall coverage and rear cap, depth tolerance, optional front surfaces, pixel restoration, cached geometry, foreground survival, diagonal walls and target cleanup.';
+ scene.renderer.dispose();document.querySelector('#result').textContent='PASS: connected flat/sloped faces, no exterior outline at maximum continuity, genuine depth openings preserved, original/seam/reconstructed occlusion, cached geometry, rear cap, toggles, diagonals and cleanup.';
 }catch(error){document.querySelector('#result').textContent='FAIL: '+error.stack;}
 </script>

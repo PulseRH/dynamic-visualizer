@@ -73,6 +73,14 @@ a few percent CPU and holds a steady frame rate without spinning fans.
   evaluation per hidden vertex while enabled, with no extra draw call or AI.
   Off preserves the existing front-only reveal; empty/invisible Gap fill
   leaves reconstruction unchanged.
+  **Shared wall mask → Face continuity** optionally connects existing depth
+  samples into front-surface triangles, including sloped faces. Higher
+  continuity admits more gradual depth variation without expanding the
+  sampled silhouette; sharp depth jumps and empty cells remain separate.
+  Replaces the earlier enlarged circular Face coverage patches and retains
+  their saved setting. Off is the default. Adds one mask draw, capped at 60k
+  vertices / 120k triangles and about 2.5 MB of GPU geometry. Connections are
+  cached; tuning selects them without another AI run or point-cloud rebuild.
 - **Gap fill points**: independently cap ordinary seam infill at 0–400k extra
   points (180k default). The Gap fill percentage scales that budget, with a
   150% of Count ceiling. Higher budgets add GPU work and memory. **Auto

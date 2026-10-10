@@ -65,8 +65,6 @@ const VERT = /* glsl */ `
   #ifdef SIDE_MASK
     uniform float uSideMaskWallCoverage;
     uniform float uSideMaskFaceCoverage;
-    uniform float uSideMaskFaceSpacing;
-    uniform float uSideMaskHeight;
     attribute vec2 aMaskOffset;
   #endif
   #ifdef OCCLUDED_BACKGROUND
@@ -558,9 +556,8 @@ const VERT = /* glsl */ `
       // even when the reconstructed layer is completely hidden.
       #ifdef SIDE_MASK
         vMaskOpen=uSideMaskFaceCoverage>0.0 ? 1.0:0.0;
-        // Coverage follows the sampled surface, independent of particle size/light.
-        gl_PointSize=clamp(uSideMaskFaceSpacing*uSideMaskFaceCoverage*projectionMatrix[1][1]
-          *uSideMaskHeight/max(gl_Position.w,.000001),1.0,64.0);
+        // Connected faces use the same animated vertices as the point cloud.
+        // Their rasterized triangles provide coverage without growing an outline.
       #else
         if(wallOccludes(gl_Position)){gl_Position=vec4(2.0,2.0,2.0,1.0);gl_PointSize=0.0;}
       #endif
@@ -674,8 +671,6 @@ export class VisualScene {
       uSideMaskDepthTolerance: {value:1},
       uSideMaskWallCoverage: {value:1},
       uSideMaskFaceCoverage: {value:0},
-      uSideMaskFaceSpacing: {value:0},
-      uSideMaskHeight: {value:1},
       uFillOnlyOpen: { value: 1 },
       uFillAdaptive: { value: 1 },
       uFillSamples: { value: 12 },
