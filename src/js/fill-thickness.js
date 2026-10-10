@@ -64,11 +64,13 @@ export function estimateFillThickness(depth,reconstruction,objects=null){
   const thickness=new Float32Array(n),edgeWeight=new Float32Array(n);
   for(let i=0;i<n;i++)if(labels[i]&&boundary[i]>=0){
     const gap=Math.max(0,surface[i]-background[boundary[i]]),r=radius[i]||distance[i];
-    // World/image-plane units, rather than a fraction of the animated gap.
-    // Depth is relative, so the width also bounds the visual shell estimate.
-    // Tiny depth noise and frame boundaries without a real background are
-    // not evidence of an object edge. Keep their existing fill untouched.
-    thickness[i]=gap>=.08 ? Math.min(gap*.25,r/h):0;
+    // A fraction of the side span, like the manual Fill thickness: assume an
+    // object is about as deep as it is wide (image-plane width vs relative
+    // depth gap). A building keeps most of its wall, a person or pole a thin
+    // shell. Independent of Depth scale and audio motion, which stretch the
+    // span but not the percentage. Tiny depth noise and frame boundaries
+    // without a real background are not object edges; leave them untouched.
+    thickness[i]=gap>=.08 ? Math.min(1,Math.max(.05,2*r/h/gap)):0;
     const t=Math.min(1,Math.max(0,(distance[i]-.5)/Math.max(1,r*.65)));
     edgeWeight[i]=thickness[i]>0 ? 1-t*t*(3-2*t):0;
   }

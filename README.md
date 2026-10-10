@@ -73,8 +73,11 @@ a few percent CPU and holds a steady frame rate without spinning fans.
 - **Gap fill points**: independently cap ordinary seam infill at 0–400k extra
   points (180k default). The Gap fill percentage scales that budget, with a
   150% of Count ceiling. Higher budgets add GPU work and memory. **Auto
-  thickness** and **Thickness bias** shorten foreground infill to the local
-  shell distance, redistributing samples instead of deleting whole seams.
+  thickness** works like Fill thickness with a different percentage per
+  object: local width versus depth gap, so a broad building keeps most of its
+  wall and a person or pole a thin shell. **Thickness bias** multiplies those
+  percentages. Depth scale and audio motion stretch walls without changing
+  their share, and samples are redistributed instead of deleting whole seams.
   Each seam uses one estimate at its foreground endpoint; outline influence
   blends continuously into unchanged interior seams without separate wall or
   outline geometry. Object-edge fill uses the original foreground endpoint's

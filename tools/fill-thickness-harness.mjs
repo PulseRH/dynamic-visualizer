@@ -22,8 +22,12 @@ const transpose={w:96,h:96,data:new Float32Array(96*96)};
 for(let y=0;y<96;y++)for(let x=0;x<96;x++)transpose.data[y*96+x]=depth.data[x*96+y];
 const turned=estimateFillThickness(transpose,prepareOcclusion(transpose,2.5));
 assert.ok(Math.abs(turned.thickness[16*96+40]-field.thickness[at(16,40)])<.02,'vertical and horizontal silhouettes need comparable estimates');
-const broad=(near,back)=>{const data=new Float32Array(256*128).fill(back);for(let y=12;y<116;y++)for(let x=80;x<176;x++)data[y*256+x]=near;const depth={w:256,h:128,data};return estimateFillThickness(depth,prepareOcclusion(depth,2.5));};
-assert.ok(broad(.9,.15).thickness[64*256+80]>broad(.65,.15).thickness[64*256+80]*1.3,'foreground/background depth separation must affect thickness');
+// Thickness is a fraction of the side span, like the manual percentage.
+assert.ok(field.thickness[at(16,40)]>.4&&field.thickness[at(16,40)]<=1,'wide wall keeps a large share of its side');
+assert.ok(field.thickness[at(76,40)]>=.05&&field.thickness[at(76,40)]<.2,'thin figure gets a thin shell, not zero');
+const block=(near,back,x0,x1)=>{const data=new Float32Array(256*128).fill(back);for(let y=12;y<116;y++)for(let x=x0;x<x1;x++)data[y*256+x]=near;const depth={w:256,h:128,data};return estimateFillThickness(depth,prepareOcclusion(depth,2.5)).thickness[64*256+x0];};
+assert.ok(block(.65,.15,120,136)>block(.9,.15,120,136)*1.3,'the same width across a deeper gap must occupy a smaller share');
+assert.equal(block(.9,.15,20,236),1,'very broad surfaces keep their full wall');
 const softer=make();for(let i=0;i<softer.data.length;i++)if(softer.data[i]>.5)softer.data[i]=.4;
 assert.ok(estimateFillThickness(softer,prepareOcclusion(softer,2.5)).thickness[at(76,40)]>0,'detected lower-depth objects must not depend on the .55 foreground threshold');
 console.log('PASS: local width and depth contrast vary thickness, interior seams stay connected, background stays untouched, orientations and grid scales agree, lower-depth silhouettes supported.');

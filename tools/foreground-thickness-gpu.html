@@ -14,7 +14,7 @@ try{
  scene.applySettings(base);scene.uniforms.uSize.value=3;scene.uniforms.uCursor.value.set(0,0,0);
  const positions=[-.12,0,.7,.12,0,.3],starts=[],ends=[],fractions=[.2,.4,.6,.8];
  for(const [i,t] of fractions.entries()){const y=(i-1.5)*.08;positions.push(-.12+.24*t,y,.7-.4*t);starts.push(-.12,y,.7,.2);ends.push(.12,y,.3,.8);}
- scene.setCloud({count:6,baseCount:2,aspect:1,positions:new Float32Array(positions),colors:new Float32Array(Array.from({length:18},(_,i)=>i%3===2 ? .6:0)),rands:new Float32Array([.2,.8,.1,.2,.3,.4]),fillStarts:new Float32Array(starts),fillEnds:new Float32Array(ends),fillFractions:new Float32Array(fractions),fillThickness:new Float32Array([.08,1,.08,1,.08,1,.08,1]),fillForeground:new Float32Array([.6,0,0,1,.6,0,0,1,.6,0,0,1,.6,0,0,1])});
+ scene.setCloud({count:6,baseCount:2,aspect:1,positions:new Float32Array(positions),colors:new Float32Array(Array.from({length:18},(_,i)=>i%3===2 ? .6:0)),rands:new Float32Array([.2,.8,.1,.2,.3,.4]),fillStarts:new Float32Array(starts),fillEnds:new Float32Array(ends),fillFractions:new Float32Array(fractions),fillThickness:new Float32Array([.5,1,.5,1,.5,1,.5,1]),fillForeground:new Float32Array([.6,0,0,1,.6,0,0,1,.6,0,0,1,.6,0,0,1])});
  scene.uniforms.uFillSpacing.value=.004;
  scene.points.visible=false;
  const geometry=scene.fillPoints.geometry,gl=scene.renderer.getContext(),pixels=new Uint8Array(300*300*4);
@@ -28,7 +28,7 @@ try{
      geometry.setDrawRange(i,1);if(!draw())throw Error('Thickness deleted a seam sample '+i);
      let sum=0,cx=0,cy=0;
      for(let p=0;p<pixels.length;p+=4){const light=pixels[p]+pixels[p+1]+pixels[p+2],pixel=p/4;sum+=light;cx+=(pixel%300+.5)*light;cy+=(Math.floor(pixel/300)+.5)*light;}
-     const fraction=1-weight+weight*Math.min(1,limit/Math.max(Math.abs(lastZ-firstZ),1e-6));
+     const fraction=1-weight+weight*Math.min(1,limit);
      const t=fractions[i],wallT=frontFirst ? t*fraction:1-(1-t)*fraction;
      const expected=new Vector3(-.12+.24*t,(i-1.5)*.08,firstZ+(lastZ-firstZ)*wallT).project(scene.camera);
      const error=Math.hypot(cx/sum-(expected.x+1)*150,cy/sum-(expected.y+1)*150);
@@ -36,57 +36,59 @@ try{
    }
  };
  scene.camera.position.set(1.2,0,2);scene.camera.lookAt(0,0,0);
- verifyPositions(.28,.12,.08);
+ verifyPositions(.28,.12,.5);
  const channels=()=>{const sums=[0,0,0];for(let i=0;i<pixels.length;i++)if(i%4<3)sums[i%4]+=pixels[i];return sums;};
  geometry.setDrawRange(0,1);draw();if(!(channels()[0]>0&&channels()[2]===0))throw Error('Sidewall inherited blue background instead of red foreground');
- scene.applySettings({...base,depthScale:.2});verifyPositions(.14,.06,.08);
- scene.applySettings({...base,depthScale:.8});verifyPositions(.56,.24,.08);
- scene.applySettings({...base,gapFillThicknessBias:.5});verifyPositions(.28,.12,.04);
- scene.applySettings({...base,gapFillThicknessBias:2});verifyPositions(.28,.12,.16);
- scene.applySettings({...base,gapFillForegroundLimit:false,gapFillManualLimit:true,gapFillThickness:.6});verifyPositions(.28,.12,.096);
- scene.applySettings({...base,gapFillForegroundLimit:false,gapFillManualLimit:true,gapFillThickness:1});verifyPositions(.28,.12,.16);
- scene.applySettings({...base,gapFillManualLimit:true,gapFillThickness:.25});verifyPositions(.28,.12,.04);
- scene.applySettings({...base,gapFillManualLimit:true,gapFillThickness:.9});verifyPositions(.28,.12,.08);
+ // Auto thickness is a percentage, like the manual cap: Depth scale changes
+ // the wall length but never the share of the side it occupies.
+ scene.applySettings({...base,depthScale:.2});verifyPositions(.14,.06,.5);
+ scene.applySettings({...base,depthScale:.8});verifyPositions(.56,.24,.5);
+ scene.applySettings({...base,gapFillThicknessBias:.5});verifyPositions(.28,.12,.25);
+ scene.applySettings({...base,gapFillThicknessBias:2});verifyPositions(.28,.12,1);
+ scene.applySettings({...base,gapFillForegroundLimit:false,gapFillManualLimit:true,gapFillThickness:.6});verifyPositions(.28,.12,.6);
+ scene.applySettings({...base,gapFillForegroundLimit:false,gapFillManualLimit:true,gapFillThickness:1});verifyPositions(.28,.12,1);
+ scene.applySettings({...base,gapFillManualLimit:true,gapFillThickness:.25});verifyPositions(.28,.12,.25);
+ scene.applySettings({...base,gapFillManualLimit:true,gapFillThickness:.9});verifyPositions(.28,.12,.5);
  scene.applySettings({...base,gapFillManualLimit:true,gapFillThickness:0});if(counts().some(Boolean))throw Error('Zero manual thickness still draws foreground edges');
  scene.applySettings(base);
  scene.camera.position.set(0,0,-2);scene.camera.lookAt(0,0,0);
- verifyPositions(.28,.12,.08);
+ verifyPositions(.28,.12,.5);
  scene.camera.position.set(1.2,0,2);scene.camera.lookAt(0,0,0);
  scene.applySettings({...base,depthScale:0,intensity:1.5,bands:4,bandMap:'depth',bandDistribution:0,invertBands:false});scene.uniforms.uDyn.value=1;
  scene.bandData.fill(0);scene.bandData[4]=255;
- verifyPositions(0,.165,.08);
+ verifyPositions(0,.165,.5);
  geometry.setDrawRange(0,1);draw();if(!(channels()[0]>0&&channels()[2]===0))throw Error('Audio reversal changed the red wall into background blue');
  scene.applySettings(base);
  const begin=geometry.attributes.aFillStart,end=geometry.attributes.aFillEnd,foreground=geometry.attributes.aFillForeground;
  for(let i=0;i<4;i++){begin.array[i*4+2]=.3;end.array[i*4+2]=.7;foreground.array[i*4+3]=-1;}
  begin.needsUpdate=end.needsUpdate=foreground.needsUpdate=true;
- verifyPositions(.12,.28,.08,1,false);
+ verifyPositions(.12,.28,.5,1,false);
  geometry.setDrawRange(3,1);draw();if(!(channels()[0]>0&&channels()[2]===0))throw Error('End-owned foreground lost its colour');
  for(let i=0;i<4;i++){begin.array[i*4+2]=.7;end.array[i*4+2]=.3;foreground.array[i*4+3]=1;}
  begin.needsUpdate=end.needsUpdate=foreground.needsUpdate=true;
  const shell=geometry.attributes.aFillThickness;
- for(let i=0;i<4;i++)shell.array[i*2]=.016;shell.needsUpdate=true;
- verifyPositions(.28,.12,.016);
- for(let i=0;i<4;i++){shell.array[i*2]=.08;shell.array[i*2+1]=.5;}shell.needsUpdate=true;
- verifyPositions(.28,.12,.08,.5);
+ for(let i=0;i<4;i++)shell.array[i*2]=.1;shell.needsUpdate=true;
+ verifyPositions(.28,.12,.1);
+ for(let i=0;i<4;i++){shell.array[i*2]=.5;shell.array[i*2+1]=.5;}shell.needsUpdate=true;
+ verifyPositions(.28,.12,.5,.5);
  for(const weight of [.009,.011]){
    for(let i=0;i<4;i++)shell.array[i*2+1]=weight;shell.needsUpdate=true;
-   verifyPositions(.28,.12,.08,weight);
+   verifyPositions(.28,.12,.5,weight);
  }
- for(let i=0;i<4;i++){shell.array[i*2]=.08;shell.array[i*2+1]=0;}shell.needsUpdate=true;
+ for(let i=0;i<4;i++){shell.array[i*2]=.5;shell.array[i*2+1]=0;}shell.needsUpdate=true;
  if(counts().join()!=='1,1,1,1')throw Error('Interior band seams were cut');
  scene.applySettings({...base,gapFillManualLimit:true,gapFillThickness:0});if(counts().join()!=='1,1,1,1')throw Error('Manual limit hid unclassified interior seams');scene.applySettings(base);
  shell.array.fill(0);shell.needsUpdate=true;
  if(counts().join()!=='1,1,1,1')throw Error('Background fill was shortened');
- for(let i=0;i<4;i++){shell.array[i*2]=.08;shell.array[i*2+1]=1;}shell.needsUpdate=true;geometry.setDrawRange(0,4);
+ for(let i=0;i<4;i++){shell.array[i*2]=.5;shell.array[i*2+1]=1;}shell.needsUpdate=true;geometry.setDrawRange(0,4);
  scene.applySettings({...base,gapFillForegroundLimit:false});draw();const neutral=pixels.slice();
  if(!(channels()[2]>0&&channels()[0]===0))throw Error('Disabled Auto thickness changed ordinary seam colour');
  scene.applySettings({...base,occludedBackground:false});draw();if(!pixels.every((v,i)=>v===neutral[i]))throw Error('Disabled reconstruction affected fill');
  // Cleaned silhouettes retain red ownership even without a thickness limiter.
  for(let i=0;i<4;i++)foreground.array[i*4+3]=2;foreground.needsUpdate=true;
- scene.applySettings({...base,gapFillForegroundLimit:false});verifyPositions(.28,.12,.16);
+ scene.applySettings({...base,gapFillForegroundLimit:false});verifyPositions(.28,.12,1);
  if(!(channels()[0]>0&&channels()[2]===0))throw Error('Unlimited cleaned sidewall lost red ownership');
- scene.applySettings({...base,gapFillForegroundLimit:false,gapFillManualLimit:true,gapFillThickness:.6});verifyPositions(.28,.12,.096);
+ scene.applySettings({...base,gapFillForegroundLimit:false,gapFillManualLimit:true,gapFillThickness:.6});verifyPositions(.28,.12,.6);
  scene.applySettings({...base,gapFillForegroundLimit:false,gapFillManualLimit:true,gapFillThickness:0});if(counts().some(Boolean))throw Error('Zero thickness did not hide cleaned sidewall');
 
  if(scene.fillPoints.geometry!==geometry)throw Error('Live thickness settings rebuilt geometry');

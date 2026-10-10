@@ -209,7 +209,7 @@ export function sampleImageToCloud(bitmap, depth, count, gapFill=0, mapping={}) 
           fillEnds.set([bx,by,positions[bi+2],rands[bi/3]],f*4);
           fillFractions[f]=t;rands[used]=(sample-1)/samplesPerEdge;used++;
           if(fillThickness){
-            fillThickness[f*2]=reconstruction?.thickness?.[thicknessIndex] ?? .05;
+            fillThickness[f*2]=reconstruction?.thickness?.[thicknessIndex] ?? 1;
             fillThickness[f*2+1]=cleanSide ? 1:(reconstruction?.edgeWeight?.[thicknessIndex] ?? 0);
             if(fillThickness[f*2+1]>0){
               fillForeground.set([colors[front],colors[front+1],colors[front+2],(front===ai ? 1:-1)*(cleanSide ? 2:1)],f*4);

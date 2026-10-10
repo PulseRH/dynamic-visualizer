@@ -5,7 +5,7 @@ const RESULTS=`dv-hidden-background-v${OCCLUSION_VERSION}`,memory=new WeakMap();
 const FIELDS={owner:Int32Array,back:Float32Array,front:Float32Array,normalX:Int8Array,normalY:Int8Array,distance:Uint8Array,rgb:Uint8Array};
 const THICKNESS_FIELDS={thickness:Float32Array,edgeWeight:Float32Array};
 // Version the derived estimate separately, so changing it cannot rerun AI.
-const THICKNESS_VERSION=1;
+const THICKNESS_VERSION=2;
 const fieldsFor=result=>result.thickness&&result.edgeWeight ? {...FIELDS,...THICKNESS_FIELDS}:FIELDS;
 // Binary cache avoids turning large typed grids into JS object/JSON trees.
 export function packReconstruction(result){

@@ -339,7 +339,7 @@ const VERT = /* glsl */ `
   #if defined(GAP_FILL) || defined(OCCLUDED_BACKGROUND)
   float limitedFillSpan(float span, vec2 thickness) {
     float fraction=1.0;
-    if(uFillThicknessAuto>.5)fraction=min(1.0,thickness.x*uFillThicknessBias/max(span,.000001));
+    if(uFillThicknessAuto>.5)fraction=min(1.0,thickness.x*uFillThicknessBias);
     if(uFillThicknessManual>.5)fraction=min(fraction,uFillThickness);
     return mix(1.0,fraction,clamp(thickness.y,0.0,1.0));
   }

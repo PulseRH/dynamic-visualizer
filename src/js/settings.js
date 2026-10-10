@@ -88,7 +88,7 @@ export const DEFAULTS = {
   gapFillPointLimit: 180000, // ordinary seam points, independently capped; zero disables
   surfaceCohesion: .75,    // shared audio motion on confident AI wall surfaces; geometry stays original
   smartDepthBands: false, // snap audio cuts toward valleys in the image depth distribution
-  gapFillThicknessBias: 1, // multiplier of the local estimate, not a gap percentage
+  gapFillThicknessBias: 1, // multiplier of each object's automatic percentage
   gapFillManualLimit: false, // optional uniform percentage cap, alongside Auto thickness
   gapFillThickness: .6,    // retained foreground side span when manual limiting is on
   pinWallpaperSelector: false, // keep image selection visible while scrolling settings
