@@ -2,7 +2,7 @@ import {reconstructionKey} from './reconstruction.js';
 import {OBJECT_MASK_VERSION,MAX_OBJECT_MASKS} from './object-mask-utils.js';
 import {depthImageIdentity} from './depth.js';
 
-const CACHE='dv-object-thickness-v3',memory=new WeakMap();
+const CACHE='dv-object-thickness-v5',memory=new WeakMap();
 // Class inference depends on the image, while connected surfaces/thickness
 // depend on depth. Tuning depth recomputes only those inexpensive derived fields.
 const CLASSES_CACHE='dv-object-classes-v1',classesMemory=new WeakMap();
