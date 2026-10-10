@@ -23,4 +23,19 @@ assert.ok(lookup.every((v,i)=>v<20&&(!i||v>=lookup[i-1])),'surface-aware audio a
 const peak=410,hist=new Uint32Array(1024);hist[peak]=500;
 const smart=depthBandLookup(hist,10);assert.equal(smart[peak],smart[peak+1],'cut should move away from a densely populated depth');
 for(const bias of [-1,0,1])assert.ok(depthBandLookup(histogram,256,bias).every(v=>v<256));
+{
+  // A small figure (0.41) whose outline hides wall at 0.24 and 0.35: the
+  // second layer must not use the figure's own pixels as context.
+  const n=40,data=new Float32Array(n).fill(.30),owner=new Int32Array(n).fill(-1),back=new Float32Array(n);
+  for(let i=10;i<30;i++){data[i]=.41;owner[i]=i;back[i]=i<20 ? .24:.35;}
+  // The same layer also reconstructs behind a nearer object (0.44), so its
+  // cutoff extends past the figure; only the occluder rule excludes it.
+  data[35]=.38;data[36]=.52;data[38]=.7;owner[38]=38;back[38]=.44;
+  const {layers,assignment}=planReconstructionLayers({w:n,h:1,data},{owner,back});
+  const second=layers[assignment[25]];
+  assert.notEqual(assignment[15],assignment[25],'fixture must split the outline across layers');
+  assert.equal(second.mask[15],0,'an occluding figure must not be context for background behind it');
+  assert.equal(second.mask[35],255,'ordinary content within the layer depth stays context');
+  assert.equal(second.mask[36],0,'content nearer than the layer cutoff is still excluded');
+}
 console.log('PASS: separate depth masks preserve middle-layer context, four-pass cap and ordered surface-aware audio cuts.');

@@ -87,6 +87,17 @@ for(const count of [20000,100000,400000]){
   assert.deepEqual(cloud,sampleOcclusion(prepared,4/3,count),'sampling must be deterministic');
 }
 
+{
+  // A small figure 0.07 in front of a wall gets its own hidden strip with the
+  // wall behind it; a steadily sloping wall gets none.
+  const scene={w:128,h:96,data:Float32Array.from({length:128*96},(_,i)=>.30+.008*(i%128)/2)};
+  for(let y=30;y<70;y++)for(let x=60;x<68;x++)scene.data[y*128+x]=scene.data[y*128+x]+.07;
+  const small=prepareOcclusion(scene);
+  let behind=0,elsewhere=0;
+  for(let i=0;i<small.owner.length;i++)if(small.owner[i]>=0){const x=i%128,y=Math.floor(i/128);if(x>=60&&x<68&&y>=30&&y<70)behind++;else if(x<50||x>78)elsewhere++;}
+  assert.ok(behind>=8*40*.6,'a small figure must hide reconstructed wall behind most of itself');
+  assert.equal(elsewhere,0,'a sloping wall alone must not become a hidden-background edge');
+}
 const legacy={...prepared};Object.assign(prepared,estimateFillThickness(depth,prepared));
 const entries=new Map();globalThis.caches={open:async()=>({match:async key=>entries.get(key)?.clone(),put:async(key,value)=>entries.set(key,value.clone()),keys:async()=>[...entries.keys()],delete:async key=>entries.delete(key)})};
 let started=0,terminated=0,modelStarts=0,hold=false;globalThis.createImageBitmap=async()=>({close(){}});

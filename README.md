@@ -50,7 +50,10 @@ a few percent CPU and holds a steady frame rate without spinning fans.
     each image; model choice does not change animation workload.
 - **Hidden background** (optional, under Depth): local MI-GAN inpainting
   reconstructs up to four hidden depth slices with separate masks, retaining
-  context appropriate to each depth instead of one shared distant background. Reveals
+  context appropriate to each depth instead of one shared distant background.
+  Strips cover depth steps from 0.06, so small figures just in front of a wall
+  (a person on a balcony) get the wall reconstructed behind them; an occluding
+  object is never used as context for the background it hides. Reveals
   particles as parallax or audio motion exposes them, including with static
   Depth strength at zero. Best with AI depth. It prepares narrow strips once
   per wallpaper, caches results by image content and depth map, and releases

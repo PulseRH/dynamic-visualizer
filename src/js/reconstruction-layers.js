@@ -24,7 +24,11 @@ export function planReconstructionLayers(depth,prepared,maxLayers=4){
     for(const bin of group.bins)binLayer[bin]=index;
     // Upper depth of this hidden surface with a small tolerance for noise.
     const cutoff=Math.min(1,group.max+.04),mask=new Uint8Array(assignment.length).fill(255);
-    for(let i=0;i<mask.length;i++)if(depth.data[i]>cutoff)mask[i]=0;
+    // An occluding object is never context for background it stands in
+    // front of: a small figure's outline can split across two layers, and
+    // its own colours would otherwise smear into the hidden wall behind it.
+    const nearest=Math.min(1,group.min+.04);
+    for(let i=0;i<mask.length;i++)if(depth.data[i]>cutoff||(prepared.owner[i]>=0&&depth.data[i]>nearest))mask[i]=0;
     return {cutoff,mask,count:group.count};
   });
   for(let i=0;i<assignment.length;i++)if(prepared.owner[i]>=0){

@@ -1,7 +1,7 @@
 // Geometry preparation only. AI colours are generated separately, once per image.
 // A bounded strip behind each significant near/far edge stores its background
 // depth and the foreground boundary that must move away before it is revealed.
-export const OCCLUSION_VERSION = 5;
+export const OCCLUSION_VERSION = 7;
 export const OCCLUSION_WIDTH = 12; // pixels of the 256-wide depth grid (~5%)
 export const OCCLUSION_MAX_WIDTH = 2.5;
 
@@ -36,7 +36,9 @@ export function prepareOcclusion(depth, width=1) {
     return {value,x:endX,y:endY};
   };
   for(let y=2;y<h-2;y++)for(let x=2;x<w-2;x++){
-    const i=y*w+x;let best=.12,dx=0,dy=0;
+    // 0.06 includes small figures just in front of a wall (a person is a
+    // 0.07 step), while a wall's own slope stays near 0.016 over two cells.
+    const i=y*w+x;let best=.06,dx=0,dy=0;
     for(const [nx,ny] of directions){
       const jump=jumpAt(x,y,nx,ny);
       if(jump>best){best=jump;dx=nx;dy=ny;}
@@ -68,7 +70,9 @@ export function prepareOcclusion(depth, width=1) {
     if(distance[i]>=maxDistance)continue;
     for(const [dx,dy] of directions){
       const xx=x+dx,yy=y+dy;if(xx<0||xx>=w||yy<0||yy>=h)continue;
-      const j=yy*w+xx;if(owner[j]>=0||data[j]<back[i]+.1)continue;
+      // Stay on the foreground side: half the edge's own step, so a small
+      // figure's strip still covers it, at most the original 0.1.
+      const j=yy*w+xx;if(owner[j]>=0||data[j]<back[i]+Math.min(.1,(front[i]-back[i])*.5))continue;
       const edge=owner[i],ex=edge%w,ey=Math.floor(edge/w);
       if((xx-ex)*normalX[i]-(yy-ey)*normalY[i]>0)continue;
       owner[j]=edge;distance[j]=distance[i]+1;back[j]=back[i];front[j]=front[i];
